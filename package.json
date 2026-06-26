@@ -1,0 +1,23 @@
+{
+  "name": "glm-usage",
+  "version": "1.0.0",
+  "description": "智谱 GLM / YesCode / 火狸 多账号 API 用量监控面板",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "keywords": [
+    "glm",
+    "bigmodel",
+    "zhipu",
+    "yescode",
+    "huoli",
+    "usage",
+    "monitor",
+    "echarts"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.21.2"
+  }
+}

@@ -1,0 +1,1613 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CodingPlan 用量监控</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif; background: #f0f2f5; color: #333; min-height: 100vh; }
+
+    .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #fff; padding: 18px 32px; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 8px rgba(102,126,234,0.3); }
+    .header h1 { font-size: 20px; font-weight: 600; letter-spacing: 0.5px; }
+    .header-right { display: flex; align-items: center; gap: 12px; }
+    .header-btn { background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); color: #fff; padding: 7px 18px; border-radius: 6px; cursor: pointer; font-size: 13px; transition: background 0.2s; }
+    .header-btn:hover { background: rgba(255,255,255,0.35); }
+    .header-btn:active { transform: scale(0.97); }
+    .last-updated { font-size: 12px; opacity: 0.7; }
+
+    .container { max-width: 1600px; margin: 24px auto; padding: 0 24px; }
+    .toolbar { display: flex; flex-wrap: wrap; gap: 18px; align-items: center; padding: 10px 14px; background: #fff; border-radius: 10px; box-shadow: 0 1px 4px rgba(0,0,0,0.04); margin-bottom: 16px; }
+    .toolbar-group { display: flex; align-items: center; gap: 6px; }
+    .toolbar-label { font-size: 12px; color: #8c8c8c; margin-right: 2px; }
+    .toolbar-btn { padding: 4px 14px; border: 1px solid #d9d9d9; border-radius: 16px; background: #fff; cursor: pointer; font-size: 12px; color: #595959; transition: all 0.15s; display: inline-flex; align-items: center; gap: 4px; }
+    .toolbar-btn:hover { border-color: #667eea; color: #667eea; }
+    .toolbar-btn.active { background: #667eea; border-color: #667eea; color: #fff; }
+    .sort-arrow { font-size: 9px; line-height: 1; opacity: 0.85; }
+    .toolbar-count { margin-left: auto; font-size: 12px; color: #8c8c8c; }
+    .card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
+
+    .card { background: #fff; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); overflow: hidden; transition: transform 0.2s, box-shadow 0.2s; }
+    .card:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,0,0,0.1); }
+
+    .card-header { padding: 14px 20px; border-bottom: 1px solid #f0f0f0; display: flex; justify-content: space-between; align-items: center; }
+    .card-header-left { display: flex; align-items: center; gap: 8px; min-width: 0; }
+    .card-header h3 { font-size: 15px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .card-header-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+    .platform-tag { font-size: 10px; padding: 1px 6px; border-radius: 3px; font-weight: 500; flex-shrink: 0; letter-spacing: 0.3px; }
+    .platform-glm { background: #e6f4ff; color: #0958d9; border: 1px solid #91caff; }
+    .platform-yescode { background: #f6ffed; color: #389e0d; border: 1px solid #b7eb8f; }
+.platform-huoli { background: #fff7e6; color: #d4380d; border: 1px solid #ffd591; }
+    .card-status { font-size: 12px; padding: 2px 10px; border-radius: 10px; font-weight: 500; }
+    .status-ok { background: #f6ffed; color: #52c41a; border: 1px solid #b7eb8f; }
+    .status-warn { background: #fffbe6; color: #d48806; border: 1px solid #ffe58f; }
+    .status-danger { background: #fff2f0; color: #cf1322; border: 1px solid #ffccc7; }
+    .status-exhausted { background: #4a044e; color: #f0abfc; border: 1px solid #c026d3; }
+    .status-error { background: #f5f5f5; color: #8c8c8c; border: 1px solid #d9d9d9; }
+    .card-refresh { background: none; border: none; cursor: pointer; color: #bfbfbf; padding: 6px 8px; border-radius: 6px; font-size: 20px; transition: color 0.2s, background 0.2s; line-height: 1; }
+    .card-refresh:hover { color: #667eea; background: #f0f5ff; }
+    .card-refresh.spinning { animation: spin 0.8s linear infinite; color: #667eea; }
+
+    .card-body { padding: 16px 20px; }
+
+    .limit-row { margin-bottom: 14px; }
+    .limit-row:last-child { margin-bottom: 0; }
+    .limit-label { display: flex; justify-content: space-between; margin-bottom: 5px; font-size: 13px; }
+    .limit-name { color: #8c8c8c; }
+    .limit-value { font-weight: 500; font-variant-numeric: tabular-nums; }
+    .limit-bar { height: 6px; background: #f0f0f0; border-radius: 3px; overflow: hidden; }
+    .limit-fill { height: 100%; border-radius: 3px; transition: width 0.6s ease; min-width: 2px; }
+    .fill-green { background: linear-gradient(90deg, #95de64, #389e0d); }
+    .fill-orange { background: linear-gradient(90deg, #ffc069, #d48806); }
+    .fill-red { background: linear-gradient(90deg, #ff7875, #cf1322); }
+    .fill-exhausted { background: linear-gradient(90deg, #c026d3, #4a044e); }
+    .limit-bar-wrap { position: relative; overflow: visible; }
+    .limit-bar-seg { display: flex; gap: 3px; height: 8px; }
+    .limit-bar-seg .seg { flex: 1; background: #eee; border-radius: 2px; overflow: hidden; }
+    .limit-bar-seg .seg-fill { height: 100%; border-radius: 2px; transition: width 0.6s ease; min-width: 0; }
+    .theo-marker { position: absolute; top: -3px; bottom: -3px; width: 2px; background: rgba(102,126,234,0.6); border-radius: 1px; transform: translateX(-1px); pointer-events: none; }
+    .theo-label { position: absolute; top: -15px; transform: translateX(-50%); font-size: 10px; color: #667eea; white-space: nowrap; pointer-events: none; }
+    .tension-row { display: flex; justify-content: space-between; margin-top: 4px; font-size: 11px; }
+
+    .card-footer { padding: 10px 20px; border-top: 1px solid #f0f0f0; display: flex; justify-content: space-between; align-items: center; font-size: 12px; }
+    .card-footer-left { display: flex; align-items: center; gap: 8px; }
+    .level-badge { padding: 2px 8px; border-radius: 4px; background: #f0f5ff; color: #2f54eb; border: 1px solid #adc6ff; }
+    .cache-time { color: #bfbfbf; }
+    .detail-btn { background: none; border: 1px solid #d9d9d9; color: #595959; padding: 4px 14px; border-radius: 4px; cursor: pointer; font-size: 13px; transition: all 0.2s; }
+    .detail-btn:hover { border-color: #667eea; color: #667eea; }
+.expire-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 20px; border-top: 1px solid #f0f0f0; font-size: 13px; cursor: pointer; transition: background 0.15s; }
+.expire-row:hover { background: #f0f5ff; }
+.expire-label { color: #8c8c8c; }
+.expire-value { font-weight: 500; font-variant-numeric: tabular-nums; }
+.expire-danger { color: #f5222d; font-weight: 600; }
+.expire-hint { font-size: 11px; color: #bfbfbf; margin-left: 6px; }
+.expire-danger .expire-hint { color: #ff7875; }
+
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 1000; display: none; justify-content: center; align-items: center; }
+    .modal-overlay.active { display: flex; }
+    .modal { background: #fff; border-radius: 12px; width: 560px; max-width: 92vw; max-height: 85vh; box-shadow: 0 12px 48px rgba(0,0,0,0.2); animation: modalIn 0.2s ease; display: flex; flex-direction: column; overflow: hidden; }
+    @keyframes modalIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+    .modal-header { padding: 18px 24px; border-bottom: 1px solid #f0f0f0; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; background: #fff; border-radius: 12px 12px 0 0; }
+    .modal-header h3 { font-size: 17px; }
+    .modal-close { background: none; border: none; font-size: 22px; cursor: pointer; color: #bfbfbf; width: 32px; height: 32px; border-radius: 4px; display: flex; align-items: center; justify-content: center; }
+    .modal-close:hover { background: #f5f5f5; color: #595959; }
+    .modal-body { padding: 24px; overflow-y: auto; flex: 1; min-height: 0; }
+    .modal-body::-webkit-scrollbar { width: 6px; height: 6px; }
+    .modal-body::-webkit-scrollbar-track { background: transparent; }
+    .modal-body::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); border-radius: 3px; }
+    .modal-body::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.28); }
+    .modal-body { scrollbar-width: thin; scrollbar-color: rgba(0,0,0,0.18) transparent; }
+
+    .info-section { margin-bottom: 20px; }
+    .info-section-title { font-size: 14px; font-weight: 600; color: #262626; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 2px solid #667eea; display: inline-block; }
+    .info-grid { display: grid; grid-template-columns: 72px 1fr; gap: 10px 12px; }
+    .info-label { color: #8c8c8c; font-size: 13px; line-height: 1.8; }
+    .info-value { font-size: 13px; line-height: 1.8; color: #262626; }
+
+    .keys-section { margin-top: 20px; padding-top: 16px; border-top: 1px solid #f0f0f0; }
+    .keys-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+    .keys-title { font-size: 14px; font-weight: 600; color: #262626; padding-bottom: 8px; border-bottom: 2px solid #764ba2; }
+    .keys-create { display: flex; gap: 6px; }
+    .keys-create input { padding: 4px 10px; border: 1px solid #d9d9d9; border-radius: 4px; font-size: 12px; width: 120px; outline: none; }
+    .keys-create input:focus { border-color: #667eea; }
+    .keys-create button { padding: 4px 10px; border-radius: 4px; border: none; background: #667eea; color: #fff; cursor: pointer; font-size: 12px; }
+
+    .keys-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .keys-table th { text-align: left; padding: 8px 12px; background: #fafafa; color: #8c8c8c; font-weight: 500; border-bottom: 1px solid #f0f0f0; }
+    .keys-table td { padding: 8px 12px; border-bottom: 1px solid #f5f5f5; }
+    .keys-table tr:hover td { background: #f0f5ff; }
+    .keys-table .mono { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px; color: #595959; word-break: break-all; }
+    .keys-table .key-hidden td { opacity: 0.45; }
+    .keys-table .key-hidden td:first-child::after { content: '(隐藏)'; font-size: 11px; color: #bfbfbf; margin-left: 4px; }
+    .keys-loading { text-align: center; padding: 20px; color: #8c8c8c; font-size: 13px; }
+
+    .key-actions { display: flex; gap: 6px; align-items: center; }
+    .icon-btn { background: none; border: none; cursor: pointer; color: #8c8c8c; padding: 4px; border-radius: 4px; transition: color 0.15s, background 0.15s; display: inline-flex; align-items: center; justify-content: center; }
+    .icon-btn:hover { color: #667eea; background: #f0f5ff; }
+    .icon-btn.copied { color: #52c41a; }
+    .icon-btn.del-icon:hover { color: #f5222d; background: #fff1f0; }
+    .icon-btn svg { width: 16px; height: 16px; }
+
+    .loading { display: flex; flex-direction: column; align-items: center; padding: 80px; color: #8c8c8c; }
+    .loading-spinner { width: 36px; height: 36px; border: 3px solid #f0f0f0; border-top-color: #667eea; border-radius: 50%; animation: spin 0.8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .empty { text-align: center; padding: 80px; color: #8c8c8c; font-size: 14px; }
+    .error-text { color: #cf1322; font-size: 13px; line-height: 1.6; }
+
+    .acct-item { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; background: #fafafa; border-radius: 8px; margin-bottom: 8px; transition: background 0.15s, opacity 0.15s, transform 0.15s; }
+    .acct-item:hover { background: #f0f5ff; }
+    .acct-item.dragging { opacity: 0.4; transform: scale(0.98); }
+    .acct-item.drag-over { border-top: 2px solid #667eea; padding-top: 10px; }
+    .drag-handle { cursor: grab; color: #d9d9d9; padding: 0 4px 0 0; display: flex; align-items: center; transition: color 0.15s; flex-shrink: 0; }
+    .drag-handle:hover { color: #667eea; }
+    .drag-handle:active { cursor: grabbing; }
+    .drag-handle svg { width: 16px; height: 16px; }
+    .acct-info { flex: 1; min-width: 0; }
+    .acct-name { font-weight: 500; font-size: 14px; color: #262626; }
+    .acct-meta { font-size: 12px; color: #8c8c8c; margin-top: 3px; }
+    .acct-actions { display: flex; gap: 6px; flex-shrink: 0; margin-left: 12px; }
+    .btn-sm { padding: 4px 10px; border-radius: 4px; border: 1px solid #d9d9d9; background: #fff; cursor: pointer; font-size: 12px; color: #595959; transition: all 0.15s; }
+    .btn-sm:hover { border-color: #667eea; color: #667eea; }
+    .btn-sm.danger:hover { border-color: #f5222d; color: #f5222d; }
+    .btn-add { display: block; width: 100%; padding: 10px; border: 1px dashed #d9d9d9; border-radius: 8px; background: none; cursor: pointer; font-size: 13px; color: #667eea; transition: all 0.15s; }
+    .btn-add:hover { border-color: #667eea; background: #f0f5ff; }
+
+    .form-group { margin-bottom: 14px; }
+    .form-label { display: block; font-size: 13px; color: #595959; margin-bottom: 5px; font-weight: 500; }
+    .form-input { width: 100%; padding: 8px 12px; border: 1px solid #d9d9d9; border-radius: 6px; font-size: 13px; font-family: inherit; transition: border-color 0.2s; outline: none; }
+    .form-input:focus { border-color: #667eea; box-shadow: 0 0 0 2px rgba(102,126,234,0.1); }
+    textarea.form-input { resize: vertical; min-height: 60px; }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .form-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+    .btn-primary { padding: 8px 24px; border-radius: 6px; border: none; background: #667eea; color: #fff; cursor: pointer; font-size: 13px; transition: background 0.2s; }
+    .btn-primary:hover { background: #5a6fd6; }
+    .btn-default { padding: 8px 24px; border-radius: 6px; border: 1px solid #d9d9d9; background: #fff; cursor: pointer; font-size: 13px; color: #595959; }
+    .btn-default:hover { border-color: #667eea; color: #667eea; }
+
+    .import-section { margin-bottom: 18px; padding: 14px; background: #f9f9fb; border-radius: 8px; border: 1px dashed #d9d9d9; }
+    .import-toggle { cursor: pointer; font-size: 13px; color: #667eea; user-select: none; display: flex; align-items: center; gap: 4px; }
+    .import-toggle:hover { color: #5a6fd6; }
+    .import-body { margin-top: 10px; display: none; }
+    .import-body.open { display: block; }
+    .import-body textarea { min-height: 100px; font-size: 12px; font-family: 'SF Mono', 'Fira Code', monospace; }
+    .import-actions { margin-top: 8px; display: flex; justify-content: flex-end; }
+
+    .detail-tabs { display: flex; border-bottom: 2px solid #f0f0f0; margin-bottom: 16px; gap: 0; }
+    .detail-tab { padding: 8px 20px; border: none; background: none; cursor: pointer; font-size: 14px; color: #8c8c8c; border-bottom: 2px solid transparent; margin-bottom: -2px; transition: color 0.2s, border-color 0.2s; }
+    .detail-tab:hover { color: #667eea; }
+    .detail-tab.active { color: #667eea; border-bottom-color: #667eea; font-weight: 500; }
+
+    .chart-controls { display: flex; gap: 8px; margin-bottom: 14px; }
+    .period-btn { padding: 4px 14px; border: 1px solid #d9d9d9; border-radius: 20px; background: #fff; cursor: pointer; font-size: 13px; color: #595959; transition: all 0.2s; }
+    .period-btn:hover { border-color: #667eea; color: #667eea; }
+    .period-btn.active { background: #667eea; border-color: #667eea; color: #fff; }
+    .chart-wrap { position: relative; min-height: 260px; }
+    .chart-loading { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; font-size: 13px; color: #8c8c8c; background: rgba(255,255,255,0.92); }
+
+    @media (max-width: 768px) {
+      .header { padding: 14px 16px; }
+      .header h1 { font-size: 17px; }
+      .container { padding: 0 12px; margin: 16px auto; }
+      .card-grid { grid-template-columns: 1fr; }
+      .form-row { grid-template-columns: 1fr; }
+    }
+    @media (min-width: 769px) and (max-width: 1024px) {
+      .card-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (min-width: 1025px) and (max-width: 1280px) {
+      .card-grid { grid-template-columns: repeat(3, 1fr); }
+    }
+    @media (min-width: 1281px) {
+      .card-grid { grid-template-columns: repeat(4, 1fr); }
+    }
+
+    /* ============ Dark Mode ============ */
+    body.dark { background: #141414; color: #e0e0e0; }
+    body.dark .header { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); box-shadow: 0 2px 8px rgba(0,0,0,0.5); }
+    body.dark .header-btn { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.15); }
+    body.dark .header-btn:hover { background: rgba(255,255,255,0.16); }
+    body.dark .container { }
+    body.dark .toolbar { background: #1f1f1f; box-shadow: 0 1px 4px rgba(0,0,0,0.3); }
+    body.dark .toolbar-label { color: #888; }
+    body.dark .toolbar-btn { border-color: #444; background: #1a1a1a; color: #bbb; }
+    body.dark .toolbar-btn:hover { border-color: #8b5cf6; color: #8b5cf6; }
+    body.dark .toolbar-btn.active { background: #8b5cf6; border-color: #8b5cf6; color: #fff; }
+    body.dark .toolbar-count { color: #888; }
+
+    body.dark .card { background: #1f1f1f; box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
+    body.dark .card:hover { box-shadow: 0 6px 20px rgba(0,0,0,0.5); }
+    body.dark .card-header { border-bottom-color: #2a2a2a; }
+    body.dark .card-header h3 { color: #e0e0e0; }
+    body.dark .platform-glm { background: #1e1b4b; color: #818cf8; border-color: #4338ca; }
+    body.dark .platform-yescode { background: #14532d; color: #4ade80; border-color: #166534; }
+body.dark .platform-huoli { background: #422006; color: #fb923c; border-color: #854d0e; }
+    body.dark .status-ok { background: #14532d; color: #4ade80; border-color: #166534; }
+    body.dark .status-warn { background: #422006; color: #fbbf24; border-color: #854d0e; }
+    body.dark .status-danger { background: #450a0a; color: #fca5a5; border-color: #991b1b; }
+    body.dark .status-exhausted { background: #4a044e; color: #f0abfc; border-color: #c026d3; }
+    body.dark .status-error { background: #262626; color: #737373; border-color: #404040; }
+    body.dark .card-refresh { color: #555; }
+    body.dark .card-refresh:hover { color: #8b5cf6; background: #2a2a2a; }
+
+    body.dark .card-body { }
+    body.dark .limit-name { color: #999; }
+    body.dark .limit-value { color: #e0e0e0; }
+    body.dark .limit-bar { background: #2a2a2a; }
+    body.dark .fill-green { background: linear-gradient(90deg, #166534, #4ade80); }
+    body.dark .fill-orange { background: linear-gradient(90deg, #854d0e, #fbbf24); }
+    body.dark .fill-red { background: linear-gradient(90deg, #991b1b, #fca5a5); }
+    body.dark .fill-exhausted { background: linear-gradient(90deg, #4a044e, #e879f9); }
+    body.dark .limit-bar-seg .seg { background: #2a2a2a; }
+    body.dark .tension-row { color: #888; }
+    body.dark .card-footer { border-top-color: #2a2a2a; }
+    body.dark .level-badge { background: #1e1b4b; color: #a5b4fc; border-color: #3730a3; }
+    body.dark .cache-time { color: #555; }
+    body.dark .detail-btn { border-color: #444; color: #bbb; background: #1a1a1a; }
+    body.dark .detail-btn:hover { border-color: #8b5cf6; color: #8b5cf6; }
+
+    body.dark .expire-row { border-top-color: #2a2a2a; }
+    body.dark .expire-row:hover { background: #1a1a2e; }
+    body.dark .expire-label { color: #888; }
+    body.dark .expire-value { color: #e0e0e0; }
+    body.dark .expire-danger { color: #f87171; }
+    body.dark .expire-hint { color: #666; }
+    body.dark .expire-danger .expire-hint { color: #f87171; }
+
+    body.dark .modal-overlay { background: rgba(0,0,0,0.7); }
+    body.dark .modal { background: #1f1f1f; box-shadow: 0 12px 48px rgba(0,0,0,0.5); }
+    body.dark .modal-header { border-bottom-color: #2a2a2a; background: #1f1f1f; }
+    body.dark .modal-header h3 { color: #e0e0e0; }
+    body.dark .modal-close { color: #666; }
+    body.dark .modal-close:hover { background: #2a2a2a; color: #e0e0e0; }
+    body.dark .modal-body::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); }
+    body.dark .modal-body::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.25); }
+    body.dark .modal-body { scrollbar-color: rgba(255,255,255,0.15) transparent; }
+
+    body.dark .info-section-title { color: #e0e0e0; }
+    body.dark .info-label { color: #888; }
+    body.dark .info-value { color: #d4d4d4; }
+    body.dark .keys-section { border-top-color: #2a2a2a; }
+    body.dark .keys-title { color: #e0e0e0; }
+    body.dark .keys-create input { background: #141414; border-color: #444; color: #e0e0e0; }
+    body.dark .keys-create input:focus { border-color: #8b5cf6; }
+    body.dark .keys-create button { background: #8b5cf6; }
+    body.dark .keys-table th { background: #181818; color: #888; border-bottom-color: #2a2a2a; }
+    body.dark .keys-table td { border-bottom-color: #262626; color: #d4d4d4; }
+    body.dark .keys-table tr:hover td { background: #1a1a2e; }
+    body.dark .keys-table .mono { color: #aaa; }
+    body.dark .keys-table .key-hidden td { opacity: 0.35; }
+    body.dark .keys-loading { color: #888; }
+
+    body.dark .icon-btn { color: #888; }
+    body.dark .icon-btn:hover { color: #8b5cf6; background: #1a1a2e; }
+    body.dark .icon-btn.copied { color: #4ade80; }
+    body.dark .icon-btn.del-icon:hover { color: #f87171; background: #2a1a1a; }
+
+    body.dark .loading { color: #888; }
+    body.dark .loading-spinner { border-color: #2a2a2a; border-top-color: #8b5cf6; }
+    body.dark .empty { color: #888; }
+    body.dark .error-text { color: #f87171; }
+
+    body.dark .acct-item { background: #1a1a1a; }
+    body.dark .acct-item:hover { background: #1a1a2e; }
+    body.dark .acct-name { color: #e0e0e0; }
+    body.dark .acct-meta { color: #888; }
+    body.dark .btn-sm { border-color: #444; background: #1a1a1a; color: #bbb; }
+    body.dark .btn-sm:hover { border-color: #8b5cf6; color: #8b5cf6; }
+    body.dark .btn-sm.danger:hover { border-color: #f87171; color: #f87171; }
+    body.dark .btn-add { border-color: #444; color: #8b5cf6; }
+    body.dark .btn-add:hover { border-color: #8b5cf6; background: #1a1a2e; }
+
+    body.dark .form-label { color: #bbb; }
+    body.dark .form-input { background: #141414; border-color: #444; color: #e0e0e0; }
+    body.dark .form-input:focus { border-color: #8b5cf6; box-shadow: 0 0 0 2px rgba(139,92,246,0.15); }
+    body.dark .btn-primary { background: #8b5cf6; }
+    body.dark .btn-primary:hover { background: #7c3aed; }
+    body.dark .btn-default { border-color: #444; background: #1a1a1a; color: #bbb; }
+    body.dark .btn-default:hover { border-color: #8b5cf6; color: #8b5cf6; }
+
+    body.dark .import-section { background: #181818; border-color: #333; }
+    body.dark .import-toggle { color: #8b5cf6; }
+
+    body.dark .detail-tab { color: #888; }
+    body.dark .detail-tab:hover { color: #8b5cf6; }
+    body.dark .detail-tab.active { color: #8b5cf6; border-bottom-color: #8b5cf6; }
+    body.dark .period-btn { border-color: #444; background: #1a1a1a; color: #bbb; }
+    body.dark .period-btn:hover { border-color: #8b5cf6; color: #8b5cf6; }
+    body.dark .period-btn.active { background: #8b5cf6; border-color: #8b5cf6; color: #fff; }
+    body.dark .chart-loading { background: rgba(31,31,31,0.92); color: #888; }
+
+    /* Dark mode toggle */
+    .dark-toggle { background: none; border: none; cursor: pointer; color: rgba(255,255,255,0.85); font-size: 18px; width: 34px; height: 34px; border-radius: 8px; display: flex; align-items: center; justify-content: center; transition: background 0.2s; }
+    .dark-toggle:hover { background: rgba(255,255,255,0.15); }
+    .dark-toggle svg { width: 18px; height: 18px; }
+    .dark-toggle.active { background: rgba(255,255,255,0.35); box-shadow: inset 0 0 0 1.5px rgba(255,255,255,0.5); }
+
+    /* Theme transition - View Transitions API */
+    ::view-transition-old(root), ::view-transition-new(root) {
+      animation-duration: 500ms;
+      animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    /* 开灯: 旧主题静止, 新主题从按钮处向外扩散 */
+    ::view-transition-old(root) {
+      animation: none;
+      z-index: 1;
+    }
+    ::view-transition-new(root) {
+      animation: theme-grow 500ms cubic-bezier(0.4, 0, 0.2, 1);
+      z-index: 2;
+    }
+    @keyframes theme-grow {
+      from { clip-path: circle(0% at var(--theme-x) var(--theme-y)); }
+      to   { clip-path: circle(150% at var(--theme-x) var(--theme-y)); }
+    }
+    /* 关灯: 新主题静止, 旧主题从全屏收缩到按钮处 */
+    html.to-dark::view-transition-old(root) {
+      animation: theme-shrink 500ms cubic-bezier(0.4, 0, 0.2, 1);
+      z-index: 2;
+    }
+    html.to-dark::view-transition-new(root) {
+      animation: none;
+      z-index: 1;
+    }
+    @keyframes theme-shrink {
+      from { clip-path: circle(150% at var(--theme-x) var(--theme-y)); }
+      to   { clip-path: circle(0% at var(--theme-x) var(--theme-y)); }
+    }
+
+    /* Theme transition overlay - fallback */
+    .theme-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      z-index: 9999;
+      pointer-events: none;
+    }
+  </style>
+  <script src="/js/echart/echarts.min.js"></script>
+  <script>if(localStorage.getItem('usage_dark')==='true')document.documentElement.classList.add('dark');</script>
+</head>
+<body>
+  <div class="header">
+    <h1>CodingPlan 用量监控</h1>
+    <div class="header-right">
+      <button class="dark-toggle" id="darkToggle" title="切换深色模式">
+        <svg id="sunIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+        <svg id="moonIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
+      </button>
+      <button class="dark-toggle" id="privacyToggle" title="切换隐私模式（隐藏账号名称）">
+        <svg id="eyeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+        <svg id="eyeOffIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+      </button>
+      <span class="last-updated" id="lastUpdated"></span>
+      <button class="header-btn" id="mgmtBtn">管理账号</button>
+      <button class="header-btn" id="refreshBtn" style="display: none;">全部刷新</button>
+    </div>
+  </div>
+  <div class="container">
+    <div class="toolbar" id="toolbar">
+      <div class="toolbar-group">
+        <span class="toolbar-label">站点</span>
+        <button class="toolbar-btn active" data-filter="all" onclick="setFilter('all')">全部</button>
+        <button class="toolbar-btn" data-filter="glm" onclick="setFilter('glm')">智谱</button>
+        <button class="toolbar-btn" data-filter="yescode" onclick="setFilter('yescode')">YesCode</button>
+        <button class="toolbar-btn" data-filter="huoli" onclick="setFilter('huoli')">火狸</button>
+      </div>
+      <div class="toolbar-group">
+        <span class="toolbar-label">排序</span>
+        <button class="toolbar-btn active" data-sort="default" onclick="setSort('default')">默认</button>
+        <button class="toolbar-btn" data-sort="tension" onclick="setSort('tension')">紧张度<span class="sort-arrow" id="tensionArrow">▼</span></button>
+      </div>
+      <span class="toolbar-count" id="toolbarCount"></span>
+    </div>
+    <div class="card-grid" id="cardGrid"></div>
+  </div>
+
+  <!-- 密码验证 -->
+  <div class="modal-overlay" id="pwdOverlay">
+    <div class="modal" style="width:360px">
+      <div class="modal-header">
+        <h3>身份验证</h3>
+        <button class="modal-close" onclick="closeModal('pwdOverlay')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label">请输入管理密码</label>
+          <input class="form-input" type="password" id="pwdInput">
+        </div>
+        <div id="pwdError" style="color:#f5222d;font-size:13px;min-height:18px"></div>
+        <div class="form-actions"><button class="btn-primary" onclick="submitPassword()">确认</button></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 详情 Modal -->
+  <div class="modal-overlay" id="modalOverlay">
+    <div class="modal" style="width:calc(100vw - 50px);max-width:calc(100vw - 50px)">
+      <div class="modal-header">
+        <h3 id="modalTitle">账号详情</h3>
+        <button class="modal-close" onclick="closeModal('modalOverlay')">&times;</button>
+      </div>
+      <div class="modal-body" id="modalBody"></div>
+    </div>
+  </div>
+
+  <!-- 管理 Modal -->
+  <div class="modal-overlay" id="mgmtOverlay">
+    <div class="modal" style="width:640px">
+      <div class="modal-header">
+        <h3 id="mgmtTitle">账号管理</h3>
+        <button class="modal-close" onclick="closeModal('mgmtOverlay')">&times;</button>
+      </div>
+      <div class="modal-body" id="mgmtBody"></div>
+    </div>
+  </div>
+
+  <!-- Theme transition overlay -->
+  <div class="theme-overlay" id="themeOverlay"></div>
+
+  <script>
+    var accountsData = [];
+    var expireData = [];
+    var UNIT_LABELS = { 3: '每5小时', 5: 'MCP月额度', 6: '每周' };
+    var _pendingAuth = null;
+    var _detailIndex = -1;
+    var _filterPlatform = 'all';
+    var _sortMode = 'default';
+    var _privacyMode = localStorage.getItem('usage_privacy') === 'true';
+
+    // ============ Dark Mode ============
+    (function() {
+      var dark = localStorage.getItem('usage_dark') === 'true';
+      if (dark) document.documentElement.classList.add('dark');
+      document.body.classList.toggle('dark', dark);
+      document.getElementById('sunIcon').style.display = dark ? 'none' : '';
+      document.getElementById('moonIcon').style.display = dark ? '' : 'none';
+
+      var overlay = document.getElementById('themeOverlay');
+
+      function applyTheme(goingDark) {
+        document.body.classList.toggle('dark', goingDark);
+        document.documentElement.classList.toggle('dark', goingDark);
+        localStorage.setItem('usage_dark', goingDark);
+        document.getElementById('sunIcon').style.display = goingDark ? 'none' : '';
+        document.getElementById('moonIcon').style.display = goingDark ? '' : 'none';
+      }
+
+      document.getElementById('darkToggle').addEventListener('click', function() {
+        if (this._animating) return;
+        var goingDark = !document.body.classList.contains('dark');
+        var rect = this.getBoundingClientRect();
+        var cx = rect.left + rect.width / 2;
+        var cy = rect.top + rect.height / 2;
+
+        if (document.startViewTransition) {
+          document.documentElement.style.setProperty('--theme-x', cx + 'px');
+          document.documentElement.style.setProperty('--theme-y', cy + 'px');
+          document.documentElement.classList.toggle('to-dark', goingDark);
+          document.startViewTransition(function() {
+            applyTheme(goingDark);
+          }).finished.then(function() {
+            document.documentElement.classList.remove('to-dark');
+          });
+          return;
+        }
+
+        this._animating = true;
+        var self = this;
+        var maxDist = Math.max(
+          Math.hypot(cx, cy),
+          Math.hypot(window.innerWidth - cx, cy),
+          Math.hypot(cx, window.innerHeight - cy),
+          Math.hypot(window.innerWidth - cx, window.innerHeight - cy)
+        );
+        var maxR = Math.ceil(maxDist) + 10;
+        var tpl = 'radial-gradient(circle {SIZE}px at {CX}px {CY}px, transparent {HOLE}px, black {EDGE}px)';
+        var initMask = tpl.replace('{SIZE}', maxR).replace('{CX}', cx).replace('{CY}', cy).replace('{HOLE}', '0').replace('{EDGE}', '0');
+
+        overlay.style.background = goingDark ? '#141414' : '#f0f2f5';
+        overlay.style.webkitMaskImage = initMask;
+        overlay.style.maskImage = initMask;
+
+        applyTheme(goingDark);
+
+        var duration = 500;
+        var startTime = performance.now();
+        function frame(now) {
+          var t = Math.min(1, (now - startTime) / duration);
+          var eased = 1 - Math.pow(1 - t, 3);
+          var r = eased * maxR;
+          var m = tpl.replace('{SIZE}', maxR).replace('{CX}', cx).replace('{CY}', cy).replace('{HOLE}', r.toFixed(1)).replace('{EDGE}', (r + 2).toFixed(1));
+          overlay.style.webkitMaskImage = m;
+          overlay.style.maskImage = m;
+          if (t < 1) { requestAnimationFrame(frame); }
+          else {
+            overlay.style.webkitMaskImage = '';
+            overlay.style.maskImage = '';
+            overlay.style.background = '';
+            self._animating = false;
+          }
+        }
+        requestAnimationFrame(frame);
+      });
+    })();
+
+    // ============ Privacy Mode ============
+    (function() {
+      var btn = document.getElementById('privacyToggle');
+      function syncIcon() {
+        document.getElementById('eyeIcon').style.display = _privacyMode ? 'none' : '';
+        document.getElementById('eyeOffIcon').style.display = _privacyMode ? '' : 'none';
+        btn.classList.toggle('active', _privacyMode);
+      }
+      syncIcon();
+      btn.addEventListener('click', function() {
+        _privacyMode = !_privacyMode;
+        localStorage.setItem('usage_privacy', _privacyMode);
+        syncIcon();
+        if (accountsData.length) renderCards(accountsData);
+        if (_detailIndex >= 0 && document.getElementById('modalOverlay').classList.contains('active')) {
+          var acc = accountsData[_detailIndex];
+          if (acc) document.getElementById('modalTitle').textContent = displayName(acc, _detailIndex);
+        }
+      });
+    })();
+
+    function esc(s) { return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+    // 隐私模式：账号名称 → 站点名 + 站点内序号（按全局顺序，1 起）
+    function platformLabel(platform) {
+      if (platform === 'yescode') return 'YesCode';
+      if (platform === 'huoli') return '火狸';
+      return '智谱';
+    }
+    function displayName(acc, origIdx) {
+      var name = (acc && acc.name) || '';
+      if (!_privacyMode) return name;
+      var platform = (acc && acc.platform) || 'glm';
+      var seq = 0;
+      for (var i = 0; i < accountsData.length; i++) {
+        if (((accountsData[i] && accountsData[i].platform) || 'glm') === platform) seq++;
+        if (i === origIdx) break;
+      }
+      return platformLabel(platform) + seq;
+    }
+    function getLimitLabel(l) { return l.type === 'TIME_LIMIT' ? 'MCP 调用额度' : 'Token (' + (UNIT_LABELS[l.unit] || '周期' + l.unit) + ')'; }
+    function getColorClass(p) { return p >= 100 ? 'fill-exhausted' : p < 50 ? 'fill-green' : p < 80 ? 'fill-orange' : 'fill-red'; }
+    function getStatusClass(p) { return p >= 100 ? 'status-exhausted' : p < 50 ? 'status-ok' : p < 80 ? 'status-warn' : 'status-danger'; }
+    function getStatusText(p) { return p >= 100 ? '耗尽' : p < 50 ? '正常' : p < 80 ? '注意' : '紧张'; }
+    function formatTime(ts) { return ts ? new Date(ts).toLocaleString('zh-CN',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}) : '-'; }
+    function maxPct(ls) { return ls && ls.length ? Math.max.apply(null, ls.map(function(l){return l.percentage||0})) : 0; }
+    function timeAgo(ts) { if (!ts) return ''; var d = Date.now() - ts; if (d < 60000) return '刚刚'; if (d < 3600000) return Math.floor(d/60000) + '分钟前'; return new Date(ts).toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'}); }
+    function isAdmin() { return !!localStorage.getItem('glm_pwd'); }
+    function authHeaders() { var h = {'Content-Type':'application/json'}; var p = localStorage.getItem('glm_pwd'); if (p) h['X-Auth-Password'] = p; return h; }
+
+    // ============ 通用：需要管理员权限 ============
+
+    function requireAuth(callback) {
+      if (isAdmin()) { callback(); return; }
+      _pendingAuth = callback;
+      document.getElementById('pwdError').textContent = '';
+      document.getElementById('pwdInput').value = '';
+      document.getElementById('pwdOverlay').classList.add('active');
+      setTimeout(function(){ document.getElementById('pwdInput').focus(); }, 100);
+    }
+
+    function clipCopy(text) {
+      if (navigator.clipboard) return navigator.clipboard.writeText(text);
+      var ta = document.createElement('textarea');
+      ta.value = text; ta.style.cssText = 'position:fixed;opacity:0';
+      document.body.appendChild(ta); ta.select();
+      document.execCommand('copy'); document.body.removeChild(ta);
+      return Promise.resolve();
+    }
+
+    // ============ 卡片渲染 ============
+
+    function renderLimitRow(limit) {
+      if (limit._unlimited) {
+        return '<div class="limit-row"><div class="limit-label"><span class="limit-name">' + getLimitLabel(limit) + '</span><span class="limit-value" style="color:#52c41a">∞</span></div></div>';
+      }
+      var pct = limit.percentage || 0;
+      var label = getLimitLabel(limit);
+      var value = '已用 ' + pct + '%';
+      if (limit.type === 'TIME_LIMIT' && limit.usage != null) value = (limit.currentValue||0) + '/' + limit.usage + ' (' + pct + '%)';
+      var reset = limit.nextResetTime ? '重置 ' + formatTime(limit.nextResetTime) : '';
+
+      // Segmented bar for 5-hour (unit=3 → 5 segments) and weekly (unit=6 → 7 segments)
+      var segments = 0;
+      if (limit.unit === 3) segments = 5;
+      else if (limit.unit === 6) segments = 7;
+
+      if (segments > 0) {
+        var segPct = 100 / segments;
+        var segHtml = '';
+        for (var i = 0; i < segments; i++) {
+          var segStart = i * segPct;
+          var segEnd = (i + 1) * segPct;
+          var fillW = 0;
+          if (pct >= segEnd) fillW = 100;
+          else if (pct > segStart) fillW = ((pct - segStart) / segPct) * 100;
+          segHtml += '<div class="seg"><div class="seg-fill ' + getColorClass(pct) + '" style="width:' + fillW + '%"></div></div>';
+        }
+
+        // Theoretical usage based on nextResetTime
+        var theoPct = -1;
+        if (limit.nextResetTime) {
+          var now = Date.now();
+          var resetMs = new Date(limit.nextResetTime).getTime();
+          if (!isNaN(resetMs)) {
+            var periodMs = segments === 5 ? 5 * 3600000 : 7 * 86400000;
+            var elapsed = now - (resetMs - periodMs);
+            if (elapsed > 0) theoPct = Math.min(100, (elapsed / periodMs) * 100);
+          }
+        }
+
+        var barHtml = '<div class="limit-bar-wrap"><div class="limit-bar-seg">' + segHtml + '</div>';
+        if (theoPct >= 0) {
+          barHtml += '<div class="theo-marker" style="left:' + theoPct + '%"></div>';
+        }
+        barHtml += '</div>';
+
+        // Tension based on actual vs theoretical
+        var tensionHtml = '';
+        if (theoPct >= 0) {
+          var tText = '', tColor = '';
+          if (pct <= 0) { tText = '暂无用量'; tColor = '#bfbfbf'; }
+          else {
+            var ratio = pct / theoPct;
+            if (ratio <= 0.8) { tText = '充裕'; tColor = '#52c41a'; }
+            else if (ratio <= 1.3) { tText = '正常'; tColor = '#8c8c8c'; }
+            else if (ratio <= 2.0) { tText = '偏快'; tColor = '#fa8c16'; }
+            else { tText = '紧张'; tColor = '#f5222d'; }
+          }
+          tensionHtml = '<div class="tension-row"><span style="color:' + tColor + ';font-weight:500">' + tText + '</span><span style="color:#bfbfbf">理论 ' + theoPct.toFixed(0) + '%</span></div>';
+        }
+
+        return '<div class="limit-row"><div class="limit-label"><span class="limit-name">' + label + '</span><span class="limit-value">' + value + '</span></div>'
+          + barHtml + tensionHtml
+          + (reset ? '<div style="font-size:11px;color:#bfbfbf;margin-top:2px">' + reset + '</div>' : '')
+          + '</div>';
+      }
+
+      // Default simple bar for other limits
+      return '<div class="limit-row"><div class="limit-label"><span class="limit-name">' + label + '</span><span class="limit-value">' + value + '</span></div>'
+        + '<div class="limit-bar"><div class="limit-fill ' + getColorClass(pct) + '" style="width:' + Math.min(pct,100) + '%"></div></div>'
+        + (reset ? '<div style="font-size:11px;color:#bfbfbf;margin-top:3px">' + reset + '</div>' : '') + '</div>';
+    }
+
+    function platformTag(platform) {
+      if (platform === 'yescode') return '<span class="platform-tag platform-yescode">YesCode</span>';
+      if (platform === 'huoli') return '<span class="platform-tag platform-huoli">火狸</span>';
+      return '<span class="platform-tag platform-glm">智谱</span>';
+    }
+
+    function renderSpendRow(label, spent, limit, lastReset, periodMs) {
+      var pct = limit > 0 ? Math.min(100, (spent / limit) * 100) : 0;
+      var pctRound = pct.toFixed(1).replace(/\.0$/, '');
+      var value = '$' + (+spent).toFixed(2) + ' / $' + (+limit).toFixed(2) + ' (' + pctRound + '%)';
+      var nextReset = lastReset ? new Date(lastReset).getTime() + periodMs : null;
+      var resetTxt = nextReset ? '重置 ' + formatTime(nextReset) : '';
+
+      var theoPct = -1;
+      if (lastReset) {
+        var elapsed = Date.now() - new Date(lastReset).getTime();
+        if (elapsed > 0) theoPct = Math.min(100, (elapsed / periodMs) * 100);
+      }
+
+      var html = '<div class="limit-row"><div class="limit-label"><span class="limit-name">' + label + '</span><span class="limit-value">' + value + '</span></div>';
+      html += '<div class="limit-bar-wrap"><div class="limit-bar"><div class="limit-fill ' + getColorClass(pct) + '" style="width:' + pct + '%"></div></div>';
+      if (theoPct >= 0) html += '<div class="theo-marker" style="left:' + theoPct + '%"></div>';
+      html += '</div>';
+
+      if (theoPct >= 0) {
+        var tText, tColor;
+        if (pct <= 0) { tText = '暂无用量'; tColor = '#bfbfbf'; }
+        else {
+          var ratio = pct / theoPct;
+          if (ratio <= 0.8) { tText = '充裕'; tColor = '#52c41a'; }
+          else if (ratio <= 1.3) { tText = '正常'; tColor = '#8c8c8c'; }
+          else if (ratio <= 2.0) { tText = '偏快'; tColor = '#fa8c16'; }
+          else { tText = '紧张'; tColor = '#f5222d'; }
+        }
+        html += '<div class="tension-row"><span style="color:' + tColor + ';font-weight:500">' + tText + '</span><span style="color:#bfbfbf">理论 ' + theoPct.toFixed(0) + '%</span></div>';
+      }
+
+      if (resetTxt) html += '<div style="font-size:11px;color:#bfbfbf;margin-top:2px">' + resetTxt + '</div>';
+      html += '</div>';
+      return html;
+    }
+
+    function yescodeDailySpent(d) {
+      var plan = d.subscription_plan || {};
+      var quota = plan.daily_balance || 0;
+      if (quota <= 0) return 0;
+      return Math.max(0, quota - (d.subscription_balance || 0));
+    }
+
+    function yescodeMaxPct(d) {
+      var plan = d.subscription_plan || {};
+      var dq = plan.daily_balance || 0;
+      var dPct = dq > 0 ? Math.min(100, (yescodeDailySpent(d) / dq) * 100) : 0;
+      var w = plan.weekly_limit > 0 ? Math.min(100, ((d.current_week_spend || 0) / plan.weekly_limit) * 100) : 0;
+      var m = plan.monthly_spend_limit > 0 ? Math.min(100, ((d.current_month_spend || 0) / plan.monthly_spend_limit) * 100) : 0;
+      return Math.max(dPct, w, m);
+    }
+
+    function renderCardHTML(i, acc) {
+      var platform = acc.platform || 'glm';
+      var btn = isAdmin() ? '<button class="card-refresh" id="refresh-' + i + '" onclick="refreshCard(' + i + ')" title="刷新">&#x21bb;</button>' : '';
+      var pTag = platformTag(platform);
+      var headerLeft = '<div class="card-header-left">' + pTag + '<h3>' + esc(displayName(acc, i)) + '</h3></div>';
+
+      if (!acc.success) {
+        return '<div class="card" id="card-' + i + '"><div class="card-header">' + headerLeft
+          + '<div class="card-header-right">' + btn + '<span class="card-status status-error">请求失败</span></div></div>'
+          + '<div class="card-body"><p class="error-text">' + esc(acc.error||'未知错误') + '</p></div>'
+          + '<div class="card-footer"><span></span><button class="detail-btn" onclick="showDetail(' + i + ')">详情</button></div></div>';
+      }
+
+      var cache = acc.cachedAt ? '<span class="cache-time">' + timeAgo(acc.cachedAt) + '</span>' : '';
+
+      if (platform === 'yescode') {
+        var d = acc.data || {};
+        var plan = d.subscription_plan || {};
+        var bodyHtml = renderSpendRow('今日消费', yescodeDailySpent(d), plan.daily_balance || 0, d.last_daily_balance_add, 86400000)
+          + renderSpendRow('本周消费', d.current_week_spend || 0, plan.weekly_limit || 0, d.last_week_reset, 7 * 86400000)
+          + renderSpendRow('本月消费', d.current_month_spend || 0, plan.monthly_spend_limit || 0, d.last_month_reset, 30 * 86400000);
+        var mpY = yescodeMaxPct(d);
+        var planBadge = '<span class="level-badge">' + esc(plan.name || '-') + '</span>';
+        var balanceBadge = (d.balance != null) ? '<span class="level-badge" style="background:#f6ffed;color:#389e0d;border-color:#b7eb8f">余额 $' + (+d.balance).toFixed(0) + '</span>' : '';
+        var expHtmlY = '';
+        if (d.subscription_expiry) {
+          var expDate = new Date(d.subscription_expiry);
+          var daysLeftY = Math.ceil((expDate - Date.now()) / 86400000);
+          var expClsY = daysLeftY <= 10 ? 'expire-danger' : '';
+          var expHintY = daysLeftY <= 0 ? '已过期' : daysLeftY + '天后到期';
+          var expTxt = expDate.toLocaleDateString('zh-CN');
+          expHtmlY = '<div class="expire-row" title="订阅到期"><span class="expire-label">订阅到期</span><span class="expire-value ' + expClsY + '">' + esc(expTxt) + '<span class="expire-hint">' + expHintY + '</span></span></div>';
+        }
+        return '<div class="card" id="card-' + i + '"><div class="card-header">' + headerLeft
+          + '<div class="card-header-right">' + btn + '<span class="card-status ' + getStatusClass(mpY) + '">' + getStatusText(mpY) + '</span></div></div>'
+          + '<div class="card-body">' + bodyHtml + '</div>' + expHtmlY
+          + '<div class="card-footer"><div class="card-footer-left">' + planBadge + balanceBadge + cache + '</div>'
+          + '<button class="detail-btn" onclick="showDetail(' + i + ')">详情</button></div></div>';
+      }
+
+      if (platform === 'huoli') {
+        var subs = acc.data || [];
+        var sub = subs[0] || {};
+        var grp = sub.group || {};
+        var dailyUsed = sub.daily_usage_usd || 0;
+        var dailyLimit = grp.daily_limit_usd || 0;
+        var weeklyUsed = sub.weekly_usage_usd || 0;
+        var weeklyLimit = grp.weekly_limit_usd || 0;
+        var monthlyUsed = sub.monthly_usage_usd || 0;
+        var monthlyLimit = grp.monthly_limit_usd || 0;
+        var bodyHtml = renderSpendRow('今日消费', dailyUsed, dailyLimit, sub.daily_window_start, 86400000)
+          + renderSpendRow('本周消费', weeklyUsed, weeklyLimit, sub.weekly_window_start, 7 * 86400000)
+          + renderSpendRow('本月消费', monthlyUsed, monthlyLimit, sub.monthly_window_start, 30 * 86400000);
+        var dPctH = dailyLimit > 0 ? Math.min(100, (dailyUsed / dailyLimit) * 100) : 0;
+        var wPctH = weeklyLimit > 0 ? Math.min(100, (weeklyUsed / weeklyLimit) * 100) : 0;
+        var mPctH = monthlyLimit > 0 ? Math.min(100, (monthlyUsed / monthlyLimit) * 100) : 0;
+        var mpH = Math.max(dPctH, wPctH, mPctH);
+        var planBadgeH = '<span class="level-badge">' + esc(grp.name || '-') + '</span>';
+        var expHtmlH = '';
+        if (sub.expires_at) {
+          var expDateH = new Date(sub.expires_at);
+          var daysLeftH = Math.ceil((expDateH - Date.now()) / 86400000);
+          var expClsH = daysLeftH <= 10 ? 'expire-danger' : '';
+          var expHintH = daysLeftH <= 0 ? '已过期' : daysLeftH + '天后到期';
+          var expTxtH = expDateH.toLocaleDateString('zh-CN');
+          expHtmlH = '<div class="expire-row" title="订阅到期"><span class="expire-label">订阅到期</span><span class="expire-value ' + expClsH + '">' + esc(expTxtH) + '<span class="expire-hint">' + expHintH + '</span></span></div>';
+        }
+        return '<div class="card" id="card-' + i + '"><div class="card-header">' + headerLeft
+          + '<div class="card-header-right">' + btn + '<span class="card-status ' + getStatusClass(mpH) + '">' + getStatusText(mpH) + '</span></div></div>'
+          + '<div class="card-body">' + bodyHtml + '</div>' + expHtmlH
+          + '<div class="card-footer"><div class="card-footer-left">' + planBadgeH + cache + '</div>'
+          + '<button class="detail-btn" onclick="showDetail(' + i + ')">详情</button></div></div>';
+      }
+
+      // GLM
+      var limits = acc.data && acc.data.limits ? acc.data.limits : [];
+      var hasWeekly = limits.some(function(l) { return l.unit === 6; });
+      if (!hasWeekly) limits = limits.concat([{ type: 'TOKEN_LIMIT', unit: 6, _unlimited: true }]);
+      // 固定顺序: TIME_LIMIT(MCP额度) → unit 3(Token每5小时) → unit 6(Token每周) → 其他
+      var LIMIT_ORDER = { TIME_LIMIT: 0, 3: 1, 6: 2 };
+      limits = limits.slice().sort(function(a, b) {
+        var oa = a.type === 'TIME_LIMIT' ? 0 : (LIMIT_ORDER[a.unit] != null ? LIMIT_ORDER[a.unit] : 9);
+        var ob = b.type === 'TIME_LIMIT' ? 0 : (LIMIT_ORDER[b.unit] != null ? LIMIT_ORDER[b.unit] : 9);
+        return oa - ob;
+      });
+      var mp = maxPct(limits), level = acc.data && acc.data.level ? acc.data.level : '-';
+      var expHtml = '';
+      var exp = expireData[i];
+      if (exp && exp.success && exp.expireTime) {
+        var daysLeft = Math.ceil((new Date(exp.expireTime.replace(/-/g, '/')) - Date.now()) / 86400000);
+        var expCls = daysLeft <= 10 ? 'expire-danger' : '';
+        var expHint = daysLeft <= 0 ? '已过期' : daysLeft + '天后到期';
+        expHtml = '<div class="expire-row" onclick="refreshExpire(' + i + ')" title="点击刷新"><span class="expire-label">订阅到期</span><span class="expire-value ' + expCls + '">' + esc(exp.expireTime) + '<span class="expire-hint">' + expHint + '</span></span></div>';
+      }
+      var keyBadge = acc.keyCount != null ? '<span class="level-badge" style="background:#f6ffed;color:#389e0d;border-color:#b7eb8f">Key: ' + acc.keyCount + '个</span>' : '';
+      return '<div class="card" id="card-' + i + '"><div class="card-header">' + headerLeft
+        + '<div class="card-header-right">' + btn + '<span class="card-status ' + getStatusClass(mp) + '">' + getStatusText(mp) + '</span></div></div>'
+        + '<div class="card-body">' + limits.map(renderLimitRow).join('') + '</div>' + expHtml
+        + '<div class="card-footer"><div class="card-footer-left"><span class="level-badge">' + level + '</span>' + keyBadge + cache + '</div>'
+        + '<button class="detail-btn" onclick="showDetail(' + i + ')">详情</button></div></div>';
+    }
+
+    function getAccMaxPct(acc) {
+      if (!acc || !acc.success || !acc.data) return -1;
+      var plat = acc.platform || 'glm';
+      if (plat === 'yescode') return yescodeMaxPct(acc.data);
+      if (plat === 'huoli') {
+        var subs = acc.data || [];
+        var sub = subs[0] || {};
+        var grp = sub.group || {};
+        var dPct = (grp.daily_limit_usd || 0) > 0 ? Math.min(100, ((sub.daily_usage_usd || 0) / grp.daily_limit_usd) * 100) : 0;
+        var wPct = (grp.weekly_limit_usd || 0) > 0 ? Math.min(100, ((sub.weekly_usage_usd || 0) / grp.weekly_limit_usd) * 100) : 0;
+        var mPct = (grp.monthly_limit_usd || 0) > 0 ? Math.min(100, ((sub.monthly_usage_usd || 0) / grp.monthly_limit_usd) * 100) : 0;
+        return Math.max(dPct, wPct, mPct);
+      }
+      var limits = acc.data.limits || [];
+      return maxPct(limits);
+    }
+
+    function applyFilterSort(data) {
+      var arr = data.map(function(a, i) { return { acc: a, origIdx: (a && a.index != null) ? a.index : i }; });
+      if (_filterPlatform !== 'all') {
+        arr = arr.filter(function(x) { return (x.acc && x.acc.platform || 'glm') === _filterPlatform; });
+      }
+      if (_sortMode === 'tension-desc' || _sortMode === 'tension-asc') {
+        var asc = _sortMode === 'tension-asc';
+        arr.sort(function(a, b) {
+          var pa = getAccMaxPct(a.acc), pb = getAccMaxPct(b.acc);
+          // 请求失败的卡（pct = -1）始终排到最后
+          if (pa < 0 && pb < 0) return a.origIdx - b.origIdx;
+          if (pa < 0) return 1;
+          if (pb < 0) return -1;
+          if (pa !== pb) return asc ? (pa - pb) : (pb - pa);
+          return a.origIdx - b.origIdx;
+        });
+      }
+      return arr;
+    }
+
+    function renderCards(data) {
+      var grid = document.getElementById('cardGrid');
+      var countEl = document.getElementById('toolbarCount');
+      if (!data || !data.length) {
+        grid.innerHTML = '<div class="empty">暂无账号数据<br><span style="font-size:12px;margin-top:8px;display:block">点击「管理账号」添加</span></div>';
+        if (countEl) countEl.textContent = '';
+        return;
+      }
+      var list = applyFilterSort(data);
+      if (countEl) countEl.textContent = '共 ' + list.length + ' / ' + data.length + ' 个账号';
+      if (!list.length) {
+        grid.innerHTML = '<div class="empty">当前筛选下无账号</div>';
+        return;
+      }
+      grid.innerHTML = list.map(function(x) { return renderCardHTML(x.origIdx, x.acc); }).join('');
+    }
+
+    function setFilter(p) {
+      _filterPlatform = p;
+      document.querySelectorAll('#toolbar [data-filter]').forEach(function(b) {
+        b.classList.toggle('active', b.dataset.filter === p);
+      });
+      if (accountsData.length) renderCards(accountsData);
+    }
+
+    function setSort(s) {
+      if (s === 'tension') {
+        // 已是紧张度排序则切换方向；否则首次进入按降序
+        _sortMode = (_sortMode === 'tension-desc') ? 'tension-asc' : 'tension-desc';
+      } else {
+        _sortMode = 'default';
+      }
+      document.querySelectorAll('#toolbar [data-sort]').forEach(function(b) {
+        var key = b.dataset.sort;
+        var active = (key === 'default' && _sortMode === 'default')
+          || (key === 'tension' && (_sortMode === 'tension-desc' || _sortMode === 'tension-asc'));
+        b.classList.toggle('active', active);
+      });
+      var arrow = document.getElementById('tensionArrow');
+      if (arrow) arrow.textContent = _sortMode === 'tension-asc' ? '▲' : '▼';
+      if (accountsData.length) renderCards(accountsData);
+    }
+
+    function updateCard(i, acc) {
+      accountsData[i] = acc;
+      var old = document.getElementById('card-' + i);
+      if (old) { var t = document.createElement('div'); t.innerHTML = renderCardHTML(i, acc); old.parentNode.replaceChild(t.firstChild, old); }
+    }
+
+    function refreshCard(index) {
+      var btn = document.getElementById('refresh-' + index);
+      if (btn) btn.classList.add('spinning');
+      fetch('/api/usage/' + index + '?force=1').then(function(r){return r.json()}).then(function(acc){updateCard(index,acc)}).catch(function(){if(btn)btn.classList.remove('spinning')});
+    }
+
+    // ============ 详情弹窗 ============
+
+    var _usageCharts = {};
+
+    function fmtYesCodeDate(s) {
+      if (!s) return '-';
+      var d = new Date(s);
+      if (isNaN(d)) return s;
+      return d.toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+    }
+
+    function renderYesCodeDetail(index, acc) {
+      var d = acc.data || {};
+      var plan = d.subscription_plan || {};
+      var weekSpent = d.current_week_spend || 0;
+      var weekLimit = plan.weekly_limit || 0;
+      var monthSpent = d.current_month_spend || 0;
+      var monthLimit = plan.monthly_spend_limit || 0;
+
+      var html = '<div class="info-section"><div class="info-section-title">负责人信息</div><div class="info-grid">'
+        + '<span class="info-label">负责人</span><span class="info-value">' + esc(acc.responsiblePerson||'-') + '</span>'
+        + '<span class="info-label">电话</span><span class="info-value">' + esc(acc.phone||'-') + '</span>'
+        + '<span class="info-label">备注</span><span class="info-value">' + esc(acc.notes||'-') + '</span>'
+        + '</div></div>';
+
+      html += '<div class="info-section"><div class="info-section-title">账号信息</div><div class="info-grid">'
+        + '<span class="info-label">用户名</span><span class="info-value">' + esc(d.username||'-') + '</span>'
+        + '<span class="info-label">邮箱</span><span class="info-value">' + esc(d.email||'-') + '</span>'
+        + '<span class="info-label">套餐</span><span class="info-value">' + esc(plan.name||'-') + (plan.description ? ' <span style="color:#bfbfbf">· ' + esc(plan.description) + '</span>' : '') + '</span>'
+        + '<span class="info-label">价格</span><span class="info-value">' + (plan.price != null ? '$' + plan.price : '-') + '</span>'
+        + '<span class="info-label">注册时间</span><span class="info-value">' + esc(fmtYesCodeDate(d.created_at)) + '</span>'
+        + '<span class="info-label">订阅到期</span><span class="info-value">' + esc(fmtYesCodeDate(d.subscription_expiry)) + '</span>'
+        + '<span class="info-label">官网</span><span class="info-value"><a href="https://co.yes.vg/" target="_blank" rel="noopener" style="color:#667eea;text-decoration:none">https://co.yes.vg/ ↗</a></span>'
+        + '</div></div>';
+
+      html += '<div class="info-section"><div class="info-section-title">余额详情</div><div class="info-grid">'
+        + '<span class="info-label">总余额</span><span class="info-value">$' + (+(d.balance||0)).toFixed(2) + '</span>'
+        + '<span class="info-label">订阅余额</span><span class="info-value">$' + (+(d.subscription_balance||0)).toFixed(2) + '</span>'
+        + '<span class="info-label">按量余额</span><span class="info-value">$' + (+(d.pay_as_you_go_balance||0)).toFixed(2) + '</span>'
+        + '<span class="info-label">每日额度</span><span class="info-value">$' + (+(plan.daily_balance||0)).toFixed(2) + '</span>'
+        + '</div></div>';
+
+      var dailyLimit = plan.daily_balance || 0;
+      var dailySpent = yescodeDailySpent(d);
+      var dailyPct = dailyLimit > 0 ? Math.min(100, (dailySpent / dailyLimit) * 100) : 0;
+      var dailyNext = d.last_daily_balance_add ? new Date(d.last_daily_balance_add).getTime() + 86400000 : null;
+      var weekPct = weekLimit > 0 ? Math.min(100, (weekSpent / weekLimit) * 100) : 0;
+      var monthPct = monthLimit > 0 ? Math.min(100, (monthSpent / monthLimit) * 100) : 0;
+      var weekNext = d.last_week_reset ? new Date(d.last_week_reset).getTime() + 7*86400000 : null;
+      var monthNext = d.last_month_reset ? new Date(d.last_month_reset).getTime() + 30*86400000 : null;
+
+      html += '<div class="info-section"><div class="info-section-title">消费情况</div>'
+        + '<div class="limit-row"><div class="limit-label"><span class="limit-name">今日已消费</span><span class="limit-value">$' + dailySpent.toFixed(2) + ' / $' + dailyLimit.toFixed(2) + ' (' + dailyPct.toFixed(1) + '%)</span></div>'
+        + '<div class="limit-bar"><div class="limit-fill ' + getColorClass(dailyPct) + '" style="width:' + dailyPct + '%"></div></div>'
+        + (dailyNext ? '<div style="font-size:11px;color:#bfbfbf;margin-top:3px">每日额度重置时间：' + fmtYesCodeDate(dailyNext) + '（每日0点 UTC+8）</div>' : '')
+        + '</div>'
+        + '<div class="limit-row"><div class="limit-label"><span class="limit-name">本周已消费</span><span class="limit-value">$' + weekSpent.toFixed(2) + ' / $' + weekLimit.toFixed(2) + ' (' + weekPct.toFixed(1) + '%)</span></div>'
+        + '<div class="limit-bar"><div class="limit-fill ' + getColorClass(weekPct) + '" style="width:' + weekPct + '%"></div></div>'
+        + (weekNext ? '<div style="font-size:11px;color:#bfbfbf;margin-top:3px">周配额重置时间：' + fmtYesCodeDate(weekNext) + '（每7天滚动）</div>' : '')
+        + '</div>'
+        + '<div class="limit-row"><div class="limit-label"><span class="limit-name">本月已消费</span><span class="limit-value">$' + monthSpent.toFixed(2) + ' / $' + monthLimit.toFixed(2) + ' (' + monthPct.toFixed(1) + '%)</span></div>'
+        + '<div class="limit-bar"><div class="limit-fill ' + getColorClass(monthPct) + '" style="width:' + monthPct + '%"></div></div>'
+        + (monthNext ? '<div style="font-size:11px;color:#bfbfbf;margin-top:3px">月度配额重置时间：' + fmtYesCodeDate(monthNext) + '（每30天滚动）</div>' : '')
+        + '</div>'
+        + '</div>';
+
+      document.getElementById('modalBody').innerHTML = html;
+    }
+
+    function renderHuoliDetail(index, acc) {
+      var subs = acc.data || [];
+      var sub = subs[0] || {};
+      var grp = sub.group || {};
+      var dailyUsed = sub.daily_usage_usd || 0;
+      var dailyLimit = grp.daily_limit_usd || 0;
+      var weeklyUsed = sub.weekly_usage_usd || 0;
+      var weeklyLimit = grp.weekly_limit_usd || 0;
+      var monthlyUsed = sub.monthly_usage_usd || 0;
+      var monthlyLimit = grp.monthly_limit_usd || 0;
+
+      var html = '<div class="info-section"><div class="info-section-title">负责人信息</div><div class="info-grid">'
+        + '<span class="info-label">负责人</span><span class="info-value">' + esc(acc.responsiblePerson||'-') + '</span>'
+        + '<span class="info-label">电话</span><span class="info-value">' + esc(acc.phone||'-') + '</span>'
+        + '<span class="info-label">备注</span><span class="info-value">' + esc(acc.notes||'-') + '</span>'
+        + '</div></div>';
+
+      html += '<div class="info-section"><div class="info-section-title">订阅信息</div><div class="info-grid">'
+        + '<span class="info-label">套餐名称</span><span class="info-value">' + esc(grp.name||'-') + (grp.description ? ' <span style="color:#bfbfbf">· ' + esc(grp.description) + '</span>' : '') + '</span>'
+        + '<span class="info-label">平台</span><span class="info-value">' + esc(grp.platform||'-') + '</span>'
+        + '<span class="info-label">倍率</span><span class="info-value">' + (grp.rate_multiplier != null ? grp.rate_multiplier + 'x' : '-') + '</span>'
+        + '<span class="info-label">状态</span><span class="info-value">' + esc(sub.status||'-') + '</span>'
+        + '<span class="info-label">开始时间</span><span class="info-value">' + esc(fmtYesCodeDate(sub.starts_at)) + '</span>'
+        + '<span class="info-label">到期时间</span><span class="info-value">' + esc(fmtYesCodeDate(sub.expires_at)) + '</span>'
+        + '<span class="info-label">支持模型</span><span class="info-value">' + ((grp.supported_models||[]).join(', ') || '-') + '</span>'
+        + '<span class="info-label">官网</span><span class="info-value"><a href="https://huolilink.com/" target="_blank" rel="noopener" style="color:#667eea;text-decoration:none">https://huolilink.com/ ↗</a></span>'
+        + '</div></div>';
+
+      var dailyPct = dailyLimit > 0 ? Math.min(100, (dailyUsed / dailyLimit) * 100) : 0;
+      var weeklyPct = weeklyLimit > 0 ? Math.min(100, (weeklyUsed / weeklyLimit) * 100) : 0;
+      var monthlyPct = monthlyLimit > 0 ? Math.min(100, (monthlyUsed / monthlyLimit) * 100) : 0;
+      var dailyNext = sub.daily_window_start ? new Date(sub.daily_window_start).getTime() + 86400000 : null;
+      var weeklyNext = sub.weekly_window_start ? new Date(sub.weekly_window_start).getTime() + 7*86400000 : null;
+      var monthlyNext = sub.monthly_window_start ? new Date(sub.monthly_window_start).getTime() + 30*86400000 : null;
+
+      html += '<div class="info-section"><div class="info-section-title">消费情况</div>'
+        + '<div class="limit-row"><div class="limit-label"><span class="limit-name">今日已消费</span><span class="limit-value">$' + dailyUsed.toFixed(2) + ' / $' + dailyLimit.toFixed(2) + ' (' + dailyPct.toFixed(1) + '%)</span></div>'
+        + '<div class="limit-bar"><div class="limit-fill ' + getColorClass(dailyPct) + '" style="width:' + dailyPct + '%"></div></div>'
+        + (dailyNext ? '<div style="font-size:11px;color:#bfbfbf;margin-top:3px">每日额度重置时间：' + fmtYesCodeDate(dailyNext) + '</div>' : '')
+        + '</div>'
+        + '<div class="limit-row"><div class="limit-label"><span class="limit-name">本周已消费</span><span class="limit-value">$' + weeklyUsed.toFixed(2) + ' / $' + weeklyLimit.toFixed(2) + ' (' + weeklyPct.toFixed(1) + '%)</span></div>'
+        + '<div class="limit-bar"><div class="limit-fill ' + getColorClass(weeklyPct) + '" style="width:' + weeklyPct + '%"></div></div>'
+        + (weeklyNext ? '<div style="font-size:11px;color:#bfbfbf;margin-top:3px">周配额重置时间：' + fmtYesCodeDate(weeklyNext) + '</div>' : '')
+        + '</div>'
+        + '<div class="limit-row"><div class="limit-label"><span class="limit-name">本月已消费</span><span class="limit-value">$' + monthlyUsed.toFixed(2) + ' / $' + monthlyLimit.toFixed(2) + ' (' + monthlyPct.toFixed(1) + '%)</span></div>'
+        + '<div class="limit-bar"><div class="limit-fill ' + getColorClass(monthlyPct) + '" style="width:' + monthlyPct + '%"></div></div>'
+        + (monthlyNext ? '<div style="font-size:11px;color:#bfbfbf;margin-top:3px">月度配额重置时间：' + fmtYesCodeDate(monthlyNext) + '</div>' : '')
+        + '</div>'
+        + '</div>';
+
+      document.getElementById('modalBody').innerHTML = html;
+    }
+
+    function showDetail(index) {
+      // Dispose existing chart if any
+      if (_usageCharts[_detailIndex]) { _usageCharts[_detailIndex].dispose(); delete _usageCharts[_detailIndex]; }
+      _detailIndex = index;
+      var acc = accountsData[index];
+      if (!acc) return;
+      document.getElementById('modalTitle').textContent = displayName(acc, index) || ('账号 ' + (index + 1));
+
+      if ((acc.platform || 'glm') === 'yescode') {
+        renderYesCodeDetail(index, acc);
+        document.getElementById('modalOverlay').classList.add('active');
+        return;
+      }
+
+      if ((acc.platform || 'glm') === 'huoli') {
+        renderHuoliDetail(index, acc);
+        document.getElementById('modalOverlay').classList.add('active');
+        return;
+      }
+
+      var admin = isAdmin();
+      var createRow = admin
+        ? '<div class="keys-create"><input id="newKeyName" placeholder="Key 名称"><button onclick="createKey(' + index + ')">创建</button></div>'
+        : '';
+
+      var html = '<div class="info-section"><div class="info-section-title">负责人信息</div><div class="info-grid">'
+        + '<span class="info-label">负责人</span><span class="info-value">' + esc(acc.responsiblePerson||'-') + '</span>'
+        + '<span class="info-label">电话</span><span class="info-value">' + esc(acc.phone||'-') + '</span>'
+        + '<span class="info-label">备注</span><span class="info-value">' + esc(acc.notes||'-') + '</span>'
+        + '</div></div>'
+        + '<div class="detail-tabs">'
+        + '<button class="detail-tab active" id="dtab-keys-' + index + '" onclick="switchDetailTab(\'keys\',' + index + ')">API Keys</button>'
+        + '<button class="detail-tab" id="dtab-chart-' + index + '" onclick="switchDetailTab(\'chart\',' + index + ')">用量曲线</button>'
+        + '</div>'
+        + '<div id="dpanel-keys-' + index + '">'
+        + '<div class="keys-section"><div class="keys-header"><div class="keys-title">API Keys</div>' + createRow + '</div>'
+        + '<div id="keysContainer" class="keys-loading">加载中...</div></div>'
+        + '</div>'
+        + '<div id="dpanel-chart-' + index + '" style="display:none">'
+        + '<div class="chart-controls">'
+        + '<button class="period-btn active" id="period-today-' + index + '" onclick="loadUsageChart(' + index + ',\'today\')">当日</button>'
+        + '<button class="period-btn" id="period-7d-' + index + '" onclick="loadUsageChart(' + index + ',\'7d\')">近7天</button>'
+        + '<button class="period-btn" id="period-30d-' + index + '" onclick="loadUsageChart(' + index + ',\'30d\')">近30天</button>'
+        + '</div>'
+        + '<div class="chart-wrap"><div id="chartContainer-' + index + '" style="width:100%;height:320px"></div>'
+        + '<div class="chart-loading" id="chartLoading-' + index + '"></div></div>'
+        + '</div>';
+
+      document.getElementById('modalBody').innerHTML = html;
+      document.getElementById('modalOverlay').classList.add('active');
+
+      fetch('/api/keys/' + index).then(function(r){return r.json()}).then(function(keys) {
+        if (keys.error) { document.getElementById('keysContainer').innerHTML = '<p class="error-text">' + esc(keys.error) + '</p>'; return; }
+        accountsData[index].keyCount = keys.length || 0;
+        updateCard(index, accountsData[index]);
+        if (!keys.length) { document.getElementById('keysContainer').innerHTML = '<p style="color:#8c8c8c;font-size:13px">无 API Key</p>'; return; }
+        renderKeysTable(index, keys, admin);
+      }).catch(function(err) {
+        document.getElementById('keysContainer').innerHTML = '<p class="error-text">加载失败: ' + esc(err.message) + '</p>';
+      });
+    }
+
+    function switchDetailTab(tab, idx) {
+      ['keys', 'chart'].forEach(function(p) {
+        var panel = document.getElementById('dpanel-' + p + '-' + idx);
+        var btn = document.getElementById('dtab-' + p + '-' + idx);
+        if (panel) panel.style.display = p === tab ? '' : 'none';
+        if (btn) btn.classList.toggle('active', p === tab);
+      });
+      if (tab === 'chart') {
+        var container = document.getElementById('chartContainer-' + idx);
+        if (container && !container._chartLoaded) loadUsageChart(idx, 'today');
+      }
+    }
+
+    function loadUsageChart(idx, period) {
+      ['today', '7d', '30d'].forEach(function(p) {
+        var btn = document.getElementById('period-' + p + '-' + idx);
+        if (btn) btn.classList.toggle('active', p === period);
+      });
+      var loading = document.getElementById('chartLoading-' + idx);
+      var container = document.getElementById('chartContainer-' + idx);
+      if (!container) return;
+      if (loading) { loading.textContent = '加载中...'; loading.style.display = 'flex'; }
+      fetch('/api/model-usage/' + idx + '?period=' + period)
+        .then(function(r) { return r.json(); })
+        .then(function(resp) {
+          if (resp.error) { if (loading) { loading.textContent = '加载失败: ' + resp.error; loading.style.display = 'flex'; } return; }
+          var data = resp.data;
+          if (!data || !data.x_time || !data.modelDataList) { if (loading) { loading.textContent = '暂无数据'; loading.style.display = 'flex'; } return; }
+          if (loading) loading.style.display = 'none';
+          container._chartLoaded = true;
+          renderUsageChart(idx, data, period);
+        })
+        .catch(function(err) { if (loading) { loading.textContent = '请求失败: ' + err.message; loading.style.display = 'flex'; } });
+    }
+
+    function renderUsageChart(idx, data, period) {
+      var container = document.getElementById('chartContainer-' + idx);
+      if (!container) return;
+      if (_usageCharts[idx]) { _usageCharts[idx].dispose(); }
+      var chart = echarts.init(container);
+      _usageCharts[idx] = chart;
+      var dark = document.body.classList.contains('dark');
+      var txtColor = dark ? '#ccc' : '#333';
+      var lineColor = dark ? '#444' : '#999';
+      var splitColor = dark ? '#2a2a2a' : '#e8e8e8';
+      var tipBg = dark ? '#1f1f1f' : '#fff';
+      var tipBorder = dark ? '#444' : '#eee';
+
+      var xData = data.x_time;
+      var models = (data.modelDataList || []).filter(function(m) {
+        return m.tokensUsage && m.tokensUsage.some(function(v) { return v > 0; });
+      });
+      var xLabels = xData.map(function(t) {
+        if (period === 'today') return t.slice(11, 16);
+        return t.slice(5, 13).replace(' ', '\n');
+      });
+      var interval = Math.max(0, Math.floor(xData.length / 14) - 1);
+      var colors = ['#3b5bdb','#e03131','#9c36b5','#0c8599','#2f9e44','#e67700','#d6336c','#1971c2'];
+
+      chart.setOption({
+        color: colors,
+        tooltip: {
+          trigger: 'axis',
+          backgroundColor: tipBg,
+          borderColor: tipBorder,
+          textStyle: { color: txtColor },
+          axisPointer: { type: 'cross', label: { backgroundColor: '#6a7985' } },
+          formatter: function(params) {
+            var time = xData[params[0].dataIndex];
+            var html = '<div style="font-size:12px;font-weight:600;margin-bottom:4px">' + time + '</div>';
+            var total = 0;
+            params.forEach(function(p) {
+              if (p.value > 0) { html += '<div>' + p.marker + p.seriesName + ': ' + fmtTokens(p.value) + '</div>'; total += p.value; }
+            });
+            if (params.length > 1 && total > 0) html += '<div style="border-top:1px solid ' + tipBorder + ';margin-top:4px;padding-top:4px;font-weight:500">合计: ' + fmtTokens(total) + '</div>';
+            return html;
+          }
+        },
+        legend: { data: models.map(function(m) { return m.modelName; }), bottom: 0, type: 'scroll', textStyle: { fontSize: 12, color: txtColor } },
+        grid: { left: 64, right: 16, top: 16, bottom: 52 },
+        xAxis: { type: 'category', data: xLabels, boundaryGap: false, axisLabel: { fontSize: 11, interval: interval, color: txtColor }, axisLine: { lineStyle: { color: lineColor } }, axisTick: { lineStyle: { color: lineColor } } },
+        yAxis: { type: 'value', axisLabel: { fontSize: 11, color: txtColor, formatter: fmtTokens }, axisLine: { show: true, lineStyle: { color: lineColor } }, splitLine: { lineStyle: { color: splitColor } } },
+        series: models.map(function(m, i) {
+          var c = colors[i % colors.length];
+          return { name: m.modelName, type: 'line', smooth: true, symbol: 'none', data: m.tokensUsage, itemStyle: { color: c }, lineStyle: { color: c, width: 2 } };
+        })
+      });
+
+      window.addEventListener('resize', function() { _usageCharts[idx] && _usageCharts[idx].resize(); });
+    }
+
+    function fmtTokens(v) {
+      if (v >= 1000000) return (v / 1000000).toFixed(1) + 'M';
+      if (v >= 1000) return (v / 1000).toFixed(1) + 'K';
+      return '' + v;
+    }
+
+    function renderKeysTable(idx, keys, admin) {
+      var svgCopy = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>';
+      var svgDel = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"/></svg>';
+      var adminCol = admin ? '<th style="width:72px">操作</th>' : '';
+      var rows = keys.map(function(k) {
+        var cls = k.isHidden ? ' class="key-hidden"' : '';
+        var lastUse = k.lastUseTime || '-';
+        var api = esc(k.apiKey || '');
+        var copyBtn = admin ? '<button class="icon-btn" onclick="copySecret(this,' + idx + ',\'' + api + '\')" title="复制密钥">' + svgCopy + '</button>' : '';
+        var delBtn = admin && !k.isHidden ? '<button class="icon-btn del-icon" onclick="deleteKey(this,' + idx + ',\'' + api + '\')" title="删除密钥">' + svgDel + '</button>' : '';
+        var adminCell = admin ? '<td><div class="key-actions">' + copyBtn + delBtn + '</div></td>' : '';
+        return '<tr' + cls + '><td>' + esc(k.name) + '</td><td class="mono">' + esc(k.secretKey) + '</td><td>' + lastUse + '</td>' + adminCell + '</tr>';
+      }).join('');
+      document.getElementById('keysContainer').innerHTML =
+        '<table class="keys-table"><tr><th>名称</th><th>Secret Key</th><th>最后使用</th>' + adminCol + '</tr>' + rows + '</table>';
+    }
+
+    // ============ Key 操作 ============
+
+    var _svgCopy = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>';
+    var _svgCheck = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>';
+    var _svgDel = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"/></svg>';
+
+    function copySecret(btn, idx, apiKey) {
+      if (btn.disabled) return;
+      btn.disabled = true;
+      btn.innerHTML = '...';
+      fetch('/api/keys/' + idx + '/copy/' + apiKey, { headers: authHeaders() })
+        .then(function(r) {
+          if (r.status === 401) { localStorage.removeItem('glm_pwd'); btn.disabled = false; btn.innerHTML = _svgCopy; requireAuth(function(){copySecret(btn,idx,apiKey)}); return null; }
+          return r.json();
+        })
+        .then(function(d) {
+          if (!d) return;
+          if (d.error) { btn.disabled = false; btn.innerHTML = _svgCopy; alert('失败: ' + d.error); return; }
+          var full = (d.apiKey || apiKey) + '.' + (d.secretKey || '');
+          var td = btn.closest('tr').querySelectorAll('td');
+          if (td[1]) td[1].textContent = full;
+          clipCopy(full).then(function() {
+            btn.innerHTML = _svgCheck;
+            btn.classList.add('copied');
+            setTimeout(function() { btn.innerHTML = _svgCopy; btn.classList.remove('copied'); btn.disabled = false; }, 2000);
+          });
+        })
+        .catch(function() { btn.disabled = false; btn.innerHTML = _svgCopy; });
+    }
+
+    function createKey(idx) {
+      var input = document.getElementById('newKeyName');
+      var name = (input.value || '').trim();
+      if (!name) { alert('请输入 Key 名称'); input.focus(); return; }
+      input.disabled = true;
+      fetch('/api/keys/' + idx, { method: 'POST', headers: authHeaders(), body: JSON.stringify({ name: name }) })
+        .then(function(r) {
+          if (r.status === 401) { localStorage.removeItem('glm_pwd'); input.disabled = false; requireAuth(function(){createKey(idx)}); return null; }
+          return r.json();
+        })
+        .then(function(d) {
+          if (!d) return;
+          if (d.error) { alert('创建失败: ' + d.error); input.disabled = false; return; }
+          // 创建成功后，通过 copy 接口获取完整密钥再复制
+          var apiKey = d.apiKey || '';
+          if (apiKey) {
+            fetch('/api/keys/' + idx + '/copy/' + apiKey, { headers: authHeaders() })
+              .then(function(r) { return r.json(); })
+              .then(function(cd) {
+                if (cd.error) { alert('创建成功，但获取密钥失败: ' + cd.error); showDetail(idx); return; }
+                var full = (cd.apiKey || apiKey) + '.' + (cd.secretKey || '');
+                if (full && full !== '.') {
+                  clipCopy(full).then(function() { alert('已创建并复制: ' + full); });
+                } else {
+                  alert('创建成功');
+                }
+                showDetail(idx);
+              })
+              .catch(function() { alert('创建成功，但复制失败'); showDetail(idx); });
+          } else {
+            alert('创建成功');
+            showDetail(idx);
+          }
+        })
+        .catch(function(err) { alert('请求失败: ' + err.message); input.disabled = false; });
+    }
+
+    function deleteKey(btn, idx, apiKey) {
+      if (!confirm('确定删除此 Key？删除后不可恢复。')) return;
+      btn.disabled = true;
+      btn.innerHTML = '...';
+      fetch('/api/keys/' + idx + '/' + apiKey, { method: 'DELETE', headers: authHeaders() })
+        .then(function(r) {
+          if (r.status === 401) { localStorage.removeItem('glm_pwd'); btn.disabled = false; btn.innerHTML = _svgDel; requireAuth(function(){deleteKey(btn,idx,apiKey)}); return null; }
+          return r.json();
+        })
+        .then(function(d) {
+          if (!d) return;
+          if (d.error) { alert('删除失败: ' + d.error); btn.disabled = false; btn.innerHTML = _svgDel; return; }
+          showDetail(idx);
+        })
+        .catch(function() { btn.disabled = false; btn.innerHTML = _svgDel; });
+    }
+
+    // ============ 密码验证 ============
+
+    function submitPassword() {
+      var pwd = document.getElementById('pwdInput').value;
+      fetch('/api/auth', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({password: pwd}) })
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+          if (d.success) {
+            localStorage.setItem('glm_pwd', pwd);
+            closeModal('pwdOverlay');
+            var next = _pendingAuth;
+            _pendingAuth = null;
+            if (next) { next(); }
+          } else {
+            document.getElementById('pwdError').textContent = '密码错误';
+            document.getElementById('pwdInput').value = '';
+            document.getElementById('pwdInput').focus();
+          }
+        });
+    }
+    document.getElementById('pwdInput').addEventListener('keydown', function(e) { if (e.key === 'Enter') submitPassword(); });
+
+    // ============ 账号管理 ============
+
+    document.getElementById('mgmtBtn').addEventListener('click', function() { requireAuth(openMgmtInner); });
+
+    var editingIndex = -1;
+
+    function openMgmtInner() {
+      editingIndex = -1;
+      renderMgmtList();
+      document.getElementById('mgmtOverlay').classList.add('active');
+    }
+
+    var _dragSrcIdx = null;
+    var _svgGrip = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="6" r="1"/><circle cx="15" cy="6" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="9" cy="18" r="1"/><circle cx="15" cy="18" r="1"/></svg>';
+
+    function renderMgmtList() {
+      document.getElementById('mgmtTitle').textContent = '账号管理';
+      fetch('/api/accounts', { headers: authHeaders() })
+        .then(function(r) { if (r.status===401){localStorage.removeItem('glm_pwd');alert('密码已失效');closeModal('mgmtOverlay');return null;} return r.json(); })
+        .then(function(accounts) {
+          if (!accounts) return;
+          var html = '';
+          if (!accounts.length) html += '<div style="text-align:center;padding:24px;color:#8c8c8c;font-size:13px">暂无账号</div>';
+          accounts.forEach(function(a, i) {
+            html += '<div class="acct-item" draggable="true" data-idx="'+i+'"><div class="drag-handle" title="拖动排序">' + _svgGrip + '</div>'
+              + '<div class="acct-info"><div class="acct-name">' + platformTag(a.platform || 'glm') + ' ' + esc(a.name||'未命名') + '</div>'
+              + '<div class="acct-meta">' + esc(a.responsiblePerson||'') + (a.phone?' &middot; '+esc(a.phone):'') + '</div></div>'
+              + '<div class="acct-actions"><button class="btn-sm" onclick="editAccount('+i+')">编辑</button><button class="btn-sm danger" onclick="deleteAccount('+i+')">删除</button></div></div>';
+          });
+          html += '<button class="btn-add" onclick="showForm(-1)">+ 新增账号</button>';
+          document.getElementById('mgmtBody').innerHTML = html;
+          initDragSort();
+        });
+    }
+
+    function initDragSort() {
+      var items = document.querySelectorAll('.acct-item[draggable]');
+      items.forEach(function(el) {
+        el.addEventListener('dragstart', function(e) {
+          _dragSrcIdx = parseInt(el.dataset.idx);
+          el.classList.add('dragging');
+          e.dataTransfer.effectAllowed = 'move';
+        });
+        el.addEventListener('dragend', function() {
+          el.classList.remove('dragging');
+          document.querySelectorAll('.acct-item.drag-over').forEach(function(x){ x.classList.remove('drag-over'); });
+        });
+        el.addEventListener('dragover', function(e) {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = 'move';
+          el.classList.add('drag-over');
+        });
+        el.addEventListener('dragleave', function() {
+          el.classList.remove('drag-over');
+        });
+        el.addEventListener('drop', function(e) {
+          e.preventDefault();
+          el.classList.remove('drag-over');
+          var targetIdx = parseInt(el.dataset.idx);
+          if (_dragSrcIdx === null || _dragSrcIdx === targetIdx) return;
+          // 从服务端拿最新数据做重排
+          fetch('/api/accounts', { headers: authHeaders() })
+            .then(function(r){ return r.json(); })
+            .then(function(accounts) {
+              var moved = accounts.splice(_dragSrcIdx, 1)[0];
+              accounts.splice(targetIdx, 0, moved);
+              return fetch('/api/accounts', { method: 'PUT', headers: authHeaders(), body: JSON.stringify(accounts) });
+            })
+            .then(function(r){ return r.json(); })
+            .then(function(d) {
+              if (d.error) { alert('排序失败: ' + d.error); return; }
+              renderMgmtList();
+              loadData();
+              loadExpire();
+            });
+        });
+      });
+    }
+
+    function showForm(idx) {
+      editingIndex = idx;
+      document.getElementById('mgmtTitle').textContent = idx >= 0 ? '编辑账号' : '新增账号';
+      if (idx >= 0) {
+        fetch('/api/accounts',{headers:authHeaders()}).then(function(r){return r.json()}).then(function(a){renderForm(a[idx]||{})});
+      } else { renderForm({}); }
+    }
+
+    function renderForm(a) {
+      var platform = a.platform || 'glm';
+      var glmDisp = platform === 'glm' ? '' : 'none';
+      var yesDisp = platform === 'yescode' ? '' : 'none';
+      var huoliDisp = platform === 'huoli' ? '' : 'none';
+      document.getElementById('mgmtBody').innerHTML = ''
+        + '<div class="import-section"><div class="import-toggle" onclick="this.nextElementSibling.classList.toggle(\'open\')">&#9660; 快速导入（粘贴 fetch 命令）</div>'
+        + '<div class="import-body"><textarea class="form-input" id="f_fetch" placeholder="粘贴 fetch(...) 命令，自动识别智谱 / YesCode"></textarea>'
+        + '<div class="import-actions"><button class="btn-primary" style="padding:5px 16px;font-size:12px" onclick="parseFetch()">解析并填充</button></div></div></div>'
+        + '<div class="form-row">'
+        + '<div class="form-group"><label class="form-label">站点</label><select class="form-input" id="f_platform" onchange="onPlatformChange()">'
+        + '<option value="glm"' + (platform==='glm'?' selected':'') + '>智谱</option>'
+        + '<option value="yescode"' + (platform==='yescode'?' selected':'') + '>YesCode</option>'
+        + '<option value="huoli"' + (platform==='huoli'?' selected':'') + '>火狸</option>'
+        + '</select></div>'
+        + '<div class="form-group"><label class="form-label">账号名称</label><input class="form-input" id="f_name" value="' + esc(a.name||'') + '"></div>'
+        + '</div>'
+        + '<div id="f_glm_fields" style="display:' + glmDisp + '">'
+        + '<div class="form-group"><label class="form-label">Authorization Token</label><textarea class="form-input" id="f_auth">' + esc(a.authorization||'') + '</textarea></div>'
+        + '<div class="form-row"><div class="form-group"><label class="form-label">Organization ID</label><input class="form-input" id="f_org" value="' + esc(a.organization||'') + '"></div>'
+        + '<div class="form-group"><label class="form-label">Project ID</label><input class="form-input" id="f_proj" value="' + esc(a.project||'') + '"></div></div>'
+        + '</div>'
+        + '<div id="f_yescode_fields" style="display:' + yesDisp + '">'
+        + '<div class="form-group"><label class="form-label">Cookie</label><textarea class="form-input" id="f_cookie" placeholder="完整 Cookie，用于访问 co.yes.vg">' + esc(a.cookie||'') + '</textarea></div>'
+        + '</div>'
+        + '<div id="f_huoli_fields" style="display:' + huoliDisp + '">'
+        + '<div class="form-group"><label class="form-label">Authorization Token</label><textarea class="form-input" id="f_huoli_auth" placeholder="Bearer eyJ...，用于访问 huolilink.com">' + esc(a.authorization||'') + '</textarea></div>'
+        + '<div class="form-row"><div class="form-group"><label class="form-label">登录邮箱</label><input class="form-input" id="f_huoli_email" placeholder="用于 Token 过期时自动登录" value="' + esc(a.huoli_email||'') + '"></div>'
+        + '<div class="form-group"><label class="form-label">登录密码</label><input class="form-input" type="password" id="f_huoli_password" placeholder="用于 Token 过期时自动登录" value="' + esc(a.huoli_password||'') + '"></div></div>'
+        + '</div>'
+        + '<div class="form-row"><div class="form-group"><label class="form-label">负责人</label><input class="form-input" id="f_person" value="' + esc(a.responsiblePerson||'') + '"></div>'
+        + '<div class="form-group"><label class="form-label">电话</label><input class="form-input" id="f_phone" value="' + esc(a.phone||'') + '"></div></div>'
+        + '<div class="form-group"><label class="form-label">备注</label><input class="form-input" id="f_notes" value="' + esc(a.notes||'') + '"></div>'
+        + '<div class="form-actions"><button class="btn-default" onclick="renderMgmtList()">取消</button><button class="btn-primary" onclick="saveAccount()">保存</button></div>';
+    }
+
+    function onPlatformChange() {
+      var p = document.getElementById('f_platform').value;
+      document.getElementById('f_glm_fields').style.display = p === 'glm' ? '' : 'none';
+      document.getElementById('f_yescode_fields').style.display = p === 'yescode' ? '' : 'none';
+      document.getElementById('f_huoli_fields').style.display = p === 'huoli' ? '' : 'none';
+    }
+
+    // 从 fetch / Node fetch / cURL 文本中提取指定 header 值
+    function extractHeader(text, name) {
+      var esc = name.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+      // "name": "value" 或 'name': 'value'
+      var m = text.match(new RegExp('["\']' + esc + '["\']\\s*:\\s*["\']([^"\']+)["\']', 'i'));
+      if (m) return m[1];
+      // -H 'name: value' / -H "name: value" / --header 'name: value'
+      m = text.match(new RegExp('(?:-H|--header)\\s+["\']' + esc + '\\s*:\\s*([^"\']+)["\']', 'i'));
+      if (m) return m[1].trim();
+      // 行内格式 name: value（多行 fetch/curl）
+      m = text.match(new RegExp('(?:^|\\n)\\s*' + esc + '\\s*:\\s*([^\\n\\r]+)', 'i'));
+      if (m) return m[1].trim();
+      return null;
+    }
+
+    function extractCookie(text) {
+      var v = extractHeader(text, 'cookie');
+      if (v) return v;
+      // cURL 的 -b / --cookie
+      var m = text.match(/(?:-b|--cookie)\s+["']([^"']+)["']/i);
+      if (m) return m[1].trim();
+      return null;
+    }
+
+    function parseFetch() {
+      var t = document.getElementById('f_fetch').value; if (!t.trim()) return;
+      var isYescode = /yes\.vg/i.test(t);
+      var isHuoli = /huolilink\.com/i.test(t);
+      var isGlm = /bigmodel\.cn|bigmodel-organization|bigmodel-project/i.test(t);
+
+      if (isYescode && !isGlm && !isHuoli) {
+        document.getElementById('f_platform').value = 'yescode';
+        onPlatformChange();
+        var cookie = extractCookie(t);
+        if (cookie) { document.getElementById('f_cookie').value = cookie; }
+        else { alert('未能解析出 cookie。\n\n请在浏览器 DevTools Network 面板右键请求 →\nCopy → Copy as Node.js fetch（或 Copy as cURL），\n这两种格式才会包含 Cookie。'); }
+        return;
+      }
+
+      if (isHuoli && !isGlm && !isYescode) {
+        document.getElementById('f_platform').value = 'huoli';
+        onPlatformChange();
+        var auth = extractHeader(t, 'authorization');
+        if (auth) { document.getElementById('f_huoli_auth').value = auth; }
+        // 尝试从 body 中解析 email/password（登录接口）
+        var bodyMatch = t.match(/"body"\s*:\s*"({[^"]+})"/);
+        if (bodyMatch) { try { var b = JSON.parse(bodyMatch[1].replace(/\\"/g,'"').replace(/\\\\/g,'\\')); if (b.email) document.getElementById('f_huoli_email').value = b.email; if (b.password) document.getElementById('f_huoli_password').value = b.password; } catch(e){} }
+        if (!bodyMatch) { try { var b2 = t.match(/"email"\s*:\s*"([^"]+)"[^}]*"password"\s*:\s*"([^"]+)"/); if (b2) { document.getElementById('f_huoli_email').value = b2[1]; document.getElementById('f_huoli_password').value = b2[2]; } } catch(e){} }
+        if (!auth) { alert('未能解析出 Authorization Token。\n\n请在浏览器 DevTools Network 面板右键请求 →\nCopy → Copy as Node.js fetch（或 Copy as cURL），\n这两种格式才会包含 Authorization。\n\n邮箱和密码会自动从登录接口解析。'); }
+        return;
+      }
+
+      document.getElementById('f_platform').value = 'glm';
+      onPlatformChange();
+      var n = 0;
+      var auth = extractHeader(t, 'authorization'); if (auth) { document.getElementById('f_auth').value = auth; n++; }
+      var org = extractHeader(t, 'bigmodel-organization'); if (org) { document.getElementById('f_org').value = org; n++; }
+      var proj = extractHeader(t, 'bigmodel-project'); if (proj) { document.getElementById('f_proj').value = proj; n++; }
+      if (!n) alert('未能解析出 token、organization 或 project');
+    }
+
+    function saveAccount() {
+      var platform = document.getElementById('f_platform').value;
+      var body = {
+        platform: platform,
+        name: document.getElementById('f_name').value.trim(),
+        responsiblePerson: document.getElementById('f_person').value.trim(),
+        phone: document.getElementById('f_phone').value.trim(),
+        notes: document.getElementById('f_notes').value.trim()
+      };
+      if (platform === 'yescode') {
+        body.cookie = document.getElementById('f_cookie').value.trim();
+        if (!body.name || !body.cookie) { alert('账号名称和 Cookie 不能为空'); return; }
+      } else if (platform === 'huoli') {
+        body.authorization = document.getElementById('f_huoli_auth').value.trim();
+        body.huoli_email = document.getElementById('f_huoli_email').value.trim();
+        body.huoli_password = document.getElementById('f_huoli_password').value.trim();
+        if (!body.name || !body.authorization) { alert('账号名称和 Token 不能为空'); return; }
+      } else {
+        body.authorization = document.getElementById('f_auth').value.trim();
+        body.organization = document.getElementById('f_org').value.trim();
+        body.project = document.getElementById('f_proj').value.trim();
+        if (!body.name || !body.authorization) { alert('账号名称和 Token 不能为空'); return; }
+      }
+      var method = editingIndex>=0?'PUT':'POST', url = editingIndex>=0?'/api/accounts/'+editingIndex:'/api/accounts';
+      fetch(url,{method:method,headers:authHeaders(),body:JSON.stringify(body)}).then(function(r){return r.json()}).then(function(d){
+        if(d.error){alert('保存失败: '+d.error);return;} renderMgmtList(); loadData();
+      }).catch(function(e){alert('请求失败: '+e.message)});
+    }
+
+    function editAccount(i){showForm(i)}
+    function deleteAccount(i) {
+      if(!confirm('确定删除该账号？'))return;
+      fetch('/api/accounts/'+i,{method:'DELETE',headers:authHeaders()}).then(function(r){return r.json()}).then(function(d){
+        if(d.error){alert('删除失败: '+d.error);return;} renderMgmtList(); loadData();
+      });
+    }
+
+    // ============ 弹窗控制 ============
+
+    function closeModal(id) {
+      document.getElementById(id).classList.remove('active');
+      if (id === 'modalOverlay' && _usageCharts[_detailIndex]) {
+        _usageCharts[_detailIndex].dispose();
+        delete _usageCharts[_detailIndex];
+      }
+    }
+    ['pwdOverlay','modalOverlay','mgmtOverlay'].forEach(function(id){
+      document.getElementById(id).addEventListener('click', function(e){ if(e.target===e.currentTarget) closeModal(id); });
+    });
+    document.addEventListener('keydown', function(e){ if(e.key==='Escape') ['pwdOverlay','modalOverlay','mgmtOverlay'].forEach(closeModal); });
+
+    // ============ 数据加载 ============
+
+    function loadExpire(force) {
+      var url = force ? '/api/expire?force=1' : '/api/expire';
+      fetch(url).then(function(r){return r.json()}).then(function(data){
+        expireData = data;
+        if (accountsData.length) renderCards(accountsData);
+      });
+    }
+
+    function refreshExpire(index) {
+      fetch('/api/expire/' + index + '?force=1').then(function(r){return r.json()}).then(function(data){
+        expireData[index] = data;
+        updateCard(index, accountsData[index]);
+      });
+    }
+
+    function loadData(force) {
+      var grid = document.getElementById('cardGrid');
+      var url = force ? '/api/usage?force=1' : '/api/usage';
+      if (!accountsData.length) grid.innerHTML = '<div class="loading"><div class="loading-spinner"></div><p style="margin-top:12px">加载中...</p></div>';
+      fetch(url).then(function(r){return r.json()}).then(function(data){
+        accountsData = data; renderCards(data);
+        document.getElementById('lastUpdated').textContent = '更新于 ' + new Date().toLocaleTimeString('zh-CN');
+      }).catch(function(err){ if(!accountsData.length) grid.innerHTML='<div class="empty">加载失败: '+err.message+'</div>'; });
+    }
+
+    document.getElementById('refreshBtn').addEventListener('click', function(){ loadData(true); loadExpire(true); });
+    loadData();
+    loadExpire();
+    setInterval(function(){ loadData(); }, 5 * 60 * 1000);
+  </script>
+</body>
+</html>
