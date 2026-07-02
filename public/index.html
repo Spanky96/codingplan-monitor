@@ -38,6 +38,7 @@
     .platform-glm { background: #e6f4ff; color: #0958d9; border: 1px solid #91caff; }
     .platform-yescode { background: #f6ffed; color: #389e0d; border: 1px solid #b7eb8f; }
 .platform-huoli { background: #fff7e6; color: #d4380d; border: 1px solid #ffd591; }
+.platform-volc { background: #e6fffb; color: #08979c; border: 1px solid #5cdbd3; }
     .card-status { font-size: 12px; padding: 2px 10px; border-radius: 10px; font-weight: 500; }
     .status-ok { background: #f6ffed; color: #52c41a; border: 1px solid #b7eb8f; }
     .status-warn { background: #fffbe6; color: #d48806; border: 1px solid #ffe58f; }
@@ -222,6 +223,7 @@
     body.dark .platform-glm { background: #1e1b4b; color: #818cf8; border-color: #4338ca; }
     body.dark .platform-yescode { background: #14532d; color: #4ade80; border-color: #166534; }
 body.dark .platform-huoli { background: #422006; color: #fb923c; border-color: #854d0e; }
+body.dark .platform-volc { background: #042f2e; color: #5eead4; border-color: #0e7490; }
     body.dark .status-ok { background: #14532d; color: #4ade80; border-color: #166534; }
     body.dark .status-warn { background: #422006; color: #fbbf24; border-color: #854d0e; }
     body.dark .status-danger { background: #450a0a; color: #fca5a5; border-color: #991b1b; }
@@ -389,12 +391,10 @@ body.dark .platform-huoli { background: #422006; color: #fb923c; border-color: #
   </div>
   <div class="container">
     <div class="toolbar" id="toolbar">
-      <div class="toolbar-group">
+      <div class="toolbar-group" id="platformFilterGroup">
         <span class="toolbar-label">站点</span>
         <button class="toolbar-btn active" data-filter="all" onclick="setFilter('all')">全部</button>
-        <button class="toolbar-btn" data-filter="glm" onclick="setFilter('glm')">智谱</button>
-        <button class="toolbar-btn" data-filter="yescode" onclick="setFilter('yescode')">YesCode</button>
-        <button class="toolbar-btn" data-filter="huoli" onclick="setFilter('huoli')">火狸</button>
+        <span id="platformFilters"></span>
       </div>
       <div class="toolbar-group">
         <span class="toolbar-label">排序</span>
@@ -562,6 +562,7 @@ body.dark .platform-huoli { background: #422006; color: #fb923c; border-color: #
     function platformLabel(platform) {
       if (platform === 'yescode') return 'YesCode';
       if (platform === 'huoli') return '火狸';
+      if (platform === 'volc') return '火山A';
       return '智谱';
     }
     function displayName(acc, origIdx) {
@@ -682,6 +683,7 @@ body.dark .platform-huoli { background: #422006; color: #fb923c; border-color: #
     function platformTag(platform) {
       if (platform === 'yescode') return '<span class="platform-tag platform-yescode">YesCode</span>';
       if (platform === 'huoli') return '<span class="platform-tag platform-huoli">火狸</span>';
+      if (platform === 'volc') return '<span class="platform-tag platform-volc">火山A</span>';
       return '<span class="platform-tag platform-glm">智谱</span>';
     }
 
@@ -719,6 +721,73 @@ body.dark .platform-huoli { background: #422006; color: #fb923c; border-color: #
       if (resetTxt) html += '<div style="font-size:11px;color:#bfbfbf;margin-top:2px">' + resetTxt + '</div>';
       html += '</div>';
       return html;
+    }
+
+    function renderVolcRow(label, bucket, periodMs, segments) {
+      var quota = (bucket && bucket.Quota) || 0;
+      var used = (bucket && bucket.Used) || 0;
+      var pct = quota > 0 ? Math.min(100, (used / quota) * 100) : 0;
+      var pctRound = pct.toFixed(1).replace(/\.0$/, '');
+      var value = used.toFixed(2) + ' / ' + quota + ' (' + pctRound + '%)';
+      var resetMs = bucket && bucket.ResetTime ? new Date(bucket.ResetTime).getTime() : 0;
+      var resetTxt = resetMs ? '重置 ' + formatTime(resetMs) : '';
+
+      var theoPct = -1;
+      if (resetMs) {
+        var periodStart = resetMs - periodMs;
+        var elapsed = Date.now() - periodStart;
+        if (elapsed > 0) theoPct = Math.min(100, (elapsed / periodMs) * 100);
+      }
+
+      var html = '<div class="limit-row"><div class="limit-label"><span class="limit-name">' + label + '</span><span class="limit-value">' + value + '</span></div>';
+
+      if (segments && segments > 0) {
+        var segPct = 100 / segments;
+        var segHtml = '';
+        for (var i = 0; i < segments; i++) {
+          var segStart = i * segPct;
+          var segEnd = (i + 1) * segPct;
+          var fillW = 0;
+          if (pct >= segEnd) fillW = 100;
+          else if (pct > segStart) fillW = ((pct - segStart) / segPct) * 100;
+          segHtml += '<div class="seg"><div class="seg-fill ' + getColorClass(pct) + '" style="width:' + fillW + '%"></div></div>';
+        }
+        html += '<div class="limit-bar-wrap"><div class="limit-bar-seg">' + segHtml + '</div>';
+      } else {
+        html += '<div class="limit-bar-wrap"><div class="limit-bar"><div class="limit-fill ' + getColorClass(pct) + '" style="width:' + pct + '%"></div></div>';
+      }
+
+      if (theoPct >= 0) html += '<div class="theo-marker" style="left:' + theoPct + '%"></div>';
+      html += '</div>';
+
+      if (theoPct >= 0) {
+        var tText, tColor;
+        if (pct <= 0) { tText = '暂无用量'; tColor = '#bfbfbf'; }
+        else {
+          var ratio = pct / theoPct;
+          if (ratio <= 0.8) { tText = '充裕'; tColor = '#52c41a'; }
+          else if (ratio <= 1.3) { tText = '正常'; tColor = '#8c8c8c'; }
+          else if (ratio <= 2.0) { tText = '偏快'; tColor = '#fa8c16'; }
+          else { tText = '紧张'; tColor = '#f5222d'; }
+        }
+        html += '<div class="tension-row"><span style="color:' + tColor + ';font-weight:500">' + tText + '</span><span style="color:#bfbfbf">理论 ' + theoPct.toFixed(0) + '%</span></div>';
+      }
+
+      if (resetTxt) html += '<div style="font-size:11px;color:#bfbfbf;margin-top:2px">' + resetTxt + '</div>';
+      html += '</div>';
+      return html;
+    }
+
+    function volcMaxPct(usage) {
+      var u = usage || {};
+      var buckets = [u.AFPFiveHour, u.AFPWeekly, u.AFPMonthly];
+      var max = 0;
+      buckets.forEach(function(b) {
+        var q = (b && b.Quota) || 0;
+        var used = (b && b.Used) || 0;
+        if (q > 0) max = Math.max(max, Math.min(100, (used / q) * 100));
+      });
+      return max;
     }
 
     function yescodeDailySpent(d) {
@@ -811,6 +880,33 @@ body.dark .platform-huoli { background: #422006; color: #fb923c; border-color: #
           + '<button class="detail-btn" onclick="showDetail(' + i + ')">详情</button></div></div>';
       }
 
+      if (platform === 'volc') {
+        var usage = (acc.data && acc.data.usage) || {};
+        var sub = (acc.data && acc.data.subscription) || null;
+        var five = usage.AFPFiveHour || {};
+        var week = usage.AFPWeekly || {};
+        var month = usage.AFPMonthly || {};
+        var bodyHtml = renderVolcRow('每5小时', five, 5 * 3600000, 5)
+          + renderVolcRow('每周', week, 7 * 86400000, 7)
+          + renderVolcRow('每月', month, 30 * 86400000, 0);
+        var mpV = volcMaxPct(usage);
+        var planBadgeV = '<span class="level-badge">' + esc(usage.PlanType || (sub && sub.BizInfo) || '-') + '</span>';
+        var expHtmlV = '';
+        if (sub && sub.EndTime) {
+          var expDateV = new Date(sub.EndTime);
+          var daysLeftV = Math.ceil((expDateV - Date.now()) / 86400000);
+          var expClsV = daysLeftV <= 10 ? 'expire-danger' : '';
+          var expHintV = daysLeftV <= 0 ? '已过期' : daysLeftV + '天后到期';
+          var expTxtV = expDateV.toLocaleDateString('zh-CN');
+          expHtmlV = '<div class="expire-row" title="订阅到期"><span class="expire-label">订阅到期</span><span class="expire-value ' + expClsV + '">' + esc(expTxtV) + '<span class="expire-hint">' + expHintV + '</span></span></div>';
+        }
+        return '<div class="card" id="card-' + i + '"><div class="card-header">' + headerLeft
+          + '<div class="card-header-right">' + btn + '<span class="card-status ' + getStatusClass(mpV) + '">' + getStatusText(mpV) + '</span></div></div>'
+          + '<div class="card-body">' + bodyHtml + '</div>' + expHtmlV
+          + '<div class="card-footer"><div class="card-footer-left">' + planBadgeV + cache + '</div>'
+          + '<button class="detail-btn" onclick="showDetail(' + i + ')">详情</button></div></div>';
+      }
+
       // GLM
       var limits = acc.data && acc.data.limits ? acc.data.limits : [];
       var hasWeekly = limits.some(function(l) { return l.unit === 6; });
@@ -843,6 +939,7 @@ body.dark .platform-huoli { background: #422006; color: #fb923c; border-color: #
       if (!acc || !acc.success || !acc.data) return -1;
       var plat = acc.platform || 'glm';
       if (plat === 'yescode') return yescodeMaxPct(acc.data);
+      if (plat === 'volc') return volcMaxPct(acc.data && acc.data.usage);
       if (plat === 'huoli') {
         var subs = acc.data || [];
         var sub = subs[0] || {};
@@ -876,7 +973,32 @@ body.dark .platform-huoli { background: #422006; color: #fb923c; border-color: #
       return arr;
     }
 
+    // 按固定顺序展示用户实际拥有的站点，没添加的类型不显示
+    var PLATFORM_ORDER = ['glm', 'yescode', 'huoli', 'volc'];
+    function renderPlatformFilters(data) {
+      var box = document.getElementById('platformFilters');
+      if (!box) return;
+      var have = {};
+      (data || []).forEach(function(a) {
+        var p = (a && a.platform) || 'glm';
+        have[p] = true;
+      });
+      var html = PLATFORM_ORDER.filter(function(p) { return have[p]; })
+        .map(function(p) {
+          return '<button class="toolbar-btn" data-filter="' + p + '" onclick="setFilter(\'' + p + '\')">' + platformLabel(p) + '</button>';
+        }).join('');
+      // 当前选中的站点已不存在则回落到「全部」
+      if (_filterPlatform !== 'all' && !have[_filterPlatform]) {
+        _filterPlatform = 'all';
+      }
+      box.innerHTML = html;
+      document.querySelectorAll('#platformFilterGroup [data-filter]').forEach(function(b) {
+        b.classList.toggle('active', b.dataset.filter === _filterPlatform);
+      });
+    }
+
     function renderCards(data) {
+      renderPlatformFilters(data);
       var grid = document.getElementById('cardGrid');
       var countEl = document.getElementById('toolbarCount');
       if (!data || !data.length) {
@@ -1053,6 +1175,51 @@ body.dark .platform-huoli { background: #422006; color: #fb923c; border-color: #
       document.getElementById('modalBody').innerHTML = html;
     }
 
+    function renderVolcDetail(index, acc) {
+      var usage = (acc.data && acc.data.usage) || {};
+      var sub = (acc.data && acc.data.subscription) || null;
+      var five = usage.AFPFiveHour || {};
+      var daily = usage.AFPDaily || {};
+      var week = usage.AFPWeekly || {};
+      var month = usage.AFPMonthly || {};
+
+      var html = '<div class="info-section"><div class="info-section-title">负责人信息</div><div class="info-grid">'
+        + '<span class="info-label">负责人</span><span class="info-value">' + esc(acc.responsiblePerson||'-') + '</span>'
+        + '<span class="info-label">电话</span><span class="info-value">' + esc(acc.phone||'-') + '</span>'
+        + '<span class="info-label">备注</span><span class="info-value">' + esc(acc.notes||'-') + '</span>'
+        + '</div></div>';
+
+      html += '<div class="info-section"><div class="info-section-title">订阅信息</div><div class="info-grid">'
+        + '<span class="info-label">套餐类型</span><span class="info-value">' + esc(usage.PlanType || (sub && sub.BizInfo) || '-') + '</span>'
+        + '<span class="info-label">订阅状态</span><span class="info-value">' + esc(sub && sub.Status || '-') + '</span>'
+        + '<span class="info-label">计费方式</span><span class="info-value">' + (sub && sub.PayType ? (sub.PayType === 'pre' ? '预付费' : sub.PayType) : '-') + '</span>'
+        + '<span class="info-label">订阅周期</span><span class="info-value">' + esc(sub && sub.Period || '-') + '</span>'
+        + '<span class="info-label">开始时间</span><span class="info-value">' + esc(fmtYesCodeDate(sub && sub.StartTime)) + '</span>'
+        + '<span class="info-label">到期时间</span><span class="info-value">' + esc(fmtYesCodeDate(sub && sub.EndTime)) + '</span>'
+        + '<span class="info-label">自动续费</span><span class="info-value">' + (sub ? (sub.EnableAutoRenew ? '是' : '否') : '-') + '</span>'
+        + '<span class="info-label">官网</span><span class="info-value"><a href="https://console.volcengine.com/ark/region:ark+cn-beijing/openManagement?LLM=%7B%7D&advancedActiveKey=agentPlan" target="_blank" rel="noopener" style="color:#667eea;text-decoration:none">火山引擎控制台 ↗</a></span>'
+        + '</div></div>';
+
+      function detailRow(label, bucket) {
+        var quota = (bucket && bucket.Quota) || 0, used = (bucket && bucket.Used) || 0;
+        var pct = quota > 0 ? Math.min(100, (used / quota) * 100) : 0;
+        var resetTxt = bucket && bucket.ResetTime ? fmtYesCodeDate(bucket.ResetTime) : '-';
+        return '<div class="limit-row"><div class="limit-label"><span class="limit-name">' + label + '</span><span class="limit-value">' + used.toFixed(2) + ' / ' + quota + ' (' + pct.toFixed(1) + '%)</span></div>'
+          + '<div class="limit-bar"><div class="limit-fill ' + getColorClass(pct) + '" style="width:' + pct + '%"></div></div>'
+          + '<div style="font-size:11px;color:#bfbfbf;margin-top:3px">额度重置时间：' + resetTxt + '</div>'
+          + '</div>';
+      }
+
+      html += '<div class="info-section"><div class="info-section-title">额度使用情况（AFP）</div>'
+        + detailRow('每5小时', five)
+        + detailRow('每日', daily)
+        + detailRow('每周', week)
+        + detailRow('每月', month)
+        + '</div>';
+
+      document.getElementById('modalBody').innerHTML = html;
+    }
+
     function showDetail(index) {
       // Dispose existing chart if any
       if (_usageCharts[_detailIndex]) { _usageCharts[_detailIndex].dispose(); delete _usageCharts[_detailIndex]; }
@@ -1069,6 +1236,12 @@ body.dark .platform-huoli { background: #422006; color: #fb923c; border-color: #
 
       if ((acc.platform || 'glm') === 'huoli') {
         renderHuoliDetail(index, acc);
+        document.getElementById('modalOverlay').classList.add('active');
+        return;
+      }
+
+      if ((acc.platform || 'glm') === 'volc') {
+        renderVolcDetail(index, acc);
         document.getElementById('modalOverlay').classList.add('active');
         return;
       }
@@ -1427,15 +1600,17 @@ body.dark .platform-huoli { background: #422006; color: #fb923c; border-color: #
       var glmDisp = platform === 'glm' ? '' : 'none';
       var yesDisp = platform === 'yescode' ? '' : 'none';
       var huoliDisp = platform === 'huoli' ? '' : 'none';
+      var volcDisp = platform === 'volc' ? '' : 'none';
       document.getElementById('mgmtBody').innerHTML = ''
         + '<div class="import-section"><div class="import-toggle" onclick="this.nextElementSibling.classList.toggle(\'open\')">&#9660; 快速导入（粘贴 fetch 命令）</div>'
-        + '<div class="import-body"><textarea class="form-input" id="f_fetch" placeholder="粘贴 fetch(...) 命令，自动识别智谱 / YesCode"></textarea>'
+        + '<div class="import-body"><textarea class="form-input" id="f_fetch" placeholder="粘贴 fetch(...) 命令，自动识别智谱 / YesCode / 火狸 / 火山A"></textarea>'
         + '<div class="import-actions"><button class="btn-primary" style="padding:5px 16px;font-size:12px" onclick="parseFetch()">解析并填充</button></div></div></div>'
         + '<div class="form-row">'
         + '<div class="form-group"><label class="form-label">站点</label><select class="form-input" id="f_platform" onchange="onPlatformChange()">'
         + '<option value="glm"' + (platform==='glm'?' selected':'') + '>智谱</option>'
         + '<option value="yescode"' + (platform==='yescode'?' selected':'') + '>YesCode</option>'
         + '<option value="huoli"' + (platform==='huoli'?' selected':'') + '>火狸</option>'
+        + '<option value="volc"' + (platform==='volc'?' selected':'') + '>火山A</option>'
         + '</select></div>'
         + '<div class="form-group"><label class="form-label">账号名称</label><input class="form-input" id="f_name" value="' + esc(a.name||'') + '"></div>'
         + '</div>'
@@ -1452,6 +1627,11 @@ body.dark .platform-huoli { background: #422006; color: #fb923c; border-color: #
         + '<div class="form-row"><div class="form-group"><label class="form-label">登录邮箱</label><input class="form-input" id="f_huoli_email" placeholder="用于 Token 过期时自动登录" value="' + esc(a.huoli_email||'') + '"></div>'
         + '<div class="form-group"><label class="form-label">登录密码</label><input class="form-input" type="password" id="f_huoli_password" placeholder="用于 Token 过期时自动登录" value="' + esc(a.huoli_password||'') + '"></div></div>'
         + '</div>'
+        + '<div id="f_volc_fields" style="display:' + volcDisp + '">'
+        + '<div class="form-group"><label class="form-label">Cookie</label><textarea class="form-input" id="f_volc_cookie" placeholder="完整 Cookie，用于访问 console.volcengine.com">' + esc(a.cookie||'') + '</textarea></div>'
+        + '<div class="form-row"><div class="form-group"><label class="form-label">X-CSRF-Token</label><input class="form-input" id="f_volc_csrf" value="' + esc(a.csrf||'') + '"></div>'
+        + '<div class="form-group"><label class="form-label">X-Web-Id（可选）</label><input class="form-input" id="f_volc_webid" value="' + esc(a.web_id||'') + '"></div></div>'
+        + '</div>'
         + '<div class="form-row"><div class="form-group"><label class="form-label">负责人</label><input class="form-input" id="f_person" value="' + esc(a.responsiblePerson||'') + '"></div>'
         + '<div class="form-group"><label class="form-label">电话</label><input class="form-input" id="f_phone" value="' + esc(a.phone||'') + '"></div></div>'
         + '<div class="form-group"><label class="form-label">备注</label><input class="form-input" id="f_notes" value="' + esc(a.notes||'') + '"></div>'
@@ -1463,6 +1643,7 @@ body.dark .platform-huoli { background: #422006; color: #fb923c; border-color: #
       document.getElementById('f_glm_fields').style.display = p === 'glm' ? '' : 'none';
       document.getElementById('f_yescode_fields').style.display = p === 'yescode' ? '' : 'none';
       document.getElementById('f_huoli_fields').style.display = p === 'huoli' ? '' : 'none';
+      document.getElementById('f_volc_fields').style.display = p === 'volc' ? '' : 'none';
     }
 
     // 从 fetch / Node fetch / cURL 文本中提取指定 header 值
@@ -1493,7 +1674,25 @@ body.dark .platform-huoli { background: #422006; color: #fb923c; border-color: #
       var t = document.getElementById('f_fetch').value; if (!t.trim()) return;
       var isYescode = /yes\.vg/i.test(t);
       var isHuoli = /huolilink\.com/i.test(t);
+      var isVolc = /volcengine\.com|console\.volcengine/i.test(t);
       var isGlm = /bigmodel\.cn|bigmodel-organization|bigmodel-project/i.test(t);
+
+      if (isVolc && !isGlm) {
+        document.getElementById('f_platform').value = 'volc';
+        onPlatformChange();
+        var cookie = extractCookie(t);
+        var csrf = extractHeader(t, 'x-csrf-token');
+        var webid = extractHeader(t, 'x-web-id');
+        if (cookie) { document.getElementById('f_volc_cookie').value = cookie; }
+        if (csrf) { document.getElementById('f_volc_csrf').value = csrf; }
+        if (webid) { document.getElementById('f_volc_webid').value = webid; }
+        if (!cookie) {
+          alert('未能解析出 Cookie。\n\n「Copy as fetch」不会包含 Cookie 头（它靠 credentials:include 由浏览器自动带），\n请改用：右键请求 → Copy → Copy as cURL (bash)，\ncURL 复制会带出完整 Cookie（含 HttpOnly 登录态），再粘贴到这里解析。');
+        } else if (!csrf) {
+          alert('已解析出 Cookie，但未解析出 X-CSRF-Token，请确认复制的是 GetAgentPlanAFPUsage 请求。');
+        }
+        return;
+      }
 
       if (isYescode && !isGlm && !isHuoli) {
         document.getElementById('f_platform').value = 'yescode';
@@ -1543,6 +1742,11 @@ body.dark .platform-huoli { background: #422006; color: #fb923c; border-color: #
         body.huoli_email = document.getElementById('f_huoli_email').value.trim();
         body.huoli_password = document.getElementById('f_huoli_password').value.trim();
         if (!body.name || !body.authorization) { alert('账号名称和 Token 不能为空'); return; }
+      } else if (platform === 'volc') {
+        body.cookie = document.getElementById('f_volc_cookie').value.trim();
+        body.csrf = document.getElementById('f_volc_csrf').value.trim();
+        body.web_id = document.getElementById('f_volc_webid').value.trim();
+        if (!body.name || !body.cookie || !body.csrf) { alert('账号名称、Cookie 和 X-CSRF-Token 不能为空'); return; }
       } else {
         body.authorization = document.getElementById('f_auth').value.trim();
         body.organization = document.getElementById('f_org').value.trim();

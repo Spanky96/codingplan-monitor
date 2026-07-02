@@ -231,6 +231,71 @@ async function fetchHuoliUsage(account, index) {
     }
 }
 
+// ============ 火山A 账号 ============
+
+function volcHeaders(account) {
+    var h = {
+        'accept': 'application/json, text/plain, */*',
+        'accept-language': 'zh',
+        'cache-control': 'no-cache',
+        'content-type': 'application/json',
+        'pragma': 'no-cache',
+        'cookie': account.cookie || '',
+        'x-csrf-token': account.csrf || '',
+        'referer': 'https://console.volcengine.com/ark/region:ark+cn-beijing/openManagement?LLM=%7B%7D&advancedActiveKey=agentPlan'
+    };
+    if (account.web_id) h['x-web-id'] = account.web_id;
+    return h;
+}
+
+async function fetchVolcUsage(account, index) {
+    try {
+        var headers = volcHeaders(account);
+        var usageUrl = 'https://console.volcengine.com/api/top/ark/cn-beijing/2024-01-01/GetAgentPlanAFPUsage';
+        var subUrl = 'https://console.volcengine.com/api/top/ark/cn-beijing/2024-01-01/ListSubscribeTrade';
+        var subBody = {
+            ResourceTypes: ['AgentPlan'],
+            ResourceNames: ['RealAgentPlanPersonal'],
+            BizInfos: ['small', 'medium', 'large', 'max']
+        };
+
+        var usagePromise = httpsRequest('POST', usageUrl, headers, {}).then(function(j) { return j && j.Result ? j.Result : null; });
+        var subPromise = httpsRequest('POST', subUrl, headers, subBody).then(function(j) {
+            return (j && j.Result && j.Result.InfoList && j.Result.InfoList[0]) || null;
+        }).catch(function() { return null; });
+
+        var usage = await usagePromise;
+        var subscription = await subPromise;
+
+        if (!usage) throw new Error('未获取到用量数据（可能是 Cookie/CSRF 已失效）');
+
+        var result = {
+            index: index,
+            name: account.name,
+            platform: 'volc',
+            responsiblePerson: account.responsiblePerson,
+            phone: account.phone,
+            notes: account.notes,
+            data: { usage: usage, subscription: subscription },
+            success: true,
+            cachedAt: Date.now()
+        };
+        setCache(index, result);
+        return result;
+    } catch (err) {
+        return {
+            index: index,
+            name: account.name,
+            platform: 'volc',
+            responsiblePerson: account.responsiblePerson,
+            phone: account.phone,
+            notes: account.notes,
+            error: err.message,
+            success: false
+        };
+    }
+}
+
 // ============ 统一调度 ============
 
 async function fetchAccountUsage(account, index) {
@@ -241,13 +306,16 @@ async function fetchAccountUsage(account, index) {
     if (platform === 'huoli') {
         return fetchHuoliUsage(account, index);
     }
+    if (platform === 'volc') {
+        return fetchVolcUsage(account, index);
+    }
     return fetchGLMUsage(account, index);
 }
 
 async function fetchAccountExpire(account, index) {
     var platform = account.platform || 'glm';
-    if (platform === 'yescode' || platform === 'huoli') {
-        // 火狸到期信息从 subscriptions/active 接口的 expires_at 获取，由前端渲染
+    if (platform === 'yescode' || platform === 'huoli' || platform === 'volc') {
+        // 这些平台到期信息从各自接口获取，由前端渲染
         return { success: false, cachedAt: Date.now() };
     }
     return fetchGLMExpire(account, index);
@@ -295,7 +363,7 @@ module.exports = function(app) {
             var i = parseInt(req.params.index);
             var account = getAccount(req);
             if (!account) return res.status(404).json({ error: '未找到账号' });
-            if ((account.platform || 'glm') === 'yescode' || (account.platform || 'glm') === 'huoli') {
+            if ((account.platform || 'glm') === 'yescode' || (account.platform || 'glm') === 'huoli' || (account.platform || 'glm') === 'volc') {
                 return res.json([]);
             }
             var json = await httpsGet(keysUrl(account, '?keyType=1'), makeHeaders(account));
@@ -391,8 +459,9 @@ module.exports = function(app) {
         try {
             var account = getAccount(req);
             if (!account) return res.status(404).json({ error: '未找到账号' });
-            if ((account.platform || 'glm') === 'yescode' || (account.platform || 'glm') === 'huoli') {
-                return res.json({ error: (account.platform === 'huoli' ? '火狸' : 'YesCode') + ' 暂不支持用量曲线' });
+            if ((account.platform || 'glm') === 'yescode' || (account.platform || 'glm') === 'huoli' || (account.platform || 'glm') === 'volc') {
+                var platName = account.platform === 'huoli' ? '火狸' : (account.platform === 'volc' ? '火山A' : 'YesCode');
+                return res.json({ error: platName + ' 暂不支持用量曲线' });
             }
             var period = req.query.period || '7d';
             var now = new Date();
