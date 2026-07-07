@@ -73,6 +73,12 @@
     .card-footer { padding: 10px 20px; border-top: 1px solid #f0f0f0; display: flex; justify-content: space-between; align-items: center; font-size: 12px; }
     .card-footer-left { display: flex; align-items: center; gap: 8px; }
     .level-badge { padding: 2px 8px; border-radius: 4px; background: #f0f5ff; color: #2f54eb; border: 1px solid #adc6ff; }
+    .weight-badge { padding: 1px 9px; border-radius: 10px; font-size: 12px; font-weight: 700; cursor: pointer; border: 1px solid #d9d9d9; background: #fafafa; color: #595959; user-select: none; transition: transform 0.15s; }
+    .weight-badge:hover { transform: scale(1.06); }
+    .weight-badge.w-0 { background: #fff1f0; color: #cf1322; border-color: #ffa39e; }
+    .weight-badge.w-low { background: #fff7e6; color: #d46b08; border-color: #ffd591; }
+    .weight-badge.w-mid { background: #f0f5ff; color: #2f54eb; border-color: #adc6ff; }
+    .weight-badge.w-high { background: #f6ffed; color: #389e0d; border-color: #b7eb8f; }
     .cache-time { color: #bfbfbf; }
     .detail-btn { background: none; border: 1px solid #d9d9d9; color: #595959; padding: 4px 14px; border-radius: 4px; cursor: pointer; font-size: 13px; transition: all 0.2s; }
     .detail-btn:hover { border-color: #667eea; color: #667eea; }
@@ -479,6 +485,7 @@ body.dark .platform-volc { background: #042f2e; color: #5eead4; border-color: #0
         <span class="toolbar-label">排序</span>
         <button class="toolbar-btn active" data-sort="default" onclick="setSort('default')">默认</button>
         <button class="toolbar-btn" data-sort="tension" onclick="setSort('tension')">紧张度<span class="sort-arrow" id="tensionArrow">▼</span></button>
+        <button class="toolbar-btn" data-sort="weight" onclick="setSort('weight')">权重<span class="sort-arrow" id="weightArrow">▼</span></button>
       </div>
       <span class="toolbar-count" id="toolbarCount"></span>
     </div>
@@ -525,12 +532,27 @@ body.dark .platform-volc { background: #042f2e; color: #5eead4; border-color: #0
     </div>
   </div>
 
+  <!-- 权重配置 Modal -->
+  <div class="modal-overlay" id="weightOverlay">
+    <div class="modal" style="width:420px">
+      <div class="modal-header">
+        <h3>权重配置</h3>
+        <button class="modal-close" onclick="closeModal('weightOverlay')">&times;</button>
+      </div>
+      <div class="modal-body" id="weightBody"></div>
+    </div>
+  </div>
+
   <!-- Theme transition overlay -->
   <div class="theme-overlay" id="themeOverlay"></div>
 
   <script>
     var accountsData = [];
     var expireData = [];
+    var weightsMap = {};        // name → 最终权重(管理员,卡片左上角徽标)
+    var weightsDetail = {};     // name → 明细(base/strategy/configValue/defaultWeight)
+    var _weightEditIndex = -1;
+    var _weightEditName = null;
     var UNIT_LABELS = { 3: '每5小时', 5: 'MCP月额度', 6: '每周' };
     var _pendingAuth = null;
     var _detailIndex = -1;
@@ -898,7 +920,8 @@ body.dark .platform-volc { background: #042f2e; color: #5eead4; border-color: #0
       var platform = acc.platform || 'glm';
       var btn = isAdmin() ? '<button class="card-refresh" id="refresh-' + i + '" onclick="refreshCard(' + i + ')" title="刷新">&#x21bb;</button>' : '';
       var pTag = platformTag(platform);
-      var headerLeft = '<div class="card-header-left">' + pTag + '<h3>' + esc(displayName(acc, i)) + '</h3></div>';
+      var wBadge = (isAdmin() && weightsMap[acc.name] != null) ? weightBadgeHTML(acc.name, i) : '';
+      var headerLeft = '<div class="card-header-left">' + pTag + wBadge + '<h3>' + esc(displayName(acc, i)) + '</h3></div>';
 
       if (!acc.success) {
         return '<div class="card" id="card-' + i + '"><div class="card-header">' + headerLeft
@@ -1284,6 +1307,19 @@ body.dark .platform-volc { background: #042f2e; color: #5eead4; border-color: #0
           return a.origIdx - b.origIdx;
         });
       }
+      if (_sortMode === 'weight-desc' || _sortMode === 'weight-asc') {
+        var wasc = _sortMode === 'weight-asc';
+        arr.sort(function(a, b) {
+          var wa = (a.acc && weightsMap[a.acc.name] != null) ? weightsMap[a.acc.name] : -1;
+          var wb = (b.acc && weightsMap[b.acc.name] != null) ? weightsMap[b.acc.name] : -1;
+          // 无权重数据的卡(非管理员 / 未加载)排到最后
+          if (wa < 0 && wb < 0) return a.origIdx - b.origIdx;
+          if (wa < 0) return 1;
+          if (wb < 0) return -1;
+          if (wa !== wb) return wasc ? (wa - wb) : (wb - wa);
+          return a.origIdx - b.origIdx;
+        });
+      }
       return arr;
     }
 
@@ -1347,17 +1383,22 @@ body.dark .platform-volc { background: #042f2e; color: #5eead4; border-color: #0
       if (s === 'tension') {
         // 已是紧张度排序则切换方向；否则首次进入按降序
         _sortMode = (_sortMode === 'tension-desc') ? 'tension-asc' : 'tension-desc';
+      } else if (s === 'weight') {
+        _sortMode = (_sortMode === 'weight-desc') ? 'weight-asc' : 'weight-desc';
       } else {
         _sortMode = 'default';
       }
       document.querySelectorAll('#toolbar [data-sort]').forEach(function(b) {
         var key = b.dataset.sort;
         var active = (key === 'default' && _sortMode === 'default')
-          || (key === 'tension' && (_sortMode === 'tension-desc' || _sortMode === 'tension-asc'));
+          || (key === 'tension' && (_sortMode === 'tension-desc' || _sortMode === 'tension-asc'))
+          || (key === 'weight' && (_sortMode === 'weight-desc' || _sortMode === 'weight-asc'));
         b.classList.toggle('active', active);
       });
       var arrow = document.getElementById('tensionArrow');
       if (arrow) arrow.textContent = _sortMode === 'tension-asc' ? '▲' : '▼';
+      var wArrow = document.getElementById('weightArrow');
+      if (wArrow) wArrow.textContent = _sortMode === 'weight-asc' ? '▲' : '▼';
       if (accountsData.length) renderCards(accountsData);
     }
 
@@ -2127,10 +2168,104 @@ body.dark .platform-volc { background: #042f2e; color: #5eead4; border-color: #0
         delete _usageCharts[_detailIndex];
       }
     }
-    ['pwdOverlay','modalOverlay','mgmtOverlay'].forEach(function(id){
+    ['pwdOverlay','modalOverlay','mgmtOverlay','weightOverlay'].forEach(function(id){
       document.getElementById(id).addEventListener('click', function(e){ if(e.target===e.currentTarget) closeModal(id); });
     });
-    document.addEventListener('keydown', function(e){ if(e.key==='Escape') ['pwdOverlay','modalOverlay','mgmtOverlay'].forEach(closeModal); });
+    document.addEventListener('keydown', function(e){ if(e.key==='Escape') ['pwdOverlay','modalOverlay','mgmtOverlay','weightOverlay'].forEach(closeModal); });
+
+    // ============ 权重徽标与配置(管理员)============
+
+    function weightBadgeHTML(name, i) {
+      var w = weightsMap[name];
+      if (w == null) return '';
+      var cls = 'weight-badge ' + (w === 0 ? 'w-0' : w <= 3 ? 'w-low' : w <= 7 ? 'w-mid' : 'w-high');
+      return '<span class="' + cls + '" onclick="event.stopPropagation();openWeightConfig(' + i + ')" title="点击配置权重">' + w.toFixed(1) + '</span>';
+    }
+
+    function loadWeights() {
+      if (!isAdmin()) { weightsMap = {}; weightsDetail = {}; return; }
+      var p = localStorage.getItem('glm_pwd') || '';
+      fetch('/api/weights?password=' + encodeURIComponent(p) + '&detail=1')
+        .then(function(r){return r.json()})
+        .then(function(d){
+          weightsMap = d.weights || {};
+          weightsDetail = {};
+          (d.detail || []).forEach(function(x){ if (x && x.name != null) weightsDetail[x.name] = x; });
+          if (accountsData.length) renderCards(accountsData);
+        }).catch(function(){});
+    }
+
+    // 前端复刻后端策略,用于弹窗实时预览
+    function applyStrategyFE(base, strategy, value) {
+      if (base == null) return null;
+      if (strategy === 'A') return value;
+      if (strategy === 'B') return base * value;
+      if (strategy === 'C') return Math.min(base, value);
+      if (strategy === 'D') return base + value;
+      return base;
+    }
+    function clamp10FE(x) { return Math.max(0, Math.min(10, Math.round(x * 10) / 10)); }
+
+    function updateWeightPreview() {
+      var det = weightsDetail[_weightEditName] || {};
+      var base = (det.base != null) ? det.base : null;
+      var strategy = document.getElementById('w_strategy').value;
+      var value = parseFloat(document.getElementById('w_value').value);
+      value = isFinite(value) ? value : 0;
+      var dw = parseFloat(document.getElementById('w_default').value);
+      dw = isFinite(dw) ? dw : 1;
+      // 有 usage(base)→ 当前权重 + 所选策略;无 usage → 默认权重
+      var raw = (base == null) ? dw : applyStrategyFE(base, strategy, value);
+      document.getElementById('w_preview').textContent = clamp10FE(raw).toFixed(1);
+      document.getElementById('w_base_info').textContent = (base == null)
+        ? '无法获取 usage → 使用默认权重 ' + clamp10FE(dw).toFixed(1)
+        : ('当前权重(base)= ' + base + ',配合所选策略计算(默认权重仅兜底)');
+    }
+
+    function openWeightConfig(i) {
+      var acc = accountsData[i];
+      if (!acc) return;
+      var det = weightsDetail[acc.name] || {};
+      var cfg = {
+        defaultWeight: (det.defaultWeight != null) ? det.defaultWeight : 1,
+        strategy: det.strategy || 'B',
+        value: (det.configValue != null) ? det.configValue : 1
+      };
+      _weightEditIndex = i; _weightEditName = acc.name;
+      document.getElementById('weightBody').innerHTML = ''
+        + '<div class="form-group"><label class="form-label">账号</label><div style="font-weight:600">' + esc(acc.name) + '</div></div>'
+        + '<div class="form-group"><label class="form-label">基础用量</label><div id="w_base_info" style="color:#8c8c8c;font-size:13px">-</div></div>'
+        + '<div class="form-group"><label class="form-label">默认权重(token 失效 / 无缓存时使用,0~10)</label><input class="form-input" type="number" min="0" max="10" step="1" id="w_default" value="' + cfg.defaultWeight + '" oninput="updateWeightPreview()"></div>'
+        + '<div class="form-row"><div class="form-group"><label class="form-label">权重策略</label><select class="form-input" id="w_strategy" onchange="updateWeightPreview()">'
+          + '<option value="B"' + (cfg.strategy==='B'?' selected':'') + '>B 倍率(默认 ×1)</option>'
+          + '<option value="A"' + (cfg.strategy==='A'?' selected':'') + '>A 固定值</option>'
+          + '<option value="C"' + (cfg.strategy==='C'?' selected':'') + '>C 最高值(上限)</option>'
+          + '<option value="D"' + (cfg.strategy==='D'?' selected':'') + '>D 固定加减</option>'
+        + '</select></div>'
+        + '<div class="form-group"><label class="form-label">策略值</label><input class="form-input" type="number" step="any" id="w_value" value="' + cfg.value + '" oninput="updateWeightPreview()"></div></div>'
+        + '<div class="form-group"><label class="form-label">预览最终权重</label><div style="font-size:22px;font-weight:700;color:#2f54eb">W <span id="w_preview">-</span> <span style="font-size:12px;color:#bfbfbf;font-weight:400">(钳制到 0~10)</span></div></div>'
+        + '<div class="form-actions"><button class="btn-default" onclick="closeModal(\'weightOverlay\')">取消</button><button class="btn-primary" onclick="saveWeightConfig()">保存</button></div>';
+      updateWeightPreview();
+      document.getElementById('weightOverlay').classList.add('active');
+    }
+
+    function saveWeightConfig() {
+      var i = _weightEditIndex;
+      var dw = parseFloat(document.getElementById('w_default').value);
+      var value = parseFloat(document.getElementById('w_value').value);
+      var body = {
+        defaultWeight: isFinite(dw) ? dw : 5,
+        strategy: document.getElementById('w_strategy').value,
+        value: isFinite(value) ? value : 1
+      };
+      fetch('/api/weights/config/' + i, { method: 'PUT', headers: authHeaders(), body: JSON.stringify(body) })
+        .then(function(r){return r.json()})
+        .then(function(d){
+          if (d.error) { alert('保存失败: ' + d.error); return; }
+          closeModal('weightOverlay');
+          loadWeights();   // 刷新徽标
+        }).catch(function(e){ alert('请求失败: ' + e.message); });
+    }
 
     // ============ 数据加载 ============
 
@@ -2159,6 +2294,7 @@ body.dark .platform-volc { background: #042f2e; color: #5eead4; border-color: #0
         .then(function(r){return r.json()}).then(function(data){
         accountsData = data; renderCards(data);
         document.getElementById('lastUpdated').textContent = '更新于 ' + new Date().toLocaleTimeString('zh-CN');
+        loadWeights();   // 管理员额外拉取权重(渲染左上角徽标)
       }).catch(function(err){ if(!accountsData.length) grid.innerHTML='<div class="empty">加载失败: '+err.message+'</div>'; });
     }
 

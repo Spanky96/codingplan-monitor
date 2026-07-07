@@ -103,8 +103,43 @@ docker compose down           # 停止并移除容器(./data 账号数据保留)
 | POST / PUT / DELETE | `/api/accounts[/:index]` | ✅ | 账号增改删 / 整体排序 |
 | GET  | `/api/model-usage/:index?period=today\|7d\|30d` | - | 智谱用量曲线 |
 | GET  | `/api/expire[/:index]` | - | 订阅到期时间(24 小时缓存) |
+| GET  | `/api/weights` | 可选密码 | 公开账号 token 分配权重(0~6,纯读缓存) |
 
 鉴权接口通过请求头 `X-Auth-Password` 传递管理密码。
+
+## 权重接口(`/api/weights`)
+
+为中转站提供 token 分配权重:返回 `{ "账号名": 权重, ... }`,**权重 0~10**,越高越宽裕、可多分配 token,0 = 已耗尽。
+
+**缓存依赖(关键)**:接口纯读内存缓存评分,**绝不会因调用而向 bigmodel.cn 刷新**。缓存由「打开监控面板 → `/api/usage`」填充,5 分钟 TTL。
+
+**默认权重兜底**:token 失效 / 无缓存时,该账号按其「默认权重」配置返回(而非跳过)。默认权重初值 1,可逐账号配置。
+
+**密码分层**:
+- 不带密码:`GET /api/weights` → 公开账号(`isPublic !== false`,未明确设为私有即默认公开)
+- 带正确密码:`GET /api/weights?password=<ADMIN_PASSWORD>` → 全部账号
+- 明细:`GET /api/weights?password=<PWD>&detail=1` → `{ weights, detail:[{name,weight,base,source,strategy,configValue,defaultWeight,score5h,score7d,used5h,used7d,cachedAt,exhausted}], generatedAt, cacheTtlMs }`(需密码)
+
+**计算流程**:
+1. **base(0~6)**:取 `quota/limit` 的「每5小时」(unit=3)与「每周7天」(unit=6)两窗口,单窗口按已用%分桶(<15→6 … <100→1)+ 时间速率比修正(≥2倍速 −2、≥1.3倍速 −1、≤0.5倍速 +1)钳制 1~6;综合取 `min`(瓶颈),任一耗尽则 0。token 失效 / 非 GLM → base = null
+2. **策略**(在 base 上叠加,默认 B 倍率 ×1)
+3. **兜底**:base 为 null 时直接用默认权重
+4. **钳制**:最终结果统一 `clamp [0, 10]` 取整
+
+**权重策略**(每账号可配,管理员):
+
+| 策略 | 含义 | 计算(base 已知时) |
+|------|------|------|
+| A 固定值 | 直接返回设定值 | `value` |
+| B 倍率(默认 ×1) | 按倍率缩放 | `base × value` |
+| C 最高值 | 上限钳制 | `min(base, value)` |
+| D 固定加减 | 增减 | `base + value` |
+
+**配置接口**(管理员,请求头 `X-Auth-Password`):
+- `GET /api/weights/config` → `[{index, name, platform, config:{defaultWeight,strategy,value}, base, final}]`
+- `PUT /api/weights/config/:index`,body `{defaultWeight?, strategy?, value?}`(任选提供)→ 写入该账号 `weightConfig`(存 `accounts.json`,编辑账号时自动保留)
+
+**前端**:管理员登录后,每张卡片左上角显示 `W {最终权重}` 徽标(配色:0 红 / 1-3 橙 / 4-7 蓝 / 8-10 绿),点击弹出权重配置(默认权重 + 策略 + 策略值 + 实时预览),保存后徽标即时刷新;非管理员不显示。
 
 ## 前端功能
 

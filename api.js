@@ -6,6 +6,7 @@ var jsonParser = express.json();
 var config = require('./config');
 var glmAccountsFile = config.accountsFile;
 var PASSWORD = config.adminPassword;
+var weights = require('./weights');
 var CACHE_TTL = 5 * 60 * 1000;
 
 var usageCache = {};
@@ -371,6 +372,81 @@ module.exports = function(app) {
         } catch (err) { res.status(500).json({ error: err.message }); }
     });
 
+    // ============ 权重接口(为中转站提供 token 分配权重,纯读缓存 + 默认兜底) ============
+    app.get('/api/weights', function(req, res) {
+        try {
+            var authenticated = req.query.password === PASSWORD;
+            var wantDetail = authenticated && req.query.detail === '1';
+            var accounts = readAccounts();
+            var result = {};
+            var detail = [];
+            for (var i = 0; i < accounts.length; i++) {
+                var acc = accounts[i];
+                if (!acc) continue;
+                // 未鉴权:返回公开账号(isPublic !== false,默认公开);带正确密码:全部账号
+                if (!authenticated && acc.isPublic === false) continue;
+                var cfg = weights.getWeightConfig(acc);
+                var cached = getCached(i);                          // 纯读,绝不触发官方刷新
+                var s = cached ? weights.scoreAccount(cached) : null;
+                var base = s ? s.weight : null;                      // token 失效/无缓存 → null → 走默认权重
+                var final = weights.finalWeight(base, cfg);
+                result[acc.name] = final;
+                if (wantDetail) {
+                    detail.push({
+                        index: i, name: acc.name, weight: final,
+                        base: base, source: base === null ? 'default' : 'computed',
+                        strategy: cfg.strategy, configValue: cfg.value, defaultWeight: cfg.defaultWeight,
+                        score5h: s ? s.score5h : null, score7d: s ? s.score7d : null,
+                        used5h: s ? s.used5h : null, used7d: s ? s.used7d : null,
+                        theo5h: s ? s.theo5h : null, theo7d: s ? s.theo7d : null,
+                        exhausted: s ? s.exhausted : false,
+                        cachedAt: cached ? cached.cachedAt : null
+                    });
+                }
+            }
+            if (wantDetail) {
+                res.json({ weights: result, detail: detail, generatedAt: Date.now(), cacheTtlMs: CACHE_TTL });
+            } else {
+                res.json(result);
+            }
+        } catch (err) { res.status(500).json({ error: err.message }); }
+    });
+
+    // 权重配置读取(管理员):每个账号的 weightConfig + 当前 base/final
+    app.get('/api/weights/config', checkAuth, function(req, res) {
+        try {
+            var accounts = readAccounts();
+            var list = [];
+            for (var i = 0; i < accounts.length; i++) {
+                var acc = accounts[i];
+                if (!acc) continue;
+                var cfg = weights.getWeightConfig(acc);
+                var cached = getCached(i);
+                var s = cached ? weights.scoreAccount(cached) : null;
+                var base = s ? s.weight : null;
+                list.push({ index: i, name: acc.name, platform: acc.platform || 'glm', config: cfg, base: base, final: weights.finalWeight(base, cfg) });
+            }
+            res.json(list);
+        } catch (err) { res.status(500).json({ error: err.message }); }
+    });
+
+    // 权重配置写入(管理员):{ defaultWeight, strategy, value } 任选提供
+    app.put('/api/weights/config/:index', jsonParser, checkAuth, function(req, res) {
+        try {
+            var accounts = readAccounts();
+            var idx = parseInt(req.params.index);
+            if (!accounts[idx]) return res.status(404).json({ error: '未找到账号' });
+            var cfg = weights.getWeightConfig(accounts[idx]);
+            if (req.body && req.body.defaultWeight != null) cfg.defaultWeight = req.body.defaultWeight;
+            if (req.body && req.body.strategy != null) cfg.strategy = req.body.strategy;
+            if (req.body && req.body.value != null) cfg.value = req.body.value;
+            cfg = weights.getWeightConfig({ weightConfig: cfg });   // 复用校验/兜底
+            accounts[idx].weightConfig = cfg;
+            writeAccounts(accounts);
+            res.json({ success: true, index: idx, config: cfg });
+        } catch (err) { res.status(500).json({ error: err.message }); }
+    });
+
     // ============ API Keys（查看公开，操作需密码） ============
 
     app.get('/api/keys/:index', async function(req, res) {
@@ -440,6 +516,10 @@ module.exports = function(app) {
             var accounts = readAccounts();
             var idx = parseInt(req.params.index);
             if (!accounts[idx]) return res.status(404).json({ error: '未找到账号' });
+            // 编辑账号表单不含 weightConfig,替换时保留原有权重配置
+            if (accounts[idx].weightConfig && req.body && !('weightConfig' in req.body)) {
+                req.body.weightConfig = accounts[idx].weightConfig;
+            }
             accounts[idx] = req.body;
             writeAccounts(accounts);
             clearCache();
