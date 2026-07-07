@@ -104,12 +104,14 @@ function keysUrl(account, suffix) {
 
 async function fetchGLMUsage(account, index) {
     try {
-        var json = await httpsGet('https://bigmodel.cn/api/monitor/usage/quota/limit', makeHeaders(account));
-        var result = { index: index, name: account.name, platform: 'glm', responsiblePerson: account.responsiblePerson, phone: account.phone, notes: account.notes, keyCount: account.keyCount, data: json.data, success: true, cachedAt: Date.now() };
+        var url = 'https://bigmodel.cn/api/monitor/usage/quota/limit';
+        if (account.teamEdition) url += '?type=2';
+        var json = await httpsGet(url, makeHeaders(account));
+        var result = { index: index, name: account.name, platform: 'glm', responsiblePerson: account.responsiblePerson, phone: account.phone, notes: account.notes, keyCount: account.keyCount, teamEdition: account.teamEdition || undefined, isPublic: account.isPublic, data: json.data, success: true, cachedAt: Date.now() };
         setCache(index, result);
         return result;
     } catch (err) {
-        return { index: index, name: account.name, platform: 'glm', responsiblePerson: account.responsiblePerson, phone: account.phone, notes: account.notes, keyCount: account.keyCount, error: err.message, success: false };
+        return { index: index, name: account.name, platform: 'glm', responsiblePerson: account.responsiblePerson, phone: account.phone, notes: account.notes, keyCount: account.keyCount, teamEdition: account.teamEdition || undefined, isPublic: account.isPublic, error: err.message, success: false };
     }
 }
 
@@ -140,6 +142,8 @@ async function fetchYesCodeUsage(account, index) {
             responsiblePerson: account.responsiblePerson,
             phone: account.phone,
             notes: account.notes,
+            teamEdition: account.teamEdition || undefined,
+            isPublic: account.isPublic,
             data: json.data || json,
             success: true,
             cachedAt: Date.now()
@@ -154,6 +158,8 @@ async function fetchYesCodeUsage(account, index) {
             responsiblePerson: account.responsiblePerson,
             phone: account.phone,
             notes: account.notes,
+            teamEdition: account.teamEdition || undefined,
+            isPublic: account.isPublic,
             error: err.message,
             success: false
         };
@@ -211,6 +217,8 @@ async function fetchHuoliUsage(account, index) {
             responsiblePerson: account.responsiblePerson,
             phone: account.phone,
             notes: account.notes,
+            teamEdition: account.teamEdition || undefined,
+            isPublic: account.isPublic,
             data: json.data || json,
             success: true,
             cachedAt: Date.now()
@@ -225,6 +233,8 @@ async function fetchHuoliUsage(account, index) {
             responsiblePerson: account.responsiblePerson,
             phone: account.phone,
             notes: account.notes,
+            teamEdition: account.teamEdition || undefined,
+            isPublic: account.isPublic,
             error: err.message,
             success: false
         };
@@ -276,6 +286,8 @@ async function fetchVolcUsage(account, index) {
             responsiblePerson: account.responsiblePerson,
             phone: account.phone,
             notes: account.notes,
+            teamEdition: account.teamEdition || undefined,
+            isPublic: account.isPublic,
             data: { usage: usage, subscription: subscription },
             success: true,
             cachedAt: Date.now()
@@ -290,6 +302,8 @@ async function fetchVolcUsage(account, index) {
             responsiblePerson: account.responsiblePerson,
             phone: account.phone,
             notes: account.notes,
+            teamEdition: account.teamEdition || undefined,
+            isPublic: account.isPublic,
             error: err.message,
             success: false
         };

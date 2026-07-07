@@ -186,12 +186,61 @@
     .chart-wrap { position: relative; min-height: 260px; }
     .chart-loading { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; font-size: 13px; color: #8c8c8c; background: rgba(255,255,255,0.92); }
 
+    /* ============ View Toggle (block / list) ============ */
+    .view-toggle { display: flex; background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.2); border-radius: 7px; padding: 2px; gap: 2px; }
+    .view-btn { background: transparent; border: none; cursor: pointer; color: rgba(255,255,255,0.7); width: 34px; height: 28px; border-radius: 5px; display: flex; align-items: center; justify-content: center; transition: background 0.15s, color 0.15s; }
+    .view-btn:hover { color: #fff; }
+    .view-btn:active { transform: scale(0.95); }
+    .view-btn.active { background: rgba(255,255,255,0.95); color: #667eea; }
+    .view-btn svg { width: 16px; height: 16px; }
+
+    /* ============ List View ============ */
+    .list-grid { display: flex; flex-direction: column; gap: 10px; }
+    .list-row { position: relative; background: #fff; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); padding: 12px 18px; padding-right: 40px; display: flex; align-items: center; gap: 18px; transition: transform 0.2s, box-shadow 0.2s; cursor: pointer; }
+    .list-row:hover { transform: translateY(-1px); box-shadow: 0 5px 16px rgba(0,0,0,0.1); }
+    .list-row-refresh { position: absolute; top: 8px; right: 8px; z-index: 2; font-size: 16px; padding: 3px 6px; }
+    .list-row-left { display: flex; flex-direction: column; gap: 5px; width: 170px; min-width: 170px; flex-shrink: 0; }
+    .list-row-title { display: flex; align-items: center; gap: 7px; }
+    .list-row-title h3 { font-size: 14px; font-weight: 600; color: #262626; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .list-row-status { display: flex; align-items: center; gap: 6px; }
+    .list-row-status .card-status { font-size: 11px; padding: 1px 8px; }
+
+    .list-rings { display: flex; gap: 14px; align-items: flex-start; flex: 1; min-width: 0; flex-wrap: wrap; }
+    .ring-item { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+    .ring { position: relative; width: 76px; height: 76px; }
+    .ring svg { width: 100%; height: 100%; display: block; transform: rotate(-90deg); overflow: visible; }
+    .ring-track { fill: none; stroke: #f0f0f0; stroke-width: 4; }
+    .ring-fill { fill: none; stroke: #389e0d; stroke-width: 4; stroke-linecap: round; stroke-dasharray: 106.814; stroke-dashoffset: calc(106.814 * (1 - var(--pct, 0) / 100)); transition: stroke-dashoffset 0.6s ease; }
+    .ring-fill.ring-orange { stroke: #d48806; }
+    .ring-fill.ring-red { stroke: #cf1322; }
+    .ring-fill.ring-exhausted { stroke: #a020c0; }
+    /* 分段刻度（5h=5段 / 周=7段的内部边界），用底色形成「断开」感 */
+    .ring-seg-tick { stroke: #ffffff; stroke-width: 1.4; }
+    /* 理论用量线（理论进度位置） */
+    .ring-theo { stroke: #667eea; stroke-width: 1.8; stroke-linecap: round; }
+    /* 环心内容：标签做主标题、百分比+用量做副标题 */
+    .ring-center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; line-height: 1.1; text-align: center; padding: 0 4px; }
+    .ring-center .rc-label { font-size: 9px; font-weight: 500; color: #8c8c8c; white-space: nowrap; }
+    .ring-center .rc-pct { font-size: 15px; font-weight: 700; color: #262626; font-variant-numeric: tabular-nums; line-height: 1; }
+    .ring-center .rc-value { font-size: 8px; color: #bfbfbf; font-variant-numeric: tabular-nums; white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+
+    .list-row-right { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; flex-shrink: 0; }
+    .list-row-meta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+    .list-row-meta .level-badge { font-size: 11px; padding: 1px 7px; }
+    .list-row-meta .cache-time { font-size: 11px; }
+    .list-row-expire { font-size: 11px; color: #bfbfbf; cursor: pointer; }
+    .list-row-expire.expire-danger { color: #f5222d; font-weight: 600; }
+    .list-row-error { color: #cf1322; font-size: 13px; }
+
     @media (max-width: 768px) {
       .header { padding: 14px 16px; }
       .header h1 { font-size: 17px; }
       .container { padding: 0 12px; margin: 16px auto; }
       .card-grid { grid-template-columns: 1fr; }
       .form-row { grid-template-columns: 1fr; }
+      .list-row { flex-direction: column; align-items: stretch; gap: 10px; padding: 12px 14px; }
+      .list-row-left { width: auto; min-width: 0; }
+      .list-row-right { align-items: flex-start; }
     }
     @media (min-width: 769px) and (max-width: 1024px) {
       .card-grid { grid-template-columns: repeat(2, 1fr); }
@@ -320,6 +369,28 @@ body.dark .platform-volc { background: #042f2e; color: #5eead4; border-color: #0
     body.dark .period-btn.active { background: #8b5cf6; border-color: #8b5cf6; color: #fff; }
     body.dark .chart-loading { background: rgba(31,31,31,0.92); color: #888; }
 
+    body.dark .view-toggle { background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.12); }
+    body.dark .view-btn { color: rgba(255,255,255,0.55); }
+    body.dark .view-btn:hover { color: rgba(255,255,255,0.95); }
+    body.dark .view-btn.active { background: rgba(255,255,255,0.92); color: #8b5cf6; }
+
+    body.dark .list-row { background: #1f1f1f; box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
+    body.dark .list-row:hover { box-shadow: 0 5px 16px rgba(0,0,0,0.5); }
+    body.dark .list-row-title h3 { color: #e0e0e0; }
+    body.dark .list-row-error { color: #f87171; }
+    body.dark .ring-track { stroke: #2a2a2a; }
+    body.dark .ring-fill { stroke: #4ade80; }
+    body.dark .ring-fill.ring-orange { stroke: #fbbf24; }
+    body.dark .ring-fill.ring-red { stroke: #fca5a5; }
+    body.dark .ring-fill.ring-exhausted { stroke: #e879f9; }
+    body.dark .ring-seg-tick { stroke: #1f1f1f; }
+    body.dark .ring-theo { stroke: #8b5cf6; }
+    body.dark .ring-center .rc-label { color: #888; }
+    body.dark .ring-center .rc-pct { color: #e0e0e0; }
+    body.dark .ring-center .rc-value { color: #666; }
+    body.dark .list-row-expire { color: #666; }
+    body.dark .list-row-expire.expire-danger { color: #f87171; }
+
     /* Dark mode toggle */
     .dark-toggle { background: none; border: none; cursor: pointer; color: rgba(255,255,255,0.85); font-size: 18px; width: 34px; height: 34px; border-radius: 8px; display: flex; align-items: center; justify-content: center; transition: background 0.2s; }
     .dark-toggle:hover { background: rgba(255,255,255,0.15); }
@@ -376,6 +447,14 @@ body.dark .platform-volc { background: #042f2e; color: #5eead4; border-color: #0
   <div class="header">
     <h1>CodingPlan 用量监控</h1>
     <div class="header-right">
+      <div class="view-toggle" id="viewToggle">
+        <button class="view-btn active" data-view="block" onclick="setViewMode('block')" title="卡片视图">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+        </button>
+        <button class="view-btn" data-view="list" onclick="setViewMode('list')" title="列表视图">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="3.5" cy="6" r="1"/><circle cx="3.5" cy="12" r="1"/><circle cx="3.5" cy="18" r="1"/></svg>
+        </button>
+      </div>
       <button class="dark-toggle" id="darkToggle" title="切换深色模式">
         <svg id="sunIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
         <svg id="moonIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
@@ -458,6 +537,7 @@ body.dark .platform-volc { background: #042f2e; color: #5eead4; border-color: #0
     var _filterPlatform = 'all';
     var _sortMode = 'default';
     var _privacyMode = localStorage.getItem('usage_privacy') === 'true';
+    var _viewMode = localStorage.getItem('usage_view') === 'list' ? 'list' : 'block';
 
     // ============ Dark Mode ============
     (function() {
@@ -564,6 +644,14 @@ body.dark .platform-volc { background: #042f2e; color: #5eead4; border-color: #0
       if (platform === 'huoli') return '火狸';
       if (platform === 'volc') return '火山A';
       return '智谱';
+    }
+    // 团队版 level 翻译：pro→团队标准版, max→团队高级版; 非团队版原样返回
+    function levelLabel(acc) {
+      var raw = (acc && acc.data && acc.data.level) ? acc.data.level : '-';
+      if (!acc || !acc.teamEdition) return raw;
+      if (raw === 'pro') return '团队标准版';
+      if (raw === 'max') return '团队高级版';
+      return raw;
     }
     function displayName(acc, origIdx) {
       var name = (acc && acc.name) || '';
@@ -918,7 +1006,7 @@ body.dark .platform-volc { background: #042f2e; color: #5eead4; border-color: #0
         var ob = b.type === 'TIME_LIMIT' ? 0 : (LIMIT_ORDER[b.unit] != null ? LIMIT_ORDER[b.unit] : 9);
         return oa - ob;
       });
-      var mp = maxPct(limits), level = acc.data && acc.data.level ? acc.data.level : '-';
+      var mp = maxPct(limits), level = levelLabel(acc);
       var expHtml = '';
       var exp = expireData[i];
       if (exp && exp.success && exp.expireTime) {
@@ -933,6 +1021,232 @@ body.dark .platform-volc { background: #042f2e; color: #5eead4; border-color: #0
         + '<div class="card-body">' + limits.map(renderLimitRow).join('') + '</div>' + expHtml
         + '<div class="card-footer"><div class="card-footer-left"><span class="level-badge">' + level + '</span>' + keyBadge + cache + '</div>'
         + '<button class="detail-btn" onclick="showDetail(' + i + ')">详情</button></div></div>';
+    }
+
+    // ============ List 视图：环形进度条 ============
+
+    function getRingColorClass(p) {
+      return p >= 100 ? 'ring-exhausted' : p < 50 ? '' : p < 80 ? 'ring-orange' : 'ring-red';
+    }
+    function getLimitShort(l) {
+      if (l.type === 'TIME_LIMIT') return 'MCP';
+      if (l.unit === 3) return '5小时';
+      if (l.unit === 6) return '本周';
+      return 'Token';
+    }
+
+    // 圆周上某比例位置的坐标：t∈[0,1] 从 3 点钟方向顺时针（与 SVG <circle> 描边起点一致）；
+    // 整个 svg 上的 rotate(-90deg) 会统一把它转到「从顶部顺时针」，从而与 ring-fill 填充弧对齐。
+    // viewBox 40×40，圆心 (20,20)
+    function ringPoint(r, t) {
+      var a = t * 2 * Math.PI;
+      return { x: 20 + r * Math.cos(a), y: 20 + r * Math.sin(a) };
+    }
+    // 理论用量：按「周期起点」计算（yescode / huoli 的 lastReset/windowStart 即为起点）
+    function theoPctFromStart(startIso, periodMs) {
+      if (!startIso) return -1;
+      var ms = new Date(startIso).getTime();
+      if (isNaN(ms)) return -1;
+      var elapsed = Date.now() - ms;
+      return elapsed > 0 ? Math.min(100, (elapsed / periodMs) * 100) : -1;
+    }
+    // 理论用量：按「周期终点（重置时刻）」计算（glm nextResetTime / volc ResetTime）
+    function theoPctFromEnd(endIso, periodMs) {
+      if (!endIso) return -1;
+      var ms = new Date(endIso).getTime();
+      if (isNaN(ms)) return -1;
+      var elapsed = Date.now() - (ms - periodMs);
+      return elapsed > 0 ? Math.min(100, (elapsed / periodMs) * 100) : -1;
+    }
+    // 生成分段刻度 + 理论线（作为 SVG 子元素）
+    function ringSegExtras(segments, theoPct) {
+      var html = '';
+      if (segments > 1) {
+        for (var s = 1; s < segments; s++) {
+          var ti = ringPoint(14, s / segments), to = ringPoint(19, s / segments);
+          html += '<line class="ring-seg-tick" x1="' + ti.x.toFixed(2) + '" y1="' + ti.y.toFixed(2) + '" x2="' + to.x.toFixed(2) + '" y2="' + to.y.toFixed(2) + '"/>';
+        }
+      }
+      if (theoPct != null && theoPct >= 0 && theoPct <= 100) {
+        var thi = ringPoint(14.5, theoPct / 100), tho = ringPoint(19.5, theoPct / 100);
+        html += '<line class="ring-theo" x1="' + thi.x.toFixed(2) + '" y1="' + thi.y.toFixed(2) + '" x2="' + tho.x.toFixed(2) + '" y2="' + tho.y.toFixed(2) + '"/>';
+      }
+      return html;
+    }
+
+    function renderRing(item) {
+      var label = esc(item.label || '');
+      if (item.unlimited) {
+        return '<div class="ring-item" title="' + esc(item.title || (item.label + ' 无限额度')) + '">'
+          + '<div class="ring">'
+          + '<svg viewBox="0 0 40 40"><circle class="ring-track" cx="20" cy="20" r="17"></circle></svg>'
+          + '<div class="ring-center"><span class="rc-label" style="visibility:hidden">.</span>'
+          + '<span class="rc-pct" style="color:#52c41a">∞</span>'
+          + '<span class="rc-label">无限</span></div></div></div>';
+      }
+      var pct = item.pct || 0;
+      var cls = getRingColorClass(pct);
+      var dashPct = Math.min(pct, 100);
+      var pctShow = pct >= 100 ? '100%' : Math.round(pct) + '%';
+      var extras = ringSegExtras(item.segments || 0, item.theoPct);
+      var titleParts = [item.label, pctShow];
+      if (item.value) titleParts.push(item.value);
+      var title = item.title || titleParts.join(' ');
+      if (item.theoPct != null && item.theoPct >= 0) title += ' · 理论 ' + Math.round(item.theoPct) + '%';
+      var valueHtml = item.value ? '<span class="rc-value">' + esc(item.value) + '</span>' : '';
+      return '<div class="ring-item" title="' + esc(title) + '">'
+        + '<div class="ring" style="--pct:' + dashPct + '">'
+        + '<svg viewBox="0 0 40 40">'
+        + '<circle class="ring-track" cx="20" cy="20" r="17"></circle>'
+        + '<circle class="ring-fill ' + cls + '" cx="20" cy="20" r="17"></circle>'
+        + extras + '</svg>'
+        + '<div class="ring-center">'
+        + '<span class="rc-label">' + label + '</span>'
+        + '<span class="rc-pct">' + pctShow + '</span>'
+        + valueHtml + '</div></div></div>';
+    }
+
+    // 把任意平台账号的用量统一抽成「环」数组
+    function getRings(acc) {
+      if (!acc || !acc.success || !acc.data) return [];
+      var plat = acc.platform || 'glm';
+      var rings = [];
+      function push(label, pct, value, extra) {
+        var r = { label: label, pct: Math.max(0, Math.min(100, pct || 0)), value: value };
+        if (extra) Object.keys(extra).forEach(function(k) { r[k] = extra[k]; });
+        rings.push(r);
+      }
+
+      if (plat === 'yescode') {
+        var d = acc.data || {}, plan = d.subscription_plan || {};
+        var dq = plan.daily_balance || 0, ds = yescodeDailySpent(d);
+        push('今日', dq > 0 ? (ds / dq) * 100 : 0, '$' + ds.toFixed(1) + '/$' + dq.toFixed(1), { theoPct: theoPctFromStart(d.last_daily_balance_add, 86400000), title: '今日消费 $' + ds.toFixed(2) + ' / $' + dq.toFixed(2) });
+        var wl = plan.weekly_limit || 0, ws = d.current_week_spend || 0;
+        push('本周', wl > 0 ? (ws / wl) * 100 : 0, '$' + ws.toFixed(1) + '/$' + wl.toFixed(1), { theoPct: theoPctFromStart(d.last_week_reset, 7 * 86400000), title: '本周消费 $' + ws.toFixed(2) + ' / $' + wl.toFixed(2) });
+        var ml = plan.monthly_spend_limit || 0, ms = d.current_month_spend || 0;
+        push('本月', ml > 0 ? (ms / ml) * 100 : 0, '$' + ms.toFixed(1) + '/$' + ml.toFixed(1), { theoPct: theoPctFromStart(d.last_month_reset, 30 * 86400000), title: '本月消费 $' + ms.toFixed(2) + ' / $' + ml.toFixed(2) });
+        return rings;
+      }
+
+      if (plat === 'huoli') {
+        var sub = (acc.data || [])[0] || {}, grp = sub.group || {};
+        var dU = sub.daily_usage_usd || 0, dL = grp.daily_limit_usd || 0;
+        push('今日', dL > 0 ? (dU / dL) * 100 : 0, '$' + dU.toFixed(1) + '/$' + dL.toFixed(1), { theoPct: theoPctFromStart(sub.daily_window_start, 86400000), title: '今日消费 $' + dU.toFixed(2) + ' / $' + dL.toFixed(2) });
+        var wU = sub.weekly_usage_usd || 0, wL = grp.weekly_limit_usd || 0;
+        push('本周', wL > 0 ? (wU / wL) * 100 : 0, '$' + wU.toFixed(1) + '/$' + wL.toFixed(1), { theoPct: theoPctFromStart(sub.weekly_window_start, 7 * 86400000), title: '本周消费 $' + wU.toFixed(2) + ' / $' + wL.toFixed(2) });
+        var mU = sub.monthly_usage_usd || 0, mL = grp.monthly_limit_usd || 0;
+        push('本月', mL > 0 ? (mU / mL) * 100 : 0, '$' + mU.toFixed(1) + '/$' + mL.toFixed(1), { theoPct: theoPctFromStart(sub.monthly_window_start, 30 * 86400000), title: '本月消费 $' + mU.toFixed(2) + ' / $' + mL.toFixed(2) });
+        return rings;
+      }
+
+      if (plat === 'volc') {
+        var usage = (acc.data && acc.data.usage) || {};
+        function volcRing(label, bucket, periodMs, segments) {
+          var q = (bucket && bucket.Quota) || 0, u = (bucket && bucket.Used) || 0;
+          push(label, q > 0 ? (u / q) * 100 : 0, u.toFixed(1) + '/' + q, { segments: segments, theoPct: theoPctFromEnd(bucket && bucket.ResetTime, periodMs), title: label + ' ' + u.toFixed(2) + ' / ' + q });
+        }
+        volcRing('5小时', usage.AFPFiveHour, 5 * 3600000, 5);
+        volcRing('本周', usage.AFPWeekly, 7 * 86400000, 7);
+        volcRing('本月', usage.AFPMonthly, 30 * 86400000, 0);
+        return rings;
+      }
+
+      // GLM：与卡片一致的顺序（MCP额度 → 每5小时 → 每周 → 其他）
+      var limits = acc.data && acc.data.limits ? acc.data.limits : [];
+      var hasWeekly = limits.some(function(l) { return l.unit === 6; });
+      if (!hasWeekly) limits = limits.concat([{ type: 'TOKEN_LIMIT', unit: 6, _unlimited: true }]);
+      var LIMIT_ORDER = { TIME_LIMIT: 0, 3: 1, 6: 2 };
+      limits = limits.slice().sort(function(a, b) {
+        var oa = a.type === 'TIME_LIMIT' ? 0 : (LIMIT_ORDER[a.unit] != null ? LIMIT_ORDER[a.unit] : 9);
+        var ob = b.type === 'TIME_LIMIT' ? 0 : (LIMIT_ORDER[b.unit] != null ? LIMIT_ORDER[b.unit] : 9);
+        return oa - ob;
+      });
+      limits.forEach(function(l) {
+        var label = getLimitShort(l);
+        if (l._unlimited) { push(label, 0, '无限', { unlimited: true, title: getLimitLabel(l) + '（无限额度）' }); return; }
+        var pct = l.percentage || 0;
+        var segs = l.unit === 3 ? 5 : l.unit === 6 ? 7 : 0;
+        var periodMs = l.unit === 3 ? 5 * 3600000 : 7 * 86400000;
+        var theo = segs > 0 ? theoPctFromEnd(l.nextResetTime, periodMs) : -1;
+        // MCP 额度有原始用量(current/usage)；其余 Token 限额只有百分比，与 pct 重复故不传 value
+        var value = (l.type === 'TIME_LIMIT' && l.usage != null) ? ((l.currentValue || 0) + '/' + l.usage) : null;
+        push(label, pct, value, { segments: segs, theoPct: theo, title: getLimitLabel(l) + ' ' + (value || pct + '%') });
+      });
+      return rings;
+    }
+
+    function getListExpireHtml(i, acc) {
+      var platform = acc.platform || 'glm';
+      var expTime = null, txt = '';
+      if (platform === 'glm') {
+        var exp = expireData[i];
+        if (exp && exp.success && exp.expireTime) { expTime = exp.expireTime.replace(/-/g, '/'); txt = esc(exp.expireTime); }
+      } else if (platform === 'yescode') {
+        if (acc.data && acc.data.subscription_expiry) { expTime = acc.data.subscription_expiry; txt = esc(new Date(expTime).toLocaleDateString('zh-CN')); }
+      } else if (platform === 'huoli') {
+        var s = (acc.data || [])[0];
+        if (s && s.expires_at) { expTime = s.expires_at; txt = esc(new Date(expTime).toLocaleDateString('zh-CN')); }
+      } else if (platform === 'volc') {
+        var sv = acc.data && acc.data.subscription;
+        if (sv && sv.EndTime) { expTime = sv.EndTime; txt = esc(new Date(expTime).toLocaleDateString('zh-CN')); }
+      }
+      if (!expTime) return '';
+      var days = Math.ceil((new Date(expTime) - Date.now()) / 86400000);
+      var cls = days <= 10 ? 'expire-danger' : '';
+      var hint = days <= 0 ? '已过期' : days + '天后';
+      var click = platform === 'glm' ? ' onclick="event.stopPropagation(); refreshExpire(' + i + ')" title="订阅到期，点击刷新"' : ' title="订阅到期"';
+      return '<span class="list-row-expire ' + cls + '"' + click + '>到期 ' + txt + ' (' + hint + ')</span>';
+    }
+
+    function getListBadges(acc) {
+      var platform = acc.platform || 'glm';
+      if (platform === 'yescode') {
+        var d = acc.data || {}, plan = d.subscription_plan || {};
+        var b = '<span class="level-badge">' + esc(plan.name || '-') + '</span>';
+        if (d.balance != null) b += '<span class="level-badge" style="background:#f6ffed;color:#389e0d;border-color:#b7eb8f">余额 $' + (+d.balance).toFixed(0) + '</span>';
+        return b;
+      }
+      if (platform === 'huoli') {
+        var grp = ((acc.data || [])[0] || {}).group || {};
+        return '<span class="level-badge">' + esc(grp.name || '-') + '</span>';
+      }
+      if (platform === 'volc') {
+        var usage = (acc.data && acc.data.usage) || {}, sub = (acc.data && acc.data.subscription) || null;
+        return '<span class="level-badge">' + esc(usage.PlanType || (sub && sub.BizInfo) || '-') + '</span>';
+      }
+      var level = levelLabel(acc);
+      var b = '<span class="level-badge">' + level + '</span>';
+      if (acc.keyCount != null) b += '<span class="level-badge" style="background:#f6ffed;color:#389e0d;border-color:#b7eb8f">Key: ' + acc.keyCount + '个</span>';
+      return b;
+    }
+
+    function renderListRowHTML(i, acc) {
+      var platform = acc.platform || 'glm';
+      var refresh = isAdmin() ? '<button class="card-refresh list-row-refresh" id="refresh-' + i + '" onclick="event.stopPropagation(); refreshCard(' + i + ')" title="刷新">&#x21bb;</button>' : '';
+      var pTag = platformTag(platform);
+      var name = esc(displayName(acc, i));
+
+      var leftBlock, middle, right;
+      if (!acc.success) {
+        var errStatus = '<div class="list-row-status"><span class="card-status status-error">请求失败</span></div>';
+        leftBlock = '<div class="list-row-left"><div class="list-row-title">' + pTag + '<h3>' + name + '</h3></div>' + errStatus + '</div>';
+        middle = '<div class="list-rings"><span class="list-row-error">' + esc(acc.error || '未知错误') + '</span></div>';
+        right = '';
+      } else {
+        var mp = getAccMaxPct(acc);
+        var rings = getRings(acc);
+        var ringsHtml = rings.length ? rings.map(renderRing).join('') : '<span class="ring-value" style="text-align:left">暂无用量数据</span>';
+        var okStatus = '<div class="list-row-status"><span class="card-status ' + getStatusClass(mp) + '">' + getStatusText(mp) + '</span></div>';
+        leftBlock = '<div class="list-row-left"><div class="list-row-title">' + pTag + '<h3>' + name + '</h3></div>' + okStatus + '</div>';
+        middle = '<div class="list-rings">' + ringsHtml + '</div>';
+        var cache = acc.cachedAt ? '<span class="cache-time">' + timeAgo(acc.cachedAt) + '</span>' : '';
+        var expireHtml = getListExpireHtml(i, acc);
+        right = '<div class="list-row-meta">' + getListBadges(acc) + cache + '</div>'
+          + (expireHtml ? '<div class="list-row-meta">' + expireHtml + '</div>' : '');
+      }
+
+      return '<div class="list-row" id="card-' + i + '" onclick="showDetail(' + i + ')" title="点击查看详情">'
+        + leftBlock + middle + '<div class="list-row-right">' + right + '</div>' + refresh + '</div>';
     }
 
     function getAccMaxPct(acc) {
@@ -999,20 +1313,26 @@ body.dark .platform-volc { background: #042f2e; color: #5eead4; border-color: #0
 
     function renderCards(data) {
       renderPlatformFilters(data);
+      // 隐私模式下额外过滤非公开账号（后端已对非管理员过滤，此处双重保障）
+      var visible = _privacyMode ? data.filter(function(a) { return a.isPublic !== false; }) : data;
       var grid = document.getElementById('cardGrid');
       var countEl = document.getElementById('toolbarCount');
-      if (!data || !data.length) {
+      var isList = _viewMode === 'list';
+      grid.className = isList ? 'list-grid' : 'card-grid';
+      if (!visible || !visible.length) {
         grid.innerHTML = '<div class="empty">暂无账号数据<br><span style="font-size:12px;margin-top:8px;display:block">点击「管理账号」添加</span></div>';
         if (countEl) countEl.textContent = '';
         return;
       }
-      var list = applyFilterSort(data);
+      var list = applyFilterSort(visible);
       if (countEl) countEl.textContent = '共 ' + list.length + ' / ' + data.length + ' 个账号';
       if (!list.length) {
         grid.innerHTML = '<div class="empty">当前筛选下无账号</div>';
         return;
       }
-      grid.innerHTML = list.map(function(x) { return renderCardHTML(x.origIdx, x.acc); }).join('');
+      grid.innerHTML = list.map(function(x) {
+        return isList ? renderListRowHTML(x.origIdx, x.acc) : renderCardHTML(x.origIdx, x.acc);
+      }).join('');
     }
 
     function setFilter(p) {
@@ -1041,16 +1361,41 @@ body.dark .platform-volc { background: #042f2e; color: #5eead4; border-color: #0
       if (accountsData.length) renderCards(accountsData);
     }
 
+    function setViewMode(mode) {
+      if (mode === _viewMode) return;
+      _viewMode = mode;
+      localStorage.setItem('usage_view', mode);
+      document.querySelectorAll('#viewToggle .view-btn').forEach(function(b) {
+        b.classList.toggle('active', b.dataset.view === mode);
+      });
+      var grid = document.getElementById('cardGrid');
+      if (grid) grid.className = mode === 'list' ? 'list-grid' : 'card-grid';
+      if (accountsData.length) renderCards(accountsData);
+    }
+
+    (function() {
+      document.querySelectorAll('#viewToggle .view-btn').forEach(function(b) {
+        b.classList.toggle('active', b.dataset.view === _viewMode);
+      });
+      var grid = document.getElementById('cardGrid');
+      if (grid) grid.className = _viewMode === 'list' ? 'list-grid' : 'card-grid';
+    })();
+
     function updateCard(i, acc) {
       accountsData[i] = acc;
       var old = document.getElementById('card-' + i);
-      if (old) { var t = document.createElement('div'); t.innerHTML = renderCardHTML(i, acc); old.parentNode.replaceChild(t.firstChild, old); }
+      if (old) {
+        var html = _viewMode === 'list' ? renderListRowHTML(i, acc) : renderCardHTML(i, acc);
+        var t = document.createElement('div'); t.innerHTML = html;
+        old.parentNode.replaceChild(t.firstChild, old);
+      }
     }
 
     function refreshCard(index) {
       var btn = document.getElementById('refresh-' + index);
       if (btn) btn.classList.add('spinning');
-      fetch('/api/usage/' + index + '?force=1').then(function(r){return r.json()}).then(function(acc){updateCard(index,acc)}).catch(function(){if(btn)btn.classList.remove('spinning')});
+      fetch('/api/usage/' + index + '?force=1')
+        .then(function(r){return r.json()}).then(function(acc){updateCard(index,acc)}).catch(function(){if(btn)btn.classList.remove('spinning')});
     }
 
     // ============ 详情弹窗 ============
@@ -1618,6 +1963,7 @@ body.dark .platform-volc { background: #042f2e; color: #5eead4; border-color: #0
         + '<div class="form-group"><label class="form-label">Authorization Token</label><textarea class="form-input" id="f_auth">' + esc(a.authorization||'') + '</textarea></div>'
         + '<div class="form-row"><div class="form-group"><label class="form-label">Organization ID</label><input class="form-input" id="f_org" value="' + esc(a.organization||'') + '"></div>'
         + '<div class="form-group"><label class="form-label">Project ID</label><input class="form-input" id="f_proj" value="' + esc(a.project||'') + '"></div></div>'
+        + '<div class="form-group"><label class="form-label" style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="f_team_edition"' + (a.teamEdition ? ' checked' : '') + ' style="width:16px;height:16px;cursor:pointer"> 团队版（接口 URL 加 type=2）</label></div>'
         + '</div>'
         + '<div id="f_yescode_fields" style="display:' + yesDisp + '">'
         + '<div class="form-group"><label class="form-label">Cookie</label><textarea class="form-input" id="f_cookie" placeholder="完整 Cookie，用于访问 co.yes.vg">' + esc(a.cookie||'') + '</textarea></div>'
@@ -1635,6 +1981,7 @@ body.dark .platform-volc { background: #042f2e; color: #5eead4; border-color: #0
         + '<div class="form-row"><div class="form-group"><label class="form-label">负责人</label><input class="form-input" id="f_person" value="' + esc(a.responsiblePerson||'') + '"></div>'
         + '<div class="form-group"><label class="form-label">电话</label><input class="form-input" id="f_phone" value="' + esc(a.phone||'') + '"></div></div>'
         + '<div class="form-group"><label class="form-label">备注</label><input class="form-input" id="f_notes" value="' + esc(a.notes||'') + '"></div>'
+        + '<div class="form-group"><label class="form-label" style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="f_public"' + (a.isPublic !== false ? ' checked' : '') + ' style="width:16px;height:16px;cursor:pointer"> 公开（未登录管理员时可见）</label></div>'
         + '<div class="form-actions"><button class="btn-default" onclick="renderMgmtList()">取消</button><button class="btn-primary" onclick="saveAccount()">保存</button></div>';
     }
 
@@ -1722,6 +2069,8 @@ body.dark .platform-volc { background: #042f2e; color: #5eead4; border-color: #0
       var auth = extractHeader(t, 'authorization'); if (auth) { document.getElementById('f_auth').value = auth; n++; }
       var org = extractHeader(t, 'bigmodel-organization'); if (org) { document.getElementById('f_org').value = org; n++; }
       var proj = extractHeader(t, 'bigmodel-project'); if (proj) { document.getElementById('f_proj').value = proj; n++; }
+      // 自动识别团队版：URL 中包含 type=2
+      if (/[?&]type=2/.test(t)) { document.getElementById('f_team_edition').checked = true; }
       if (!n) alert('未能解析出 token、organization 或 project');
     }
 
@@ -1732,7 +2081,8 @@ body.dark .platform-volc { background: #042f2e; color: #5eead4; border-color: #0
         name: document.getElementById('f_name').value.trim(),
         responsiblePerson: document.getElementById('f_person').value.trim(),
         phone: document.getElementById('f_phone').value.trim(),
-        notes: document.getElementById('f_notes').value.trim()
+        notes: document.getElementById('f_notes').value.trim(),
+        isPublic: document.getElementById('f_public').checked
       };
       if (platform === 'yescode') {
         body.cookie = document.getElementById('f_cookie').value.trim();
@@ -1751,6 +2101,7 @@ body.dark .platform-volc { background: #042f2e; color: #5eead4; border-color: #0
         body.authorization = document.getElementById('f_auth').value.trim();
         body.organization = document.getElementById('f_org').value.trim();
         body.project = document.getElementById('f_proj').value.trim();
+        body.teamEdition = document.getElementById('f_team_edition').checked || undefined;
         if (!body.name || !body.authorization) { alert('账号名称和 Token 不能为空'); return; }
       }
       var method = editingIndex>=0?'PUT':'POST', url = editingIndex>=0?'/api/accounts/'+editingIndex:'/api/accounts';
@@ -1785,14 +2136,16 @@ body.dark .platform-volc { background: #042f2e; color: #5eead4; border-color: #0
 
     function loadExpire(force) {
       var url = force ? '/api/expire?force=1' : '/api/expire';
-      fetch(url).then(function(r){return r.json()}).then(function(data){
+      fetch(url)
+        .then(function(r){return r.json()}).then(function(data){
         expireData = data;
         if (accountsData.length) renderCards(accountsData);
       });
     }
 
     function refreshExpire(index) {
-      fetch('/api/expire/' + index + '?force=1').then(function(r){return r.json()}).then(function(data){
+      fetch('/api/expire/' + index + '?force=1')
+        .then(function(r){return r.json()}).then(function(data){
         expireData[index] = data;
         updateCard(index, accountsData[index]);
       });
@@ -1802,7 +2155,8 @@ body.dark .platform-volc { background: #042f2e; color: #5eead4; border-color: #0
       var grid = document.getElementById('cardGrid');
       var url = force ? '/api/usage?force=1' : '/api/usage';
       if (!accountsData.length) grid.innerHTML = '<div class="loading"><div class="loading-spinner"></div><p style="margin-top:12px">加载中...</p></div>';
-      fetch(url).then(function(r){return r.json()}).then(function(data){
+      fetch(url)
+        .then(function(r){return r.json()}).then(function(data){
         accountsData = data; renderCards(data);
         document.getElementById('lastUpdated').textContent = '更新于 ' + new Date().toLocaleTimeString('zh-CN');
       }).catch(function(err){ if(!accountsData.length) grid.innerHTML='<div class="empty">加载失败: '+err.message+'</div>'; });
