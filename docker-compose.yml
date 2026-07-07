@@ -1,0 +1,21 @@
+# 用法:
+#   1) cp .env.example .env,并修改其中的 ADMIN_PASSWORD
+#   2) docker compose up -d --build
+# 容器内读取 .env(env_file)与挂载 ./data 持久化账号数据。
+services:
+  codingplan-monitor:
+    build: .
+    image: codingplan-monitor
+    container_name: codingplan-monitor
+    restart: unless-stopped
+    # 端口跟随 .env 的 PORT(默认 4000);改 PORT 时宿主机与容器端口同步变化
+    ports:
+      - "${PORT:-4000}:${PORT:-4000}"
+    # 把 .env 注入容器环境(端口、密码等由此生效)
+    env_file:
+      - .env
+    environment:
+      # 账号数据落盘到挂载目录,容器删除/重建不丢失
+      - ACCOUNTS_FILE=/app/data/accounts.json
+    volumes:
+      - ./data:/app/data

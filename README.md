@@ -1,6 +1,6 @@
 # GLM 用量监控
 
-多账号 API 用量监控面板,支持 **智谱 GLM(bigmodel.cn)**、**YesCode(co.yes.vg)**、**火狸(huolilink.com)** 三类账号,以卡片 + 用量曲线的形式集中展示额度消耗、订阅到期、API Key 管理。
+多账号 API 用量监控面板,支持 **智谱 GLM(bigmodel.cn)**、**YesCode(co.yes.vg)**、**火山AgentPlan** 等账号,以卡片 + 用量曲线的形式集中展示额度消耗、订阅到期、API Key 管理。
 
 ## 效果展示
 
@@ -12,7 +12,11 @@
 glm-usage/
 ├── server.js              # Express 入口:静态托管 + 挂载 api 中间件
 ├── api.js                 # 后端:账号凭证读写、用量/到期/Key 代理(5 分钟缓存)
+├── config.js              # 配置中心:加载 .env 并导出不可变配置(port/host/密码等)
 ├── accounts.json          # 账号凭证(运行时自动生成,敏感,.gitignore 已忽略)
+├── .env.example           # 环境变量模板(复制为 .env 后生效,.gitignore 已忽略)
+├── Dockerfile             # 容器镜像构建(node:22-alpine)
+├── docker-compose.yml     # 一键编排(.env 注入 + ./data 数据持久化)
 ├── package.json
 └── public/
     ├── index.html         # 前端监控面板(原 usage.html)
@@ -24,29 +28,53 @@ glm-usage/
 
 ```bash
 npm install
+cp .env.example .env       # 可选:按需修改 .env 中的端口 / 密码
 npm start
-# 默认 http://localhost:3000
+# 默认 http://localhost:4000
 ```
 
 首次启动会自动创建空的 `accounts.json`,无需手动准备数据文件。打开页面后点击右上角 **「管理账号」**,逐个录入账号即可(支持粘贴浏览器 fetch / cURL 命令自动解析凭证),后端落盘到 `accounts.json`。
 
 ## 配置
 
-通过环境变量配置,均有默认值:
+通过 `.env` 文件配置,模板见 `.env.example`(`cp .env.example .env` 后生效)。`.env` 已加入 `.gitignore`,不会提交。所有项均有默认值:
 
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
-| `PORT` | `3000` | 监听端口 |
+| `PORT` | `4000` | 监听端口 |
 | `HOST` | `0.0.0.0` | 监听地址,默认允许局域网访问 |
 | `ADMIN_PASSWORD` | `123456` | 管理密码(账号增删改、Key 复制/创建/删除需校验) |
+| `ACCOUNTS_FILE` | `./accounts.json` | 账号数据文件路径(Docker 持久化用,本地留空) |
+| `NODE_ENV` | `development` | 运行环境 |
 
-示例:
+`.env` 示例:
 
-```bash
-PORT=4000 ADMIN_PASSWORD=my-secret npm start
+```env
+PORT=4000
+HOST=0.0.0.0
+ADMIN_PASSWORD=my-secret
 ```
 
+> 仍可用命令行 / 系统环境变量覆盖(`PORT=5000 npm start`),优先级:系统环境变量 > `.env` > 默认值。
 > 浏览器验证通过后,密码保存在本地 `localStorage`,仅在当前浏览器生效。
+
+## Docker 部署
+
+镜像基于 `node:22-alpine`。账号数据通过宿主机 `./data` 目录持久化,`.env` 通过 `env_file` 注入容器。
+
+```bash
+cp .env.example .env          # 先准备 .env 并修改 ADMIN_PASSWORD
+docker compose up -d --build  # 构建并后台启动
+# 访问 http://localhost:4000
+
+docker compose logs -f        # 查看日志
+docker compose down           # 停止并移除容器(./data 账号数据保留)
+```
+
+说明:
+- 改 `.env` 的 `PORT` 后,`docker-compose.yml` 的端口映射会自动跟随(两端均读 `${PORT}`);生效需重建:`docker compose up -d`。
+- 账号数据落盘在宿主机 `./data/accounts.json`,容器删除/重建不丢失;彻底清空请删除 `./data` 目录。
+- `.env` 不会被打入镜像(`.dockerignore` 已排除),密码只存在于运行时环境。
 
 ## 账号类型与凭证
 
@@ -88,6 +116,6 @@ PORT=4000 ADMIN_PASSWORD=my-secret npm start
 
 ## 注意事项
 
-- `accounts.json` 含明文凭证,切勿提交到公开仓库(已加入 `.gitignore`);删除后重新启动会自动重建空文件。
+- `accounts.json` 与 `.env` 均含明文凭证 / 密码,切勿提交到公开仓库(均已加入 `.gitignore`);`accounts.json` 删除后重启会自动重建空文件。
 - 所有对 bigmodel.cn / co.yes.vg / huolilink.com 的请求由服务端代理转发,浏览器不直接持有凭证。
 - 凭证(JWT / Cookie / Token)会过期,失败时面板显示「请求失败」;智谱需重新抓 token,YesCode 需重抓 Cookie,火狸若配了邮箱密码会自动续登。

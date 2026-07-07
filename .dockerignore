@@ -1,0 +1,23 @@
+# 依赖与日志
+node_modules
+npm-debug.log
+*.log
+
+# 本地环境变量与敏感数据(绝不打入镜像,运行时通过 env_file 注入)
+.env
+accounts.json
+data/
+
+# Git / 编辑器 / 系统
+.git
+.gitignore
+.DS_Store
+
+# 文档与示例图(减小镜像体积)
+README.md
+example.png
+
+# 构建产物自身,无需进入镜像
+Dockerfile
+.dockerignore
+docker-compose.yml

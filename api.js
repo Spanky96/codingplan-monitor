@@ -3,8 +3,9 @@ var https = require('https');
 var express = require('express');
 var jsonParser = express.json();
 
-var glmAccountsFile = __dirname + '/accounts.json';
-var PASSWORD = process.env.ADMIN_PASSWORD || '123456';
+var config = require('./config');
+var glmAccountsFile = config.accountsFile;
+var PASSWORD = config.adminPassword;
 var CACHE_TTL = 5 * 60 * 1000;
 
 var usageCache = {};

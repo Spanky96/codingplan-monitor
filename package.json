@@ -1,5 +1,5 @@
 {
-  "name": "glm-usage",
+  "name": "codingplan-monitor",
   "version": "1.0.0",
   "description": "智谱 GLM / YesCode / 火狸 多账号 API 用量监控面板",
   "main": "server.js",
@@ -17,7 +17,11 @@
     "echarts"
   ],
   "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
   "dependencies": {
+    "dotenv": "^17.4.2",
     "express": "^4.21.2"
   }
 }
