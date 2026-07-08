@@ -76,6 +76,19 @@ docker compose down           # 停止并移除容器(./data 账号数据保留)
 - 账号数据落盘在宿主机 `./data/accounts.json`,容器删除/重建不丢失;彻底清空请删除 `./data` 目录。
 - `.env` 不会被打入镜像(`.dockerignore` 已排除),密码只存在于运行时环境。
 
+### 一键脚本 deploy.sh
+
+封装了上述常用操作,免去记忆 docker compose 参数:
+
+```bash
+./deploy.sh start     # 构建并启动
+./deploy.sh stop      # 停止并移除容器(./data 数据保留)
+./deploy.sh restart   # 重启(不重新构建)
+./deploy.sh status    # 查看状态
+./deploy.sh logs      # 查看日志(Ctrl+C 退出不停止服务)
+./deploy.sh update    # git pull + 重新构建启动
+```
+
 ## 账号类型与凭证
 
 在面板右上角「管理账号」中添加,支持粘贴 fetch / cURL 命令自动解析。
