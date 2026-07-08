@@ -1537,7 +1537,7 @@ body.dark .platform-volcc { background: #22113d; color: #b37feb; border-color: #
     function refreshCard(index) {
       var btn = document.getElementById('refresh-' + index);
       if (btn) btn.classList.add('spinning');
-      fetch('/api/usage/' + index + '?force=1')
+      fetch('/api/usage/' + index + '?force=1', { headers: authHeaders() })
         .then(function(r){return r.json()}).then(function(acc){updateCard(index,acc)}).catch(function(){if(btn)btn.classList.remove('spinning')});
     }
 
@@ -1809,7 +1809,7 @@ body.dark .platform-volcc { background: #22113d; color: #b37feb; border-color: #
       document.getElementById('modalBody').innerHTML = html;
       document.getElementById('modalOverlay').classList.add('active');
 
-      fetch('/api/keys/' + index).then(function(r){return r.json()}).then(function(keys) {
+      fetch('/api/keys/' + index, { headers: authHeaders() }).then(function(r){return r.json()}).then(function(keys) {
         if (keys.error) { document.getElementById('keysContainer').innerHTML = '<p class="error-text">' + esc(keys.error) + '</p>'; return; }
         accountsData[index].keyCount = keys.length || 0;
         updateCard(index, accountsData[index]);
@@ -1842,7 +1842,7 @@ body.dark .platform-volcc { background: #22113d; color: #b37feb; border-color: #
       var container = document.getElementById('chartContainer-' + idx);
       if (!container) return;
       if (loading) { loading.textContent = '加载中...'; loading.style.display = 'flex'; }
-      fetch('/api/model-usage/' + idx + '?period=' + period)
+      fetch('/api/model-usage/' + idx + '?period=' + period, { headers: authHeaders() })
         .then(function(r) { return r.json(); })
         .then(function(resp) {
           if (resp.error) { if (loading) { loading.textContent = '加载失败: ' + resp.error; loading.style.display = 'flex'; } return; }
@@ -2426,7 +2426,7 @@ body.dark .platform-volcc { background: #22113d; color: #b37feb; border-color: #
 
     function loadExpire(force) {
       var url = force ? '/api/expire?force=1' : '/api/expire';
-      fetch(url)
+      fetch(url, { headers: authHeaders() })
         .then(function(r){return r.json()}).then(function(data){
         expireData = data;
         if (accountsData.length) renderCards(accountsData);
@@ -2434,7 +2434,7 @@ body.dark .platform-volcc { background: #22113d; color: #b37feb; border-color: #
     }
 
     function refreshExpire(index) {
-      fetch('/api/expire/' + index + '?force=1')
+      fetch('/api/expire/' + index + '?force=1', { headers: authHeaders() })
         .then(function(r){return r.json()}).then(function(data){
         expireData[index] = data;
         updateCard(index, accountsData[index]);
@@ -2445,7 +2445,7 @@ body.dark .platform-volcc { background: #22113d; color: #b37feb; border-color: #
       var grid = document.getElementById('cardGrid');
       var url = force ? '/api/usage?force=1' : '/api/usage';
       if (!accountsData.length) grid.innerHTML = '<div class="loading"><div class="loading-spinner"></div><p style="margin-top:12px">加载中...</p></div>';
-      fetch(url)
+      fetch(url, { headers: authHeaders() })
         .then(function(r){return r.json()}).then(function(data){
         accountsData = data; renderCards(data);
         document.getElementById('lastUpdated').textContent = '更新于 ' + new Date().toLocaleTimeString('zh-CN');

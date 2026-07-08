@@ -88,6 +88,16 @@ function checkAuth(req, res, next) {
     next();
 }
 
+// 是否已登录管理员(用于区分游客与管理员,决定 isPublic===false 账号是否可见)
+function isAuthed(req) {
+    return req.headers['x-auth-password'] === PASSWORD;
+}
+
+// 游客(未登录管理员)不可见 isPublic===false 的账号
+function isHiddenFromGuest(req, account) {
+    return !isAuthed(req) && account.isPublic === false;
+}
+
 function makeHeaders(account) {
     return {
         'accept': 'application/json, text/plain, */*',
@@ -377,10 +387,12 @@ module.exports = function(app) {
         try {
             var accounts = readAccounts();
             var force = req.query.force === '1';
-            res.json(await Promise.all(accounts.map(function(account, i) {
+            var results = await Promise.all(accounts.map(function(account, i) {
+                if (isHiddenFromGuest(req, account)) return null;  // 游客跳过私有账号:不返回也不抓取
                 if (!force) { var c = getCached(i); if (c) return c; }
                 return fetchAccountUsage(account, i);
-            })));
+            }));
+            res.json(results.filter(Boolean));
         } catch (err) { res.status(500).json({ error: err.message }); }
     });
 
@@ -389,6 +401,7 @@ module.exports = function(app) {
             var i = parseInt(req.params.index);
             var account = getAccount(req);
             if (!account) return res.status(404).json({ error: '未找到账号' });
+            if (isHiddenFromGuest(req, account)) return res.status(404).json({ error: '未找到账号' });
             if (req.query.force !== '1') { var c = getCached(i); if (c) return res.json(c); }
             res.json(await fetchAccountUsage(account, i));
         } catch (err) { res.status(500).json({ error: err.message }); }
@@ -476,6 +489,7 @@ module.exports = function(app) {
             var i = parseInt(req.params.index);
             var account = getAccount(req);
             if (!account) return res.status(404).json({ error: '未找到账号' });
+            if (isHiddenFromGuest(req, account)) return res.status(404).json({ error: '未找到账号' });
             if ((account.platform || 'glm') === 'yescode' || (account.platform || 'glm') === 'huoli' || (account.platform || 'glm') === 'volc') {
                 return res.json([]);
             }
@@ -576,6 +590,7 @@ module.exports = function(app) {
         try {
             var account = getAccount(req);
             if (!account) return res.status(404).json({ error: '未找到账号' });
+            if (isHiddenFromGuest(req, account)) return res.status(404).json({ error: '未找到账号' });
             if ((account.platform || 'glm') === 'yescode' || (account.platform || 'glm') === 'huoli' || (account.platform || 'glm') === 'volc') {
                 var platName = account.platform === 'huoli' ? '火狸' : (account.platform === 'volc' ? '火山' : 'YesCode');
                 return res.json({ error: platName + ' 暂不支持用量曲线' });
@@ -607,10 +622,12 @@ module.exports = function(app) {
         try {
             var accounts = readAccounts();
             var force = req.query.force === '1';
-            res.json(await Promise.all(accounts.map(function(account, i) {
+            var results = await Promise.all(accounts.map(function(account, i) {
+                if (isHiddenFromGuest(req, account)) return null;  // 游客跳过私有账号
                 if (!force) { var c = getExpireCached(i); if (c) return c; }
                 return fetchAccountExpire(account, i);
-            })));
+            }));
+            res.json(results.filter(Boolean));
         } catch (err) { res.status(500).json({ error: err.message }); }
     });
 
@@ -619,6 +636,7 @@ module.exports = function(app) {
             var i = parseInt(req.params.index);
             var account = getAccount(req);
             if (!account) return res.status(404).json({ error: '未找到账号' });
+            if (isHiddenFromGuest(req, account)) return res.status(404).json({ error: '未找到账号' });
             if (req.query.force !== '1') { var c = getExpireCached(i); if (c) return res.json(c); }
             res.json(await fetchAccountExpire(account, i));
         } catch (err) { res.status(500).json({ error: err.message }); }
