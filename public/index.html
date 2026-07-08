@@ -995,7 +995,7 @@ body.dark .platform-volcc { background: #22113d; color: #b37feb; border-color: #
       var platform = acc.platform || 'glm';
       var btn = isAdmin() ? '<button class="card-refresh" id="refresh-' + i + '" onclick="refreshCard(' + i + ')" title="刷新">&#x21bb;</button>' : '';
       var pTag = platformTag(platform, acc.planType);
-      var wBadge = (isAdmin() && weightsMap[acc.name] != null) ? weightBadgeHTML(acc.name, i) : '';
+      var wBadge = weightBadgeHTML(acc.name, i);
       var headerLeft = '<div class="card-header-left">' + pTag + wBadge + '<h3>' + esc(displayName(acc, i)) + '</h3></div>';
 
       if (!acc.success) {
@@ -2334,16 +2334,24 @@ body.dark .platform-volcc { background: #22113d; color: #b37feb; border-color: #
       var w = weightsMap[name];
       if (w == null) return '';
       var cls = 'weight-badge ' + (w === 0 ? 'w-0' : w <= 3 ? 'w-low' : w <= 7 ? 'w-mid' : 'w-high');
-      return '<span class="' + cls + '" onclick="event.stopPropagation();openWeightConfig(' + i + ')" title="点击配置权重">' + w.toFixed(1) + '</span>';
+      // 管理员:点击可配置;游客:仅展示
+      if (isAdmin()) {
+        return '<span class="' + cls + '" onclick="event.stopPropagation();openWeightConfig(' + i + ')" title="点击配置权重" style="cursor:pointer">' + w.toFixed(1) + '</span>';
+      }
+      return '<span class="' + cls + '" title="权重">' + w.toFixed(1) + '</span>';
     }
 
     function loadWeights() {
-      if (!isAdmin()) { weightsMap = {}; weightsDetail = {}; return; }
+      // 权重对所有用户可见:游客拿到公开账号权重(后端按 isPublic 过滤),管理员拿全量 + detail
       var p = localStorage.getItem('glm_pwd') || '';
-      fetch('/api/weights?password=' + encodeURIComponent(p) + '&detail=1')
+      var url = '/api/weights?detail=1';
+      if (p) url += '&password=' + encodeURIComponent(p);
+      fetch(url)
         .then(function(r){return r.json()})
         .then(function(d){
-          weightsMap = d.weights || {};
+          if (!d) return;
+          // 管理员:{weights, detail};游客:纯 {name:weight};出错置空
+          weightsMap = d.weights ? d.weights : (d.error ? {} : d);
           weightsDetail = {};
           (d.detail || []).forEach(function(x){ if (x && x.name != null) weightsDetail[x.name] = x; });
           if (accountsData.length) renderCards(accountsData);
@@ -2449,7 +2457,7 @@ body.dark .platform-volcc { background: #22113d; color: #b37feb; border-color: #
         .then(function(r){return r.json()}).then(function(data){
         accountsData = data; renderCards(data);
         document.getElementById('lastUpdated').textContent = '更新于 ' + new Date().toLocaleTimeString('zh-CN');
-        loadWeights();   // 管理员额外拉取权重(渲染左上角徽标)
+        loadWeights();   // 拉取权重渲染徽标(游客仅公开账号,管理员全量)
       }).catch(function(err){ if(!accountsData.length) grid.innerHTML='<div class="empty">加载失败: '+err.message+'</div>'; });
     }
 
