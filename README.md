@@ -1,6 +1,6 @@
 # GLM 用量监控
 
-多账号 API 用量监控面板,支持 **智谱 GLM(bigmodel.cn)**、**YesCode(co.yes.vg)**、**火山AgentPlan** 等账号,以卡片 + 用量曲线的形式集中展示额度消耗、订阅到期、API Key 管理。
+多账号 API 用量监控面板,支持 **智谱 GLM(bigmodel.cn)**、**YesCode(co.yes.vg)**、**火狸(huolilink.com)**、**火山(AgentPlan / CodingPlan 同一登录会话)** 等账号,以卡片 + 用量曲线的形式集中展示额度消耗、订阅到期、API Key 管理。
 
 ## 效果展示
 
@@ -85,6 +85,7 @@ docker compose down           # 停止并移除容器(./data 账号数据保留)
 | 智谱 GLM | `authorization`(JWT)、`organization`、`project` | bigmodel.cn 任意请求头中的 `authorization` / `bigmodel-organization` / `bigmodel-project` |
 | YesCode | `cookie` | co.yes.vg 请求中的完整 `Cookie` |
 | 火狸 | `authorization`(Bearer)、可选 `huoli_email` + `huoli_password` | huolilink.com 请求头中的 `Authorization`;填了邮箱密码时 token 过期会自动重新登录 |
+| 火山(AgentPlan=火山A / CodingPlan=火山C) | `cookie`、`csrf`、可选 `web_id`、`planType` | console.volcengine.com 请求(用 cURL 复制带出完整 Cookie);添加账号时选套餐类型:AgentPlan 抓 `GetAgentPlanAFPUsage`,CodingPlan 抓 `GetCodingPlanUsage`。两者同一登录会话,Cookie/CSRF 共用 |
 
 ## 后端 API
 
@@ -144,7 +145,7 @@ docker compose down           # 停止并移除容器(./data 账号数据保留)
 ## 前端功能
 
 - 卡片视图:各账号额度进度、紧张度(实际用量 vs 理论进度)、重置时间、订阅到期倒计时
-- 站点筛选(全部 / 智谱 / YesCode / 火狸)+ 紧张度排序
+- 站点筛选(全部 / 智谱 / YesCode / 火狸 / 火山)+ 紧张度排序
 - 详情弹窗:负责人信息、余额、消费周期、API Key 表格、用量曲线(echarts)
 - 深色模式(从按钮处径向扩散动画)+ 隐私模式(隐藏账号名)
 - 账号管理:拖拽排序、粘贴 fetch/cURL 快速导入
@@ -153,4 +154,4 @@ docker compose down           # 停止并移除容器(./data 账号数据保留)
 
 - `accounts.json` 与 `.env` 均含明文凭证 / 密码,切勿提交到公开仓库(均已加入 `.gitignore`);`accounts.json` 删除后重启会自动重建空文件。
 - 所有对 bigmodel.cn / co.yes.vg / huolilink.com 的请求由服务端代理转发,浏览器不直接持有凭证。
-- 凭证(JWT / Cookie / Token)会过期,失败时面板显示「请求失败」;智谱需重新抓 token,YesCode 需重抓 Cookie,火狸若配了邮箱密码会自动续登。
+- 凭证(JWT / Cookie / Token)会过期,失败时面板显示「请求失败」;智谱需重新抓 token,YesCode 需重抓 Cookie,火狸若配了邮箱密码会自动续登,火山(AgentPlan / CodingPlan 两种套餐)需在控制台重新登录后用 cURL 重抓 Cookie(同一会话,两边的 Cookie/CSRF 一起更新)。

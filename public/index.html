@@ -39,6 +39,7 @@
     .platform-yescode { background: #f6ffed; color: #389e0d; border: 1px solid #b7eb8f; }
 .platform-huoli { background: #fff7e6; color: #d4380d; border: 1px solid #ffd591; }
 .platform-volc { background: #e6fffb; color: #08979c; border: 1px solid #5cdbd3; }
+.platform-volcc { background: #f9f0ff; color: #531dab; border: 1px solid #d3adf7; }
     .card-status { font-size: 12px; padding: 2px 10px; border-radius: 10px; font-weight: 500; }
     .status-ok { background: #f6ffed; color: #52c41a; border: 1px solid #b7eb8f; }
     .status-warn { background: #fffbe6; color: #d48806; border: 1px solid #ffe58f; }
@@ -279,6 +280,7 @@
     body.dark .platform-yescode { background: #14532d; color: #4ade80; border-color: #166534; }
 body.dark .platform-huoli { background: #422006; color: #fb923c; border-color: #854d0e; }
 body.dark .platform-volc { background: #042f2e; color: #5eead4; border-color: #0e7490; }
+body.dark .platform-volcc { background: #22113d; color: #b37feb; border-color: #531dab; }
     body.dark .status-ok { background: #14532d; color: #4ade80; border-color: #166534; }
     body.dark .status-warn { background: #422006; color: #fbbf24; border-color: #854d0e; }
     body.dark .status-danger { background: #450a0a; color: #fca5a5; border-color: #991b1b; }
@@ -664,7 +666,7 @@ body.dark .platform-volc { background: #042f2e; color: #5eead4; border-color: #0
     function platformLabel(platform) {
       if (platform === 'yescode') return 'YesCode';
       if (platform === 'huoli') return '火狸';
-      if (platform === 'volc') return '火山A';
+      if (platform === 'volc') return '火山';
       return '智谱';
     }
     // 团队版 level 翻译：pro→团队标准版, max→团队高级版; 非团队版原样返回
@@ -790,10 +792,12 @@ body.dark .platform-volc { background: #042f2e; color: #5eead4; border-color: #0
         + (reset ? '<div style="font-size:11px;color:#bfbfbf;margin-top:3px">' + reset + '</div>' : '') + '</div>';
     }
 
-    function platformTag(platform) {
+    function platformTag(platform, planType) {
       if (platform === 'yescode') return '<span class="platform-tag platform-yescode">YesCode</span>';
       if (platform === 'huoli') return '<span class="platform-tag platform-huoli">火狸</span>';
-      if (platform === 'volc') return '<span class="platform-tag platform-volc">火山A</span>';
+      if (platform === 'volc') return planType === 'coding'
+        ? '<span class="platform-tag platform-volcc">火山C</span>'
+        : '<span class="platform-tag platform-volc">火山A</span>';
       return '<span class="platform-tag platform-glm">智谱</span>';
     }
 
@@ -900,6 +904,77 @@ body.dark .platform-volc { background: #042f2e; color: #5eead4; border-color: #0
       return max;
     }
 
+    // 火山C（CodingPlan）用量：QuotaUsage 数组，每项 { Level, Percent(已是百分数，如 2.6 = 2.6%), ResetTimestamp(unix秒) }
+    function volcCQuota(usage, level) {
+      var arr = (usage && usage.QuotaUsage) || [];
+      for (var i = 0; i < arr.length; i++) {
+        if (arr[i] && arr[i].Level === level) return arr[i];
+      }
+      return null;
+    }
+    function volcCMaxPct(usage) {
+      var arr = (usage && usage.QuotaUsage) || [];
+      var max = 0;
+      arr.forEach(function(q) {
+        var p = (q && typeof q.Percent === 'number') ? q.Percent : 0;
+        max = Math.max(max, Math.min(100, p));
+      });
+      return max;
+    }
+    function renderVolcCrow(label, item, periodMs, segments) {
+      var realPct = (item && typeof item.Percent === 'number') ? item.Percent : 0;
+      var pct = Math.min(100, realPct);                       // 进度条宽度/颜色钳制到 100
+      var pctRound = realPct.toFixed(1).replace(/\.0$/, '');  // 文本显示真实值（CodingPlan 允许超额，可能 >100%）
+      var value = '已用 ' + pctRound + '%';
+      var resetMs = item && item.ResetTimestamp ? item.ResetTimestamp * 1000 : 0;
+      var resetTxt = resetMs ? '重置 ' + formatTime(resetMs) : '';
+
+      var theoPct = -1;
+      if (resetMs) {
+        var periodStart = resetMs - periodMs;
+        var elapsed = Date.now() - periodStart;
+        if (elapsed > 0) theoPct = Math.min(100, (elapsed / periodMs) * 100);
+      }
+
+      var html = '<div class="limit-row"><div class="limit-label"><span class="limit-name">' + label + '</span><span class="limit-value">' + value + '</span></div>';
+
+      if (segments && segments > 0) {
+        var segPct = 100 / segments;
+        var segHtml = '';
+        for (var i = 0; i < segments; i++) {
+          var segStart = i * segPct;
+          var segEnd = (i + 1) * segPct;
+          var fillW = 0;
+          if (pct >= segEnd) fillW = 100;
+          else if (pct > segStart) fillW = ((pct - segStart) / segPct) * 100;
+          segHtml += '<div class="seg"><div class="seg-fill ' + getColorClass(pct) + '" style="width:' + fillW + '%"></div></div>';
+        }
+        html += '<div class="limit-bar-wrap"><div class="limit-bar-seg">' + segHtml + '</div>';
+      } else {
+        html += '<div class="limit-bar-wrap"><div class="limit-bar"><div class="limit-fill ' + getColorClass(pct) + '" style="width:' + pct + '%"></div></div>';
+      }
+
+      if (theoPct >= 0) html += '<div class="theo-marker" style="left:' + theoPct + '%"></div>';
+      html += '</div>';
+
+      if (theoPct >= 0) {
+        var tText, tColor;
+        if (realPct <= 0) { tText = '暂无用量'; tColor = '#bfbfbf'; }
+        else {
+          var ratio = realPct / theoPct;
+          if (ratio <= 0.8) { tText = '充裕'; tColor = '#52c41a'; }
+          else if (ratio <= 1.3) { tText = '正常'; tColor = '#8c8c8c'; }
+          else if (ratio <= 2.0) { tText = '偏快'; tColor = '#fa8c16'; }
+          else { tText = '紧张'; tColor = '#f5222d'; }
+        }
+        html += '<div class="tension-row"><span style="color:' + tColor + ';font-weight:500">' + tText + '</span><span style="color:#bfbfbf">理论 ' + theoPct.toFixed(0) + '%</span></div>';
+      }
+
+      if (resetTxt) html += '<div style="font-size:11px;color:#bfbfbf;margin-top:2px">' + resetTxt + '</div>';
+      html += '</div>';
+      return html;
+    }
+
     function yescodeDailySpent(d) {
       var plan = d.subscription_plan || {};
       var quota = plan.daily_balance || 0;
@@ -919,7 +994,7 @@ body.dark .platform-volc { background: #042f2e; color: #5eead4; border-color: #0
     function renderCardHTML(i, acc) {
       var platform = acc.platform || 'glm';
       var btn = isAdmin() ? '<button class="card-refresh" id="refresh-' + i + '" onclick="refreshCard(' + i + ')" title="刷新">&#x21bb;</button>' : '';
-      var pTag = platformTag(platform);
+      var pTag = platformTag(platform, acc.planType);
       var wBadge = (isAdmin() && weightsMap[acc.name] != null) ? weightBadgeHTML(acc.name, i) : '';
       var headerLeft = '<div class="card-header-left">' + pTag + wBadge + '<h3>' + esc(displayName(acc, i)) + '</h3></div>';
 
@@ -992,16 +1067,26 @@ body.dark .platform-volc { background: #042f2e; color: #5eead4; border-color: #0
       }
 
       if (platform === 'volc') {
+        var isCoding = acc.planType === 'coding';
         var usage = (acc.data && acc.data.usage) || {};
         var sub = (acc.data && acc.data.subscription) || null;
-        var five = usage.AFPFiveHour || {};
-        var week = usage.AFPWeekly || {};
-        var month = usage.AFPMonthly || {};
-        var bodyHtml = renderVolcRow('每5小时', five, 5 * 3600000, 5)
-          + renderVolcRow('每周', week, 7 * 86400000, 7)
-          + renderVolcRow('每月', month, 30 * 86400000, 0);
-        var mpV = volcMaxPct(usage);
-        var planBadgeV = '<span class="level-badge">' + esc(usage.PlanType || (sub && sub.BizInfo) || '-') + '</span>';
+        var bodyHtml, mpV, planBadgeV;
+        if (isCoding) {
+          bodyHtml = renderVolcCrow('5小时会话', volcCQuota(usage, 'session'), 5 * 3600000, 5)
+            + renderVolcCrow('每周', volcCQuota(usage, 'weekly'), 7 * 86400000, 7)
+            + renderVolcCrow('每月', volcCQuota(usage, 'monthly'), 30 * 86400000, 0);
+          mpV = volcCMaxPct(usage);
+          planBadgeV = '<span class="level-badge">' + esc((sub && sub.BizInfo) || usage.Status || '-') + '</span>';
+        } else {
+          var five = usage.AFPFiveHour || {};
+          var week = usage.AFPWeekly || {};
+          var month = usage.AFPMonthly || {};
+          bodyHtml = renderVolcRow('每5小时', five, 5 * 3600000, 5)
+            + renderVolcRow('每周', week, 7 * 86400000, 7)
+            + renderVolcRow('每月', month, 30 * 86400000, 0);
+          mpV = volcMaxPct(usage);
+          planBadgeV = '<span class="level-badge">' + esc(usage.PlanType || (sub && sub.BizInfo) || '-') + '</span>';
+        }
         var expHtmlV = '';
         if (sub && sub.EndTime) {
           var expDateV = new Date(sub.EndTime);
@@ -1164,13 +1249,25 @@ body.dark .platform-volc { background: #042f2e; color: #5eead4; border-color: #0
 
       if (plat === 'volc') {
         var usage = (acc.data && acc.data.usage) || {};
-        function volcRing(label, bucket, periodMs, segments) {
-          var q = (bucket && bucket.Quota) || 0, u = (bucket && bucket.Used) || 0;
-          push(label, q > 0 ? (u / q) * 100 : 0, u.toFixed(1) + '/' + q, { segments: segments, theoPct: theoPctFromEnd(bucket && bucket.ResetTime, periodMs), title: label + ' ' + u.toFixed(2) + ' / ' + q });
+        if (acc.planType === 'coding') {
+          function volcCRing(label, level, periodMs, segments) {
+            var item = volcCQuota(usage, level);
+            var p = (item && typeof item.Percent === 'number') ? item.Percent : 0;
+            var resetIso = item && item.ResetTimestamp ? new Date(item.ResetTimestamp * 1000).toISOString() : null;
+            push(label, p, p.toFixed(1) + '%', { segments: segments, theoPct: theoPctFromEnd(resetIso, periodMs), title: label + ' ' + p.toFixed(1) + '%' });
+          }
+          volcCRing('5小时', 'session', 5 * 3600000, 5);
+          volcCRing('本周', 'weekly', 7 * 86400000, 7);
+          volcCRing('本月', 'monthly', 30 * 86400000, 0);
+        } else {
+          function volcRing(label, bucket, periodMs, segments) {
+            var q = (bucket && bucket.Quota) || 0, u = (bucket && bucket.Used) || 0;
+            push(label, q > 0 ? (u / q) * 100 : 0, u.toFixed(1) + '/' + q, { segments: segments, theoPct: theoPctFromEnd(bucket && bucket.ResetTime, periodMs), title: label + ' ' + u.toFixed(2) + ' / ' + q });
+          }
+          volcRing('5小时', usage.AFPFiveHour, 5 * 3600000, 5);
+          volcRing('本周', usage.AFPWeekly, 7 * 86400000, 7);
+          volcRing('本月', usage.AFPMonthly, 30 * 86400000, 0);
         }
-        volcRing('5小时', usage.AFPFiveHour, 5 * 3600000, 5);
-        volcRing('本周', usage.AFPWeekly, 7 * 86400000, 7);
-        volcRing('本月', usage.AFPMonthly, 30 * 86400000, 0);
         return rings;
       }
 
@@ -1235,7 +1332,10 @@ body.dark .platform-volc { background: #042f2e; color: #5eead4; border-color: #0
       }
       if (platform === 'volc') {
         var usage = (acc.data && acc.data.usage) || {}, sub = (acc.data && acc.data.subscription) || null;
-        return '<span class="level-badge">' + esc(usage.PlanType || (sub && sub.BizInfo) || '-') + '</span>';
+        var badge = acc.planType === 'coding'
+          ? ((sub && sub.BizInfo) || usage.Status || '-')
+          : (usage.PlanType || (sub && sub.BizInfo) || '-');
+        return '<span class="level-badge">' + esc(badge) + '</span>';
       }
       var level = levelLabel(acc);
       var b = '<span class="level-badge">' + level + '</span>';
@@ -1246,7 +1346,7 @@ body.dark .platform-volc { background: #042f2e; color: #5eead4; border-color: #0
     function renderListRowHTML(i, acc) {
       var platform = acc.platform || 'glm';
       var refresh = isAdmin() ? '<button class="card-refresh list-row-refresh" id="refresh-' + i + '" onclick="event.stopPropagation(); refreshCard(' + i + ')" title="刷新">&#x21bb;</button>' : '';
-      var pTag = platformTag(platform);
+      var pTag = platformTag(platform, acc.planType);
       var name = esc(displayName(acc, i));
 
       var leftBlock, middle, right;
@@ -1276,7 +1376,9 @@ body.dark .platform-volc { background: #042f2e; color: #5eead4; border-color: #0
       if (!acc || !acc.success || !acc.data) return -1;
       var plat = acc.platform || 'glm';
       if (plat === 'yescode') return yescodeMaxPct(acc.data);
-      if (plat === 'volc') return volcMaxPct(acc.data && acc.data.usage);
+      if (plat === 'volc') return acc.planType === 'coding'
+        ? volcCMaxPct(acc.data && acc.data.usage)
+        : volcMaxPct(acc.data && acc.data.usage);
       if (plat === 'huoli') {
         var subs = acc.data || [];
         var sub = subs[0] || {};
@@ -1606,6 +1708,49 @@ body.dark .platform-volc { background: #042f2e; color: #5eead4; border-color: #0
       document.getElementById('modalBody').innerHTML = html;
     }
 
+    function renderVolcCDetail(index, acc) {
+      var usage = (acc.data && acc.data.usage) || {};
+      var sub = (acc.data && acc.data.subscription) || null;
+      var session = volcCQuota(usage, 'session');
+      var week = volcCQuota(usage, 'weekly');
+      var month = volcCQuota(usage, 'monthly');
+
+      var html = '<div class="info-section"><div class="info-section-title">负责人信息</div><div class="info-grid">'
+        + '<span class="info-label">负责人</span><span class="info-value">' + esc(acc.responsiblePerson||'-') + '</span>'
+        + '<span class="info-label">电话</span><span class="info-value">' + esc(acc.phone||'-') + '</span>'
+        + '<span class="info-label">备注</span><span class="info-value">' + esc(acc.notes||'-') + '</span>'
+        + '</div></div>';
+
+      html += '<div class="info-section"><div class="info-section-title">订阅信息</div><div class="info-grid">'
+        + '<span class="info-label">套餐类型</span><span class="info-value">' + esc((sub && sub.BizInfo) || '-') + '</span>'
+        + '<span class="info-label">订阅状态</span><span class="info-value">' + esc(sub && sub.Status || usage.Status || '-') + '</span>'
+        + '<span class="info-label">计费方式</span><span class="info-value">' + (sub && sub.PayType ? (sub.PayType === 'pre' ? '预付费' : sub.PayType) : '-') + '</span>'
+        + '<span class="info-label">订阅周期</span><span class="info-value">' + esc(sub && sub.Period || '-') + '</span>'
+        + '<span class="info-label">开始时间</span><span class="info-value">' + esc(fmtYesCodeDate(sub && sub.StartTime)) + '</span>'
+        + '<span class="info-label">到期时间</span><span class="info-value">' + esc(fmtYesCodeDate(sub && sub.EndTime)) + '</span>'
+        + '<span class="info-label">自动续费</span><span class="info-value">' + (sub ? (sub.EnableAutoRenew ? '是' : '否') : '-') + '</span>'
+        + '<span class="info-label">官网</span><span class="info-value"><a href="https://console.volcengine.com/ark/region:cn-beijing/subscription/coding-plan" target="_blank" rel="noopener" style="color:#667eea;text-decoration:none">火山引擎控制台 ↗</a></span>'
+        + '</div></div>';
+
+      function cDetailRow(label, item) {
+        var realPct = (item && typeof item.Percent === 'number') ? item.Percent : 0;
+        var pct = Math.min(100, realPct);
+        var resetTxt = item && item.ResetTimestamp ? fmtYesCodeDate(item.ResetTimestamp * 1000) : '-';
+        return '<div class="limit-row"><div class="limit-label"><span class="limit-name">' + label + '</span><span class="limit-value">已用 ' + realPct.toFixed(1) + '%</span></div>'
+          + '<div class="limit-bar"><div class="limit-fill ' + getColorClass(pct) + '" style="width:' + pct + '%"></div></div>'
+          + '<div style="font-size:11px;color:#bfbfbf;margin-top:3px">额度重置时间：' + resetTxt + '</div>'
+          + '</div>';
+      }
+
+      html += '<div class="info-section"><div class="info-section-title">额度使用情况</div>'
+        + cDetailRow('5小时会话', session)
+        + cDetailRow('每周', week)
+        + cDetailRow('每月', month)
+        + '</div>';
+
+      document.getElementById('modalBody').innerHTML = html;
+    }
+
     function showDetail(index) {
       // Dispose existing chart if any
       if (_usageCharts[_detailIndex]) { _usageCharts[_detailIndex].dispose(); delete _usageCharts[_detailIndex]; }
@@ -1627,7 +1772,8 @@ body.dark .platform-volc { background: #042f2e; color: #5eead4; border-color: #0
       }
 
       if ((acc.platform || 'glm') === 'volc') {
-        renderVolcDetail(index, acc);
+        if (acc.planType === 'coding') renderVolcCDetail(index, acc);
+        else renderVolcDetail(index, acc);
         document.getElementById('modalOverlay').classList.add('active');
         return;
       }
@@ -1989,14 +2135,14 @@ body.dark .platform-volc { background: #042f2e; color: #5eead4; border-color: #0
       var volcDisp = platform === 'volc' ? '' : 'none';
       document.getElementById('mgmtBody').innerHTML = ''
         + '<div class="import-section"><div class="import-toggle" onclick="this.nextElementSibling.classList.toggle(\'open\')">&#9660; 快速导入（粘贴 fetch 命令）</div>'
-        + '<div class="import-body"><textarea class="form-input" id="f_fetch" placeholder="粘贴 fetch(...) 命令，自动识别智谱 / YesCode / 火狸 / 火山A"></textarea>'
+        + '<div class="import-body"><textarea class="form-input" id="f_fetch" placeholder="粘贴 fetch(...) 命令，自动识别智谱 / YesCode / 火狸 / 火山A / 火山C"></textarea>'
         + '<div class="import-actions"><button class="btn-primary" style="padding:5px 16px;font-size:12px" onclick="parseFetch()">解析并填充</button></div></div></div>'
         + '<div class="form-row">'
         + '<div class="form-group"><label class="form-label">站点</label><select class="form-input" id="f_platform" onchange="onPlatformChange()">'
         + '<option value="glm"' + (platform==='glm'?' selected':'') + '>智谱</option>'
         + '<option value="yescode"' + (platform==='yescode'?' selected':'') + '>YesCode</option>'
         + '<option value="huoli"' + (platform==='huoli'?' selected':'') + '>火狸</option>'
-        + '<option value="volc"' + (platform==='volc'?' selected':'') + '>火山A</option>'
+        + '<option value="volc"' + (platform==='volc'?' selected':'') + '>火山</option>'
         + '</select></div>'
         + '<div class="form-group"><label class="form-label">账号名称</label><input class="form-input" id="f_name" value="' + esc(a.name||'') + '"></div>'
         + '</div>'
@@ -2015,6 +2161,10 @@ body.dark .platform-volc { background: #042f2e; color: #5eead4; border-color: #0
         + '<div class="form-group"><label class="form-label">登录密码</label><input class="form-input" type="password" id="f_huoli_password" placeholder="用于 Token 过期时自动登录" value="' + esc(a.huoli_password||'') + '"></div></div>'
         + '</div>'
         + '<div id="f_volc_fields" style="display:' + volcDisp + '">'
+        + '<div class="form-group"><label class="form-label">套餐类型</label><div style="display:flex;gap:18px;align-items:center;flex-wrap:wrap">'
+        + '<label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="radio" name="f_volc_plan" value="agent"' + (a.planType !== 'coding' ? ' checked' : '') + ' style="width:16px;height:16px;cursor:pointer"> AgentPlan（火山A）</label>'
+        + '<label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="radio" name="f_volc_plan" value="coding"' + (a.planType === 'coding' ? ' checked' : '') + ' style="width:16px;height:16px;cursor:pointer"> CodingPlan（火山C）</label>'
+        + '</div></div>'
         + '<div class="form-group"><label class="form-label">Cookie</label><textarea class="form-input" id="f_volc_cookie" placeholder="完整 Cookie，用于访问 console.volcengine.com">' + esc(a.cookie||'') + '</textarea></div>'
         + '<div class="form-row"><div class="form-group"><label class="form-label">X-CSRF-Token</label><input class="form-input" id="f_volc_csrf" value="' + esc(a.csrf||'') + '"></div>'
         + '<div class="form-group"><label class="form-label">X-Web-Id（可选）</label><input class="form-input" id="f_volc_webid" value="' + esc(a.web_id||'') + '"></div></div>'
@@ -2066,7 +2216,10 @@ body.dark .platform-volc { background: #042f2e; color: #5eead4; border-color: #0
       var isGlm = /bigmodel\.cn|bigmodel-organization|bigmodel-project/i.test(t);
 
       if (isVolc && !isGlm) {
+        var coding = /GetCodingPlanUsage|coding-plan/i.test(t);
         document.getElementById('f_platform').value = 'volc';
+        var planRadio = document.querySelector('input[name=f_volc_plan][value="' + (coding ? 'coding' : 'agent') + '"]');
+        if (planRadio) planRadio.checked = true;
         onPlatformChange();
         var cookie = extractCookie(t);
         var csrf = extractHeader(t, 'x-csrf-token');
@@ -2077,7 +2230,7 @@ body.dark .platform-volc { background: #042f2e; color: #5eead4; border-color: #0
         if (!cookie) {
           alert('未能解析出 Cookie。\n\n「Copy as fetch」不会包含 Cookie 头（它靠 credentials:include 由浏览器自动带），\n请改用：右键请求 → Copy → Copy as cURL (bash)，\ncURL 复制会带出完整 Cookie（含 HttpOnly 登录态），再粘贴到这里解析。');
         } else if (!csrf) {
-          alert('已解析出 Cookie，但未解析出 X-CSRF-Token，请确认复制的是 GetAgentPlanAFPUsage 请求。');
+          alert('已解析出 Cookie，但未解析出 X-CSRF-Token，请确认复制的是 GetAgentPlanAFPUsage 或 GetCodingPlanUsage 请求。');
         }
         return;
       }
@@ -2137,6 +2290,8 @@ body.dark .platform-volc { background: #042f2e; color: #5eead4; border-color: #0
         body.cookie = document.getElementById('f_volc_cookie').value.trim();
         body.csrf = document.getElementById('f_volc_csrf').value.trim();
         body.web_id = document.getElementById('f_volc_webid').value.trim();
+        var planSel = document.querySelector('input[name=f_volc_plan]:checked');
+        body.planType = planSel ? planSel.value : 'agent';
         if (!body.name || !body.cookie || !body.csrf) { alert('账号名称、Cookie 和 X-CSRF-Token 不能为空'); return; }
       } else {
         body.authorization = document.getElementById('f_auth').value.trim();
