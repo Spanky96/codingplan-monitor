@@ -6,6 +6,30 @@
 
 var FIVE_HOURS_MS = 5 * 3600000;   // unit=3
 var SEVEN_DAYS_MS = 7 * 86400000;  // unit=6
+// 与前端一致的耗尽判定:官方数据常停在 99.9x%,但额度实际已不可用,统一按 ≥99.9% 视为耗尽 → 权重 0
+var EXHAUSTED_PCT = 99.9;
+
+// 纯用量分桶 → base 1~6(用量越高 base 越低)
+function bucketScore(usedPct) {
+    if (usedPct < 15) return 6;
+    if (usedPct < 30) return 5;
+    if (usedPct < 50) return 4;
+    if (usedPct < 70) return 3;
+    if (usedPct < 85) return 2;
+    return 1;
+}
+
+// 把"瓶颈窗口最高用量%"打包成统一返回结构;耗尽(≥EXHAUSTED_PCT)→ 权重 0
+function packMaxPct(maxPct) {
+    if (maxPct === null || maxPct === undefined || maxPct < 0 || isNaN(maxPct)) return null;
+    var exhausted = maxPct >= EXHAUSTED_PCT;
+    var base = exhausted ? 0 : bucketScore(maxPct);
+    return {
+        weight: base, score5h: null, score7d: base,
+        used5h: null, used7d: +maxPct.toFixed(2), theo5h: null, theo7d: null,
+        exhausted: exhausted
+    };
+}
 
 // 计算单窗口(5h 或 7d)的权重。
 // limit: quota/limit 接口里的一项 { unit, percentage, nextResetTime, _unlimited, ... }
@@ -22,7 +46,7 @@ function scoreWindow(limit, periodMs) {
         : (parseFloat(limit.percentage) || 0);
 
     // 已耗尽 → 0
-    if (usedPct >= 100) {
+    if (usedPct >= EXHAUSTED_PCT) {
         return { score: 0, usedPct: usedPct, theoPct: null, exhausted: true, noData: false };
     }
 
@@ -42,13 +66,7 @@ function scoreWindow(limit, periodMs) {
     }
 
     // 用量分桶(base)
-    var base;
-    if (usedPct < 15) base = 6;
-    else if (usedPct < 30) base = 5;
-    else if (usedPct < 50) base = 4;
-    else if (usedPct < 70) base = 3;
-    else if (usedPct < 85) base = 2;
-    else base = 1;
+    var base = bucketScore(usedPct);
 
     // 时间速率修正:ratio = 实际用量% / 理论进度%
     var ratio = theoPct > 0 ? usedPct / theoPct : 1;
@@ -64,8 +82,60 @@ function scoreWindow(limit, periodMs) {
 // 账号综合权重:5h 与 7d 取瓶颈(min),任一窗口耗尽则整体 0。
 // cachedResult: usageCache 中 fetchGLMUsage 的返回({ data: { limits: [...] }, ... })
 // 返回 { weight, score5h, score7d, used5h, used7d, theo5h, theo7d, exhausted } 或 null(无可用窗口)
+// 火山账号各窗口最高用量%(火山A AgentPlan / 火山C CodingPlan)
+function volcMaxPct(usage) {
+    var max = -1;
+    if (!usage) return max;
+    if (Array.isArray(usage.QuotaUsage)) {
+        // 火山C:Percent 已是百分数(允许超额,可能 >100)
+        usage.QuotaUsage.forEach(function(q) {
+            if (q && typeof q.Percent === 'number' && q.Percent > max) max = q.Percent;
+        });
+    } else {
+        // 火山A:AFP* 桶 { Quota, Used }
+        [usage.AFPFiveHour, usage.AFPWeekly, usage.AFPMonthly, usage.AFPDaily].forEach(function(b) {
+            if (b && b.Quota > 0) { var p = (b.Used / b.Quota) * 100; if (p > max) max = p; }
+        });
+    }
+    return max;
+}
+
+// YesCode 账号各窗口最高用量%(今日/本周/本月)
+function yescodeMaxPct(d) {
+    var plan = (d && d.subscription_plan) || {};
+    var max = -1;
+    var dq = plan.daily_balance || 0;
+    if (dq > 0) {
+        var spent = Math.max(0, dq - (d.subscription_balance || 0));
+        var p = (spent / dq) * 100;
+        if (p > max) max = p;
+    }
+    if (plan.weekly_limit > 0) {
+        var pw = ((d.current_week_spend || 0) / plan.weekly_limit) * 100;
+        if (pw > max) max = pw;
+    }
+    if (plan.monthly_spend_limit > 0) {
+        var pm = ((d.current_month_spend || 0) / plan.monthly_spend_limit) * 100;
+        if (pm > max) max = pm;
+    }
+    return max;
+}
+
 function scoreAccount(cachedResult) {
-    var data = cachedResult && cachedResult.data;
+    if (!cachedResult || !cachedResult.data) return null;
+    var platform = cachedResult.platform || 'glm';
+
+    // 火山:取各窗口最高用量%为瓶颈(任一 ≥99.9% → 耗尽 → 权重 0)
+    if (platform === 'volc') {
+        return packMaxPct(volcMaxPct(cachedResult.data.usage));
+    }
+    // YesCode:今日/本周/本月 取最高用量%
+    if (platform === 'yescode') {
+        return packMaxPct(yescodeMaxPct(cachedResult.data));
+    }
+    // huoli 等其他平台暂无统一评分,落到下方 GLM 逻辑(无 limits 时返回 null → 默认权重)
+
+    var data = cachedResult.data;
     var limits = data && Array.isArray(data.limits) ? data.limits : [];
 
     var l5 = null, l7 = null;
@@ -144,8 +214,13 @@ function finalWeight(base, cfg) {
 }
 
 module.exports = {
+    EXHAUSTED_PCT: EXHAUSTED_PCT,
     scoreWindow: scoreWindow,
     scoreAccount: scoreAccount,
+    bucketScore: bucketScore,
+    packMaxPct: packMaxPct,
+    volcMaxPct: volcMaxPct,
+    yescodeMaxPct: yescodeMaxPct,
     getWeightConfig: getWeightConfig,
     applyStrategy: applyStrategy,
     finalWeight: finalWeight,

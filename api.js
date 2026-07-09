@@ -1,4 +1,5 @@
 var fs = require('fs');
+var path = require('path');
 var https = require('https');
 var express = require('express');
 var jsonParser = express.json();
@@ -8,17 +9,51 @@ var glmAccountsFile = config.accountsFile;
 var PASSWORD = config.adminPassword;
 var weights = require('./weights');
 var CACHE_TTL = 5 * 60 * 1000;
+var CACHE_FILE = process.env.USAGE_CACHE_FILE
+    ? path.resolve(process.env.USAGE_CACHE_FILE)
+    : path.join(__dirname, 'usage-cache.json');
 
 var usageCache = {};
+var _persistTimer = null;
 
+// 启动加载持久化缓存:让 /api/weights 在重启/冷启动后也能立即返回最近已知权重(耗尽=0),
+// 而不是退回默认权重。中转站轮询抓到的永远是「最近一次抓取」的真实评分。
+(function loadUsageCache() {
+    try {
+        if (fs.existsSync(CACHE_FILE)) {
+            var raw = JSON.parse(fs.readFileSync(CACHE_FILE, 'utf8'));
+            if (raw && typeof raw === 'object' && !Array.isArray(raw)) usageCache = raw;
+        }
+    } catch (e) { usageCache = {}; }   // 损坏则丢弃,等首次抓取重建
+})();
+
+// 去抖持久化:抓取后合并写入,避免高频写盘
+function persistUsageCache() {
+    if (_persistTimer) return;
+    _persistTimer = setTimeout(function () {
+        _persistTimer = null;
+        try { fs.writeFileSync(CACHE_FILE, JSON.stringify(usageCache)); } catch (e) { /* 忽略写入失败 */ }
+    }, 2000);
+}
+
+// 新鲜缓存(5 分钟内):供 /api/usage 展示用
 function getCached(index) {
     var c = usageCache[index];
     return (c && Date.now() - c.time < CACHE_TTL) ? c.result : null;
 }
+// 最近已知(任意时效):供 /api/weights 路由用——宁可略旧,也不要把耗尽账号当默认权重
+function getCachedLastKnown(index) {
+    var c = usageCache[index];
+    return c ? c.result : null;
+}
 function setCache(index, result) {
     usageCache[index] = { result: result, time: Date.now() };
+    persistUsageCache();
 }
-function clearCache() { usageCache = {}; expireCache = {}; }
+function clearCache() {
+    usageCache = {}; expireCache = {};
+    try { fs.writeFileSync(CACHE_FILE, '{}'); } catch (e) { /* 忽略 */ }
+}
 
 var EXPIRE_CACHE_TTL = 24 * 60 * 60 * 1000;
 var expireCache = {};
@@ -421,10 +456,11 @@ module.exports = function(app) {
                 // 未鉴权:返回公开账号(isPublic !== false,默认公开);带正确密码:全部账号
                 if (!authenticated && acc.isPublic === false) continue;
                 var cfg = weights.getWeightConfig(acc);
-                var cached = getCached(i);                          // 纯读,绝不触发官方刷新
+                var cached = getCachedLastKnown(i);                 // 纯读最近已知(重启/过期也能返回真实权重),绝不触发官方刷新
                 var s = cached ? weights.scoreAccount(cached) : null;
                 var base = s ? s.weight : null;                      // token 失效/无缓存 → null → 走默认权重
                 var final = weights.finalWeight(base, cfg);
+                if (s && s.exhausted) final = 0;                     // 耗尽账号权重恒为 0,不受策略 A/D 复活
                 result[acc.name] = final;
                 if (wantDetail) {
                     detail.push({
@@ -456,10 +492,12 @@ module.exports = function(app) {
                 var acc = accounts[i];
                 if (!acc) continue;
                 var cfg = weights.getWeightConfig(acc);
-                var cached = getCached(i);
+                var cached = getCachedLastKnown(i);
                 var s = cached ? weights.scoreAccount(cached) : null;
                 var base = s ? s.weight : null;
-                list.push({ index: i, name: acc.name, platform: acc.platform || 'glm', config: cfg, base: base, final: weights.finalWeight(base, cfg) });
+                var finalW = weights.finalWeight(base, cfg);
+                if (s && s.exhausted) finalW = 0;                    // 耗尽账号权重恒为 0
+                list.push({ index: i, name: acc.name, platform: acc.platform || 'glm', config: cfg, base: base, final: finalW, exhausted: s ? s.exhausted : false });
             }
             res.json(list);
         } catch (err) { res.status(500).json({ error: err.message }); }

@@ -689,9 +689,21 @@ body.dark .platform-volcc { background: #22113d; color: #b37feb; border-color: #
       return platformLabel(platform) + seq;
     }
     function getLimitLabel(l) { return l.type === 'TIME_LIMIT' ? 'MCP 调用额度' : 'Token (' + (UNIT_LABELS[l.unit] || '周期' + l.unit) + ')'; }
-    function getColorClass(p) { return p >= 100 ? 'fill-exhausted' : p < 50 ? 'fill-green' : p < 80 ? 'fill-orange' : 'fill-red'; }
-    function getStatusClass(p) { return p >= 100 ? 'status-exhausted' : p < 50 ? 'status-ok' : p < 80 ? 'status-warn' : 'status-danger'; }
-    function getStatusText(p) { return p >= 100 ? '耗尽' : p < 50 ? '正常' : p < 80 ? '注意' : '紧张'; }
+    // 实际已耗尽判定阈值：官方数据常停在 99.9x%，但额度实际已不可用，统一按 ≥99.9% 视为耗尽
+    var EXHAUSTED_PCT = 99.9;
+    function getColorClass(p) { return p >= EXHAUSTED_PCT ? 'fill-exhausted' : p < 50 ? 'fill-green' : p < 80 ? 'fill-orange' : 'fill-red'; }
+    function getStatusClass(p) { return p >= EXHAUSTED_PCT ? 'status-exhausted' : p < 50 ? 'status-ok' : p < 80 ? 'status-warn' : 'status-danger'; }
+    function getStatusText(p) { return p >= EXHAUSTED_PCT ? '耗尽' : p < 50 ? '正常' : p < 80 ? '注意' : '紧张'; }
+    // 理论进度对照标签（实际用量 vs 理论进度）；耗尽判定优先于速率比，避免撑满进度条仍显示「偏快」
+    function tensionInfo(pct, theoPct) {
+      if (pct >= EXHAUSTED_PCT) return { text: '耗尽', color: '#c026d3' };
+      if (pct <= 0) return { text: '暂无用量', color: '#bfbfbf' };
+      var ratio = pct / theoPct;
+      if (ratio <= 0.8) return { text: '充裕', color: '#52c41a' };
+      if (ratio <= 1.3) return { text: '正常', color: '#8c8c8c' };
+      if (ratio <= 2.0) return { text: '偏快', color: '#fa8c16' };
+      return { text: '紧张', color: '#f5222d' };
+    }
     function formatTime(ts) { return ts ? new Date(ts).toLocaleString('zh-CN',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}) : '-'; }
     function maxPct(ls) { return ls && ls.length ? Math.max.apply(null, ls.map(function(l){return l.percentage||0})) : 0; }
     function timeAgo(ts) { if (!ts) return ''; var d = Date.now() - ts; if (d < 60000) return '刚刚'; if (d < 3600000) return Math.floor(d/60000) + '分钟前'; return new Date(ts).toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'}); }
@@ -768,16 +780,8 @@ body.dark .platform-volcc { background: #22113d; color: #b37feb; border-color: #
         // Tension based on actual vs theoretical
         var tensionHtml = '';
         if (theoPct >= 0) {
-          var tText = '', tColor = '';
-          if (pct <= 0) { tText = '暂无用量'; tColor = '#bfbfbf'; }
-          else {
-            var ratio = pct / theoPct;
-            if (ratio <= 0.8) { tText = '充裕'; tColor = '#52c41a'; }
-            else if (ratio <= 1.3) { tText = '正常'; tColor = '#8c8c8c'; }
-            else if (ratio <= 2.0) { tText = '偏快'; tColor = '#fa8c16'; }
-            else { tText = '紧张'; tColor = '#f5222d'; }
-          }
-          tensionHtml = '<div class="tension-row"><span style="color:' + tColor + ';font-weight:500">' + tText + '</span><span style="color:#bfbfbf">理论 ' + theoPct.toFixed(0) + '%</span></div>';
+          var ti = tensionInfo(pct, theoPct);
+          tensionHtml = '<div class="tension-row"><span style="color:' + ti.color + ';font-weight:500">' + ti.text + '</span><span style="color:#bfbfbf">理论 ' + theoPct.toFixed(0) + '%</span></div>';
         }
 
         return '<div class="limit-row"><div class="limit-label"><span class="limit-name">' + label + '</span><span class="limit-value">' + value + '</span></div>'
@@ -820,16 +824,8 @@ body.dark .platform-volcc { background: #22113d; color: #b37feb; border-color: #
       html += '</div>';
 
       if (theoPct >= 0) {
-        var tText, tColor;
-        if (pct <= 0) { tText = '暂无用量'; tColor = '#bfbfbf'; }
-        else {
-          var ratio = pct / theoPct;
-          if (ratio <= 0.8) { tText = '充裕'; tColor = '#52c41a'; }
-          else if (ratio <= 1.3) { tText = '正常'; tColor = '#8c8c8c'; }
-          else if (ratio <= 2.0) { tText = '偏快'; tColor = '#fa8c16'; }
-          else { tText = '紧张'; tColor = '#f5222d'; }
-        }
-        html += '<div class="tension-row"><span style="color:' + tColor + ';font-weight:500">' + tText + '</span><span style="color:#bfbfbf">理论 ' + theoPct.toFixed(0) + '%</span></div>';
+        var ti = tensionInfo(pct, theoPct);
+        html += '<div class="tension-row"><span style="color:' + ti.color + ';font-weight:500">' + ti.text + '</span><span style="color:#bfbfbf">理论 ' + theoPct.toFixed(0) + '%</span></div>';
       }
 
       if (resetTxt) html += '<div style="font-size:11px;color:#bfbfbf;margin-top:2px">' + resetTxt + '</div>';
@@ -875,16 +871,8 @@ body.dark .platform-volcc { background: #22113d; color: #b37feb; border-color: #
       html += '</div>';
 
       if (theoPct >= 0) {
-        var tText, tColor;
-        if (pct <= 0) { tText = '暂无用量'; tColor = '#bfbfbf'; }
-        else {
-          var ratio = pct / theoPct;
-          if (ratio <= 0.8) { tText = '充裕'; tColor = '#52c41a'; }
-          else if (ratio <= 1.3) { tText = '正常'; tColor = '#8c8c8c'; }
-          else if (ratio <= 2.0) { tText = '偏快'; tColor = '#fa8c16'; }
-          else { tText = '紧张'; tColor = '#f5222d'; }
-        }
-        html += '<div class="tension-row"><span style="color:' + tColor + ';font-weight:500">' + tText + '</span><span style="color:#bfbfbf">理论 ' + theoPct.toFixed(0) + '%</span></div>';
+        var ti = tensionInfo(pct, theoPct);
+        html += '<div class="tension-row"><span style="color:' + ti.color + ';font-weight:500">' + ti.text + '</span><span style="color:#bfbfbf">理论 ' + theoPct.toFixed(0) + '%</span></div>';
       }
 
       if (resetTxt) html += '<div style="font-size:11px;color:#bfbfbf;margin-top:2px">' + resetTxt + '</div>';
@@ -911,6 +899,17 @@ body.dark .platform-volcc { background: #22113d; color: #b37feb; border-color: #
         if (arr[i] && arr[i].Level === level) return arr[i];
       }
       return null;
+    }
+    // 火山C「月度」窗口实际周期：订阅首月窗口 ≈ [StartTime, EndTime]，实际约 32 天而非 30 天。
+    // 若仍按 30 天反推窗口起点，会让起点落在未来 → elapsed<0 → 理论进度线不显示。故优先用订阅实际周期。
+    function volcCodingMonthlyPeriodMs(acc) {
+      var sub = (acc && acc.data && acc.data.subscription) || null;
+      if (sub && sub.StartTime && sub.EndTime) {
+        var start = new Date(sub.StartTime).getTime();
+        var end = new Date(sub.EndTime).getTime();
+        if (end > start) return end - start;
+      }
+      return 30 * 86400000;
     }
     function volcCMaxPct(usage) {
       var arr = (usage && usage.QuotaUsage) || [];
@@ -958,16 +957,8 @@ body.dark .platform-volcc { background: #22113d; color: #b37feb; border-color: #
       html += '</div>';
 
       if (theoPct >= 0) {
-        var tText, tColor;
-        if (realPct <= 0) { tText = '暂无用量'; tColor = '#bfbfbf'; }
-        else {
-          var ratio = realPct / theoPct;
-          if (ratio <= 0.8) { tText = '充裕'; tColor = '#52c41a'; }
-          else if (ratio <= 1.3) { tText = '正常'; tColor = '#8c8c8c'; }
-          else if (ratio <= 2.0) { tText = '偏快'; tColor = '#fa8c16'; }
-          else { tText = '紧张'; tColor = '#f5222d'; }
-        }
-        html += '<div class="tension-row"><span style="color:' + tColor + ';font-weight:500">' + tText + '</span><span style="color:#bfbfbf">理论 ' + theoPct.toFixed(0) + '%</span></div>';
+        var ti = tensionInfo(realPct, theoPct);
+        html += '<div class="tension-row"><span style="color:' + ti.color + ';font-weight:500">' + ti.text + '</span><span style="color:#bfbfbf">理论 ' + theoPct.toFixed(0) + '%</span></div>';
       }
 
       if (resetTxt) html += '<div style="font-size:11px;color:#bfbfbf;margin-top:2px">' + resetTxt + '</div>';
@@ -1074,7 +1065,7 @@ body.dark .platform-volcc { background: #22113d; color: #b37feb; border-color: #
         if (isCoding) {
           bodyHtml = renderVolcCrow('5小时会话', volcCQuota(usage, 'session'), 5 * 3600000, 5)
             + renderVolcCrow('每周', volcCQuota(usage, 'weekly'), 7 * 86400000, 7)
-            + renderVolcCrow('每月', volcCQuota(usage, 'monthly'), 30 * 86400000, 0);
+            + renderVolcCrow('每月', volcCQuota(usage, 'monthly'), volcCodingMonthlyPeriodMs(acc), 0);
           mpV = volcCMaxPct(usage);
           planBadgeV = '<span class="level-badge">' + esc((sub && sub.BizInfo) || usage.Status || '-') + '</span>';
         } else {
@@ -1134,7 +1125,7 @@ body.dark .platform-volcc { background: #22113d; color: #b37feb; border-color: #
     // ============ List 视图：环形进度条 ============
 
     function getRingColorClass(p) {
-      return p >= 100 ? 'ring-exhausted' : p < 50 ? '' : p < 80 ? 'ring-orange' : 'ring-red';
+      return p >= EXHAUSTED_PCT ? 'ring-exhausted' : p < 50 ? '' : p < 80 ? 'ring-orange' : 'ring-red';
     }
     function getLimitShort(l) {
       if (l.type === 'TIME_LIMIT') return 'MCP';
@@ -1258,7 +1249,7 @@ body.dark .platform-volcc { background: #22113d; color: #b37feb; border-color: #
           }
           volcCRing('5小时', 'session', 5 * 3600000, 5);
           volcCRing('本周', 'weekly', 7 * 86400000, 7);
-          volcCRing('本月', 'monthly', 30 * 86400000, 0);
+          volcCRing('本月', 'monthly', volcCodingMonthlyPeriodMs(acc), 0);
         } else {
           function volcRing(label, bucket, periodMs, segments) {
             var q = (bucket && bucket.Quota) || 0, u = (bucket && bucket.Used) || 0;
