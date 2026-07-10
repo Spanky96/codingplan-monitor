@@ -80,6 +80,9 @@
     .weight-badge.w-low { background: #fff7e6; color: #d46b08; border-color: #ffd591; }
     .weight-badge.w-mid { background: #f0f5ff; color: #2f54eb; border-color: #adc6ff; }
     .weight-badge.w-high { background: #f6ffed; color: #389e0d; border-color: #b7eb8f; }
+    .risk-badge { padding: 1px 9px; border-radius: 10px; font-size: 12px; font-weight: 700; background: #fff1f0; color: #cf1322; border: 1px solid #ffa39e; cursor: help; white-space: nowrap; }
+    .risk-banner { display: flex; gap: 8px; align-items: flex-start; margin: 0 0 12px; padding: 10px 14px; border-radius: 6px; background: #fff1f0; border: 1px solid #ffa39e; color: #a8071a; font-size: 13px; line-height: 1.5; }
+    .risk-banner .risk-icon { flex-shrink: 0; font-size: 15px; line-height: 1.4; }
     .cache-time { color: #bfbfbf; }
     .detail-btn { background: none; border: 1px solid #d9d9d9; color: #595959; padding: 4px 14px; border-radius: 4px; cursor: pointer; font-size: 13px; transition: all 0.2s; }
     .detail-btn:hover { border-color: #667eea; color: #667eea; }
@@ -301,6 +304,8 @@ body.dark .platform-volcc { background: #22113d; color: #b37feb; border-color: #
     body.dark .tension-row { color: #888; }
     body.dark .card-footer { border-top-color: #2a2a2a; }
     body.dark .level-badge { background: #1e1b4b; color: #a5b4fc; border-color: #3730a3; }
+    body.dark .risk-badge { background: #3a1212; color: #ff7875; border-color: #5c2020; }
+    body.dark .risk-banner { background: #2a1414; border-color: #5c2020; color: #ffa39e; }
     body.dark .cache-time { color: #555; }
     body.dark .detail-btn { border-color: #444; color: #bbb; background: #1a1a1a; }
     body.dark .detail-btn:hover { border-color: #8b5cf6; color: #8b5cf6; }
@@ -676,6 +681,16 @@ body.dark .platform-volcc { background: #22113d; color: #b37feb; border-color: #
       if (raw === 'pro') return '团队标准版';
       if (raw === 'max') return '团队高级版';
       return raw;
+    }
+    // 风控/异常:卡片与列表用的小徽章,hover 显示完整文案;无风险返回空串
+    function riskBadgeHTML(acc) {
+      if (!acc || !acc.risk || !acc.risk.text) return '';
+      return '<span class="risk-badge" title="' + esc(acc.risk.text) + '">&#x26a0;&#xfe0f; 异常</span>';
+    }
+    // 风控/异常:详情页顶部横幅,展示完整提示文案;无风险返回空串
+    function riskBannerHTML(acc) {
+      if (!acc || !acc.risk || !acc.risk.text) return '';
+      return '<div class="risk-banner"><span class="risk-icon">&#x26a0;&#xfe0f;</span><span>' + esc(acc.risk.text) + '</span></div>';
     }
     function displayName(acc, origIdx) {
       var name = (acc && acc.name) || '';
@@ -1115,10 +1130,11 @@ body.dark .platform-volcc { background: #22113d; color: #b37feb; border-color: #
         expHtml = '<div class="expire-row" onclick="refreshExpire(' + i + ')" title="点击刷新"><span class="expire-label">订阅到期</span><span class="expire-value ' + expCls + '">' + esc(exp.expireTime) + '<span class="expire-hint">' + expHint + '</span></span></div>';
       }
       var keyBadge = acc.keyCount != null ? '<span class="level-badge" style="background:#f6ffed;color:#389e0d;border-color:#b7eb8f">Key: ' + acc.keyCount + '个</span>' : '';
+      var rBadge = riskBadgeHTML(acc);
       return '<div class="card" id="card-' + i + '"><div class="card-header">' + headerLeft
         + '<div class="card-header-right">' + btn + '<span class="card-status ' + getStatusClass(mp) + '">' + getStatusText(mp) + '</span></div></div>'
         + '<div class="card-body">' + limits.map(renderLimitRow).join('') + '</div>' + expHtml
-        + '<div class="card-footer"><div class="card-footer-left"><span class="level-badge">' + level + '</span>' + keyBadge + cache + '</div>'
+        + '<div class="card-footer"><div class="card-footer-left"><span class="level-badge">' + level + '</span>' + keyBadge + rBadge + cache + '</div>'
         + '<button class="detail-btn" onclick="showDetail(' + i + ')">详情</button></div></div>';
     }
 
@@ -1331,6 +1347,7 @@ body.dark .platform-volcc { background: #22113d; color: #b37feb; border-color: #
       var level = levelLabel(acc);
       var b = '<span class="level-badge">' + level + '</span>';
       if (acc.keyCount != null) b += '<span class="level-badge" style="background:#f6ffed;color:#389e0d;border-color:#b7eb8f">Key: ' + acc.keyCount + '个</span>';
+      b += riskBadgeHTML(acc);
       return b;
     }
 
@@ -1774,7 +1791,8 @@ body.dark .platform-volcc { background: #22113d; color: #b37feb; border-color: #
         ? '<div class="keys-create"><input id="newKeyName" placeholder="Key 名称"><button onclick="createKey(' + index + ')">创建</button></div>'
         : '';
 
-      var html = '<div class="info-section"><div class="info-section-title">负责人信息</div><div class="info-grid">'
+      var html = '<div id="riskBanner-' + index + '">' + riskBannerHTML(acc) + '</div>'
+        + '<div class="info-section"><div class="info-section-title">负责人信息</div><div class="info-grid">'
         + '<span class="info-label">负责人</span><span class="info-value">' + esc(acc.responsiblePerson||'-') + '</span>'
         + '<span class="info-label">电话</span><span class="info-value">' + esc(acc.phone||'-') + '</span>'
         + '<span class="info-label">备注</span><span class="info-value">' + esc(acc.notes||'-') + '</span>'
@@ -1807,6 +1825,17 @@ body.dark .platform-volcc { background: #22113d; color: #b37feb; border-color: #
 
       document.getElementById('modalBody').innerHTML = html;
       document.getElementById('modalOverlay').classList.add('active');
+
+      // 每次打开智谱个人版账号详情都刷新风控/异常状态:有风险则记录到 accounts.json,已解除则清除
+      if ((acc.platform || 'glm') === 'glm') {
+        fetch('/api/risk/' + index, { headers: authHeaders() }).then(function(r){return r.json()}).then(function(r) {
+          if (r.error) return;
+          accountsData[index].risk = r.text ? { level: r.level, text: r.text } : null;
+          var rb = document.getElementById('riskBanner-' + index);
+          if (rb) rb.innerHTML = riskBannerHTML(accountsData[index]);
+          updateCard(index, accountsData[index]);
+        }).catch(function() {});
+      }
 
       fetch('/api/keys/' + index, { headers: authHeaders() }).then(function(r){return r.json()}).then(function(keys) {
         if (keys.error) { document.getElementById('keysContainer').innerHTML = '<p class="error-text">' + esc(keys.error) + '</p>'; return; }

@@ -152,6 +152,38 @@ function ipWhitelistUrl(account, suffix) {
     return 'https://bigmodel.cn/api/paas/userIpWhiteList' + (suffix || '');
 }
 
+// 智谱账号(个人版)风控/异常提示接口
+function riskInfoUrl() {
+    return 'https://bigmodel.cn/api/biz/customer/risk/info';
+}
+
+// 风控等级 → 提示文案映射(data 值 1~8)
+var RISK_TIPS = {
+    1: '检测到当前支付方式短期内多次购买套餐，存在异常使用风险，部分权益已被限制。详情参阅《订阅服务协议》',
+    2: '检测到账号存在多人使用行为，部分订阅权益已被限制。恢复正常使用后，系统将在2天内自动解除。详情参阅《订阅服务协议》',
+    3: '检测到账号存在多人使用行为，部分订阅权益已被限制。恢复正常使用后，系统将在2天内自动解除。详情参阅《订阅服务协议》',
+    4: '检测到账号存在多人使用行为，违规使用已导致套餐权益冻结（为期30天）。详情参阅《订阅服务协议》',
+    5: '检测到账号在非官方许可范围内使用订阅服务，违规使用已导致套餐权益冻结（为期30天）。详情参阅《订阅服务协议》',
+    6: '检测到账号短时间内发起大量重复请求，存在异常调用风险，违规使用已导致套餐权益冻结（为期30天）。详情参阅《订阅服务协议》',
+    7: '检测到账号存在多人使用行为，且多次违反平台规则。当前套餐权益已被封禁，无法恢复使用。详情参阅《订阅服务协议》',
+    8: '检测到账号多次违反平台规则。当前套餐权益已被封禁，无法恢复使用。详情参阅《订阅服务协议》'
+};
+// 未知风控等级的兜底文案
+var RISK_TIPS_FALLBACK = '检测到账号存在异常使用风险，部分权益可能已被限制。详情参阅《订阅服务协议》';
+
+// 解码智谱 JWT(authorization) 取 user_type:PERSONAL=个人版(非团队)、ENTERPRISE=团队版
+function decodeJwtUserType(authorization) {
+    try {
+        var token = String(authorization || '').replace(/^Bearer\s+/, '');
+        var parts = token.split('.');
+        if (parts.length < 2) return null;
+        var payload = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+        while (payload.length % 4) payload += '=';
+        var json = JSON.parse(Buffer.from(payload, 'base64').toString('utf8'));
+        return json.user_type || null;
+    } catch (e) { return null; }
+}
+
 // 校验 IP 地址格式:支持 IPv4 或 IPv4/CIDR(如 1.2.3.4 / 10.0.0.0/8)
 function isValidIp(ip) {
     var m = String(ip).match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})(\/(\d{1,2}))?$/);
@@ -174,11 +206,11 @@ async function fetchGLMUsage(account, index) {
         var url = 'https://bigmodel.cn/api/monitor/usage/quota/limit';
         if (account.teamEdition) url += '?type=2';
         var json = await httpsGet(url, makeHeaders(account));
-        var result = { index: index, name: account.name, platform: 'glm', responsiblePerson: account.responsiblePerson, phone: account.phone, notes: account.notes, keyCount: account.keyCount, teamEdition: account.teamEdition || undefined, isPublic: account.isPublic, data: json.data, success: true, cachedAt: Date.now() };
+        var result = { index: index, name: account.name, platform: 'glm', responsiblePerson: account.responsiblePerson, phone: account.phone, notes: account.notes, keyCount: account.keyCount, teamEdition: account.teamEdition || undefined, isPublic: account.isPublic, risk: account.risk || undefined, data: json.data, success: true, cachedAt: Date.now() };
         setCache(index, result);
         return result;
     } catch (err) {
-        return { index: index, name: account.name, platform: 'glm', responsiblePerson: account.responsiblePerson, phone: account.phone, notes: account.notes, keyCount: account.keyCount, teamEdition: account.teamEdition || undefined, isPublic: account.isPublic, error: err.message, success: false };
+        return { index: index, name: account.name, platform: 'glm', responsiblePerson: account.responsiblePerson, phone: account.phone, notes: account.notes, keyCount: account.keyCount, teamEdition: account.teamEdition || undefined, isPublic: account.isPublic, risk: account.risk || undefined, error: err.message, success: false };
     }
 }
 
@@ -621,6 +653,41 @@ module.exports = function(app) {
             var json = await httpsRequest('DELETE', ipWhitelistUrl(account, '/' + req.params.id), makeHeaders(account));
             if (json && json.code != null && json.code !== 200) throw new Error(json.msg || '删除失败');
             res.json({ success: true });
+        } catch (err) { res.status(500).json({ error: err.message }); }
+    });
+
+    // ============ 风控/异常提示（智谱个人版账号,查看与刷新均无需管理员）============
+
+    app.get('/api/risk/:index', async function(req, res) {
+        try {
+            var i = parseInt(req.params.index);
+            var account = getAccount(req);
+            if (!account) return res.status(404).json({ error: '未找到账号' });
+            if (isHiddenFromGuest(req, account)) return res.status(404).json({ error: '未找到账号' });
+            // 仅智谱账号有风控接口;团队版(ENTERPRISE)不适用
+            if ((account.platform || 'glm') !== 'glm') return res.json({ level: null, text: '', teamEdition: false });
+            if (decodeJwtUserType(account.authorization) !== 'PERSONAL') {
+                return res.json({ level: null, text: '', teamEdition: true });
+            }
+            var json = await httpsGet(riskInfoUrl(), makeHeaders(account));
+            var level = (json && json.data != null) ? json.data : null;
+            var text = '';
+            if (level) text = RISK_TIPS[level] || RISK_TIPS_FALLBACK;
+
+            // 每次打开详情刷新:有风险则记录,已解除则清除
+            var accounts = readAccounts();
+            if (accounts[i]) {
+                if (text) {
+                    accounts[i].risk = { level: level, text: text, checkedAt: Date.now() };
+                } else {
+                    delete accounts[i].risk;
+                }
+                writeAccounts(accounts);
+                // 同步刷新内存用量缓存里的 risk,避免 /api/usage 仍返回旧值
+                var c = usageCache[i];
+                if (c && c.result) c.result.risk = text ? accounts[i].risk : undefined;
+            }
+            res.json({ level: level || null, text: text, teamEdition: false });
         } catch (err) { res.status(500).json({ error: err.message }); }
     });
 
