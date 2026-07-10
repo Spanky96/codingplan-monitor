@@ -147,6 +147,26 @@ function keysUrl(account, suffix) {
         + '/projects/' + account.project + '/api_keys' + (suffix || '');
 }
 
+// 智谱账号 IP 白名单接口(用户中心 / 安全管理)
+function ipWhitelistUrl(account, suffix) {
+    return 'https://bigmodel.cn/api/paas/userIpWhiteList' + (suffix || '');
+}
+
+// 校验 IP 地址格式:支持 IPv4 或 IPv4/CIDR(如 1.2.3.4 / 10.0.0.0/8)
+function isValidIp(ip) {
+    var m = String(ip).match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})(\/(\d{1,2}))?$/);
+    if (!m) return false;
+    for (var i = 1; i <= 4; i++) {
+        var n = parseInt(m[i], 10);
+        if (n < 0 || n > 255) return false;
+    }
+    if (m[6] != null) {
+        var cidr = parseInt(m[6], 10);
+        if (cidr < 0 || cidr > 32) return false;
+    }
+    return true;
+}
+
 // ============ GLM 账号 ============
 
 async function fetchGLMUsage(account, index) {
@@ -565,6 +585,41 @@ module.exports = function(app) {
             var account = getAccount(req);
             if (!account) return res.status(404).json({ error: '未找到账号' });
             await httpsRequest('DELETE', keysUrl(account, '/' + req.params.apiKey), makeHeaders(account));
+            res.json({ success: true });
+        } catch (err) { res.status(500).json({ error: err.message }); }
+    });
+
+    // ============ IP 白名单（智谱账号,查看与操作均需密码）============
+
+    app.get('/api/ip-whitelist/:index', checkAuth, async function(req, res) {
+        try {
+            var account = getAccount(req);
+            if (!account) return res.status(404).json({ error: '未找到账号' });
+            if ((account.platform || 'glm') !== 'glm') return res.json([]);
+            var json = await httpsGet(ipWhitelistUrl(account, '/list'), makeHeaders(account));
+            if (json && json.code != null && json.code !== 200) throw new Error(json.msg || '查询失败');
+            res.json(json.rows || []);
+        } catch (err) { res.status(500).json({ error: err.message }); }
+    });
+
+    app.post('/api/ip-whitelist/:index', jsonParser, checkAuth, async function(req, res) {
+        try {
+            var account = getAccount(req);
+            if (!account) return res.status(404).json({ error: '未找到账号' });
+            var ip = (req.body && req.body.ipAddress || '').trim();
+            if (!isValidIp(ip)) return res.status(400).json({ error: 'IP 地址格式不正确,支持 IPv4 或 IPv4/CIDR,如 1.2.3.4 或 10.0.0.0/8' });
+            var json = await httpsRequest('POST', ipWhitelistUrl(account), makeHeaders(account), { ipAddress: ip });
+            if (json && json.code != null && json.code !== 200) throw new Error(json.msg || '添加失败');
+            res.json({ success: true });
+        } catch (err) { res.status(500).json({ error: err.message }); }
+    });
+
+    app.delete('/api/ip-whitelist/:index/:id', checkAuth, async function(req, res) {
+        try {
+            var account = getAccount(req);
+            if (!account) return res.status(404).json({ error: '未找到账号' });
+            var json = await httpsRequest('DELETE', ipWhitelistUrl(account, '/' + req.params.id), makeHeaders(account));
+            if (json && json.code != null && json.code !== 200) throw new Error(json.msg || '删除失败');
             res.json({ success: true });
         } catch (err) { res.status(500).json({ error: err.message }); }
     });

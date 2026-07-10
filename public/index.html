@@ -1782,6 +1782,7 @@ body.dark .platform-volcc { background: #22113d; color: #b37feb; border-color: #
         + '<div class="detail-tabs">'
         + '<button class="detail-tab active" id="dtab-keys-' + index + '" onclick="switchDetailTab(\'keys\',' + index + ')">API Keys</button>'
         + '<button class="detail-tab" id="dtab-chart-' + index + '" onclick="switchDetailTab(\'chart\',' + index + ')">用量曲线</button>'
+        + (admin ? '<button class="detail-tab" id="dtab-ip-' + index + '" onclick="switchDetailTab(\'ip\',' + index + ')">IP 白名单</button>' : '')
         + '</div>'
         + '<div id="dpanel-keys-' + index + '">'
         + '<div class="keys-section"><div class="keys-header"><div class="keys-title">API Keys</div>' + createRow + '</div>'
@@ -1795,7 +1796,14 @@ body.dark .platform-volcc { background: #22113d; color: #b37feb; border-color: #
         + '</div>'
         + '<div class="chart-wrap"><div id="chartContainer-' + index + '" style="width:100%;height:320px"></div>'
         + '<div class="chart-loading" id="chartLoading-' + index + '"></div></div>'
-        + '</div>';
+        + '</div>'
+        + (admin ? '<div id="dpanel-ip-' + index + '" style="display:none">'
+          + '<div class="keys-section"><div class="keys-header"><div class="keys-title">IP 白名单</div>'
+          + '<div class="keys-create"><input id="newIpAddr" placeholder="如 1.2.3.4 或 10.0.0.0/8" style="width:200px"><button onclick="addIpWhitelist(' + index + ')">添加</button></div>'
+          + '</div>'
+          + '<p style="font-size:12px;color:#8c8c8c;margin:-6px 0 12px">未配置时不限制 IP;添加后仅白名单内 IP 可调用本账号 API。</p>'
+          + '<div id="ipContainer" class="keys-loading">点击「IP 白名单」标签加载...</div></div>'
+          + '</div>' : '');
 
       document.getElementById('modalBody').innerHTML = html;
       document.getElementById('modalOverlay').classList.add('active');
@@ -1812,7 +1820,7 @@ body.dark .platform-volcc { background: #22113d; color: #b37feb; border-color: #
     }
 
     function switchDetailTab(tab, idx) {
-      ['keys', 'chart'].forEach(function(p) {
+      ['keys', 'chart', 'ip'].forEach(function(p) {
         var panel = document.getElementById('dpanel-' + p + '-' + idx);
         var btn = document.getElementById('dtab-' + p + '-' + idx);
         if (panel) panel.style.display = p === tab ? '' : 'none';
@@ -1821,6 +1829,10 @@ body.dark .platform-volcc { background: #22113d; color: #b37feb; border-color: #
       if (tab === 'chart') {
         var container = document.getElementById('chartContainer-' + idx);
         if (container && !container._chartLoaded) loadUsageChart(idx, 'today');
+      }
+      if (tab === 'ip') {
+        var ipC = document.getElementById('ipContainer');
+        if (ipC && !ipC._ipLoaded) loadIpWhitelist(idx);
       }
     }
 
@@ -2007,6 +2019,82 @@ body.dark .platform-volcc { background: #22113d; color: #b37feb; border-color: #
           showDetail(idx);
         })
         .catch(function() { btn.disabled = false; btn.innerHTML = _svgDel; });
+    }
+
+    // ============ IP 白名单操作（智谱账号,管理员）============
+
+    var _svgDelIp = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"/></svg>';
+
+    function loadIpWhitelist(idx) {
+      var container = document.getElementById('ipContainer');
+      if (!container) return;
+      container._ipLoaded = true;
+      container.className = 'keys-loading';
+      container.textContent = '加载中...';
+      fetch('/api/ip-whitelist/' + idx, { headers: authHeaders() })
+        .then(function(r) {
+          if (r.status === 401) { localStorage.removeItem('glm_pwd'); requireAuth(function(){loadIpWhitelist(idx)}); return null; }
+          return r.json();
+        })
+        .then(function(rows) {
+          if (!rows) return;
+          if (rows.error) { container.className = ''; container.innerHTML = '<p class="error-text">' + esc(rows.error) + '</p>'; return; }
+          renderIpWhitelist(idx, rows);
+        })
+        .catch(function(err) { container.className = ''; container.innerHTML = '<p class="error-text">加载失败: ' + esc(err.message) + '</p>'; });
+    }
+
+    function renderIpWhitelist(idx, rows) {
+      var container = document.getElementById('ipContainer');
+      if (!container) return;
+      container.className = '';
+      if (!rows || !rows.length) {
+        container.innerHTML = '<p style="color:#8c8c8c;font-size:13px">暂无白名单 IP(当前不限制访问 IP)</p>';
+        return;
+      }
+      var body = rows.map(function(r) {
+        var delBtn = '<button class="icon-btn del-icon" onclick="deleteIpWhitelist(this,' + idx + ',' + r.id + ')" title="删除">' + _svgDelIp + '</button>';
+        return '<tr><td class="mono">' + esc(r.ipAddress || '') + '</td><td>' + esc(r.createTime || '-') + '</td>'
+          + '<td><div class="key-actions">' + delBtn + '</div></td></tr>';
+      }).join('');
+      container.innerHTML = '<table class="keys-table"><tr><th>IP 地址</th><th>添加时间</th><th style="width:72px">操作</th></tr>' + body + '</table>';
+    }
+
+    function addIpWhitelist(idx) {
+      var input = document.getElementById('newIpAddr');
+      if (!input) return;
+      var ip = (input.value || '').trim();
+      if (!ip) { alert('请输入 IP 地址'); input.focus(); return; }
+      input.disabled = true;
+      fetch('/api/ip-whitelist/' + idx, { method: 'POST', headers: authHeaders(), body: JSON.stringify({ ipAddress: ip }) })
+        .then(function(r) {
+          if (r.status === 401) { localStorage.removeItem('glm_pwd'); input.disabled = false; requireAuth(function(){addIpWhitelist(idx)}); return null; }
+          return r.json();
+        })
+        .then(function(d) {
+          if (!d) return;
+          if (d.error) { alert('添加失败: ' + d.error); input.disabled = false; return; }
+          input.value = ''; input.disabled = false;
+          loadIpWhitelist(idx);
+        })
+        .catch(function(err) { alert('请求失败: ' + err.message); input.disabled = false; });
+    }
+
+    function deleteIpWhitelist(btn, idx, id) {
+      if (!confirm('确定删除此白名单 IP？')) return;
+      btn.disabled = true;
+      btn.innerHTML = '...';
+      fetch('/api/ip-whitelist/' + idx + '/' + id, { method: 'DELETE', headers: authHeaders() })
+        .then(function(r) {
+          if (r.status === 401) { localStorage.removeItem('glm_pwd'); btn.disabled = false; btn.innerHTML = _svgDelIp; requireAuth(function(){deleteIpWhitelist(btn,idx,id)}); return null; }
+          return r.json();
+        })
+        .then(function(d) {
+          if (!d) return;
+          if (d.error) { alert('删除失败: ' + d.error); btn.disabled = false; btn.innerHTML = _svgDelIp; return; }
+          loadIpWhitelist(idx);
+        })
+        .catch(function() { btn.disabled = false; btn.innerHTML = _svgDelIp; });
     }
 
     // ============ 密码验证 ============
