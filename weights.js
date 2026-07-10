@@ -1,15 +1,25 @@
-// weights.js — 权重评分纯函数:把缓存的 GLM 用量数据映射为 0~6 权重。
+// weights.js — 权重评分纯函数:把缓存的各平台用量数据映射为 0~6 权重。
 // 权重越高 = 越宽裕(中转站可多分配 token),0 = 已耗尽。
+//
+// 核心原则:权重由「消耗速率比 ratio = usedPct / theoPct」主导(即基于重置时间衡量,
+// 而非周期已使用百分比)。ratio 的物理意义 ≈ 按当前速率整周期预计用量 / 100:
+//   ratio=1 → 重置时刚好用完;ratio=2 → 半路耗尽;ratio=6 → 1/6 周期耗尽。
+// 这与前端 public/index.html 的「理论水位线 / tensionInfo」是同一个对照量,故权重方向
+// 与 usage 页面看到的充裕/正常/偏快/紧张完全一致。
 // 仅基于传入的缓存数据计算,绝不发起任何网络请求。
 
 'use strict';
 
-var FIVE_HOURS_MS = 5 * 3600000;   // unit=3
-var SEVEN_DAYS_MS = 7 * 86400000;  // unit=6
+var FIVE_HOURS_MS = 5 * 3600000;   // GLM unit=3 / 火山 session
+var ONE_DAY_MS = 86400000;         // yescode/huoli 今日
+var SEVEN_DAYS_MS = 7 * 86400000;  // GLM unit=6 / 火山 weekly
+var THIRTY_DAYS_MS = 30 * 86400000; // yescode/huoli/火山 月度默认
 // 与前端一致的耗尽判定:官方数据常停在 99.9x%,但额度实际已不可用,统一按 ≥99.9% 视为耗尽 → 权重 0
 var EXHAUSTED_PCT = 99.9;
+// 周期早期理论进度阈值(%):低于此值时样本不足、ratio 会爆炸,改用绝对用量兜底,避免刚重置就被误判紧张
+var MIN_TRUST_THEO = 3;
 
-// 纯用量分桶 → base 1~6(用量越高 base 越低)
+// 纯用量分桶 → 1~6(用量越高分越低);用于「无重置时间」与「周期刚开始」两种兜底场景
 function bucketScore(usedPct) {
     if (usedPct < 15) return 6;
     if (usedPct < 30) return 5;
@@ -19,162 +29,244 @@ function bucketScore(usedPct) {
     return 1;
 }
 
-// 把"瓶颈窗口最高用量%"打包成统一返回结构;耗尽(≥EXHAUSTED_PCT)→ 权重 0
-function packMaxPct(maxPct) {
-    if (maxPct === null || maxPct === undefined || maxPct < 0 || isNaN(maxPct)) return null;
-    var exhausted = maxPct >= EXHAUSTED_PCT;
-    var base = exhausted ? 0 : bucketScore(maxPct);
-    return {
-        weight: base, score5h: null, score7d: base,
-        used5h: null, used7d: +maxPct.toFixed(2), theo5h: null, theo7d: null,
-        exhausted: exhausted
-    };
+// 消耗速率比 → 分数(6 最宽裕 .. 1 最紧张)。分界对齐前端 tensionInfo 的 0.8 / 1.3 / 2.0
+function rateScore(ratio) {
+    if (ratio <= 0.5) return 6;   // 整周期最多用一半 → 极宽裕
+    if (ratio <= 0.8) return 5;   // 最多用 80% → 宽裕
+    if (ratio <= 1.0) return 4;   // 恰好用完 → 正常
+    if (ratio <= 1.3) return 3;   // 略超 → 偏快
+    if (ratio <= 2.0) return 2;   // 半周期耗尽 → 紧张
+    return 1;                     // 更快耗尽 → 极紧张
 }
 
-// 计算单窗口(5h 或 7d)的权重。
-// limit: quota/limit 接口里的一项 { unit, percentage, nextResetTime, _unlimited, ... }
-// periodMs: 该窗口周期毫秒数
-// 返回 { score, usedPct, theoPct, exhausted, noData }
-function scoreWindow(limit, periodMs) {
-    // 无约束(缺失或无限额度)→ 不影响整体,标记 noData
-    if (!limit || limit._unlimited) {
-        return { score: null, usedPct: null, theoPct: null, exhausted: false, noData: true };
-    }
+// 终点法理论进度:endIso 为周期「重置时刻」(GLM nextResetTime / 火山 ResetTime / ResetTimestamp)。
+// 与 index.html theoPctFromEnd 一致。缺失/非法 → -1(语义=无重置时间,无法算速率)
+function theoPctFromEnd(endIso, periodMs) {
+    if (!endIso) return -1;
+    var resetMs = new Date(endIso).getTime();
+    if (isNaN(resetMs)) return -1;
+    var elapsed = Date.now() - (resetMs - periodMs);
+    return elapsed > 0 ? Math.min(100, (elapsed / periodMs) * 100) : 0;
+}
 
-    var usedPct = typeof limit.percentage === 'number'
-        ? limit.percentage
-        : (parseFloat(limit.percentage) || 0);
+// 起点法理论进度:startIso 为周期「起点」(yescode last_*_reset / huoli *_window_start)。
+// 与 index.html theoPctFromStart 一致。缺失/非法 → -1
+function theoPctFromStart(startIso, periodMs) {
+    if (!startIso) return -1;
+    var startMs = new Date(startIso).getTime();
+    if (isNaN(startMs)) return -1;
+    var elapsed = Date.now() - startMs;
+    return elapsed > 0 ? Math.min(100, (elapsed / periodMs) * 100) : 0;
+}
+
+// 单窗口评分。theoPct 由各平台外部用 theoPctFrom* 算好;null/undefined/<0 表示无重置时间。
+// 返回 { score, usedPct, theoPct, ratio, exhausted, noData }
+function scoreWindow(usedPct, theoPct) {
+    var hasTheo = (theoPct !== null && theoPct !== undefined && theoPct >= 0);
 
     // 已耗尽 → 0
     if (usedPct >= EXHAUSTED_PCT) {
-        return { score: 0, usedPct: usedPct, theoPct: null, exhausted: true, noData: false };
+        return { score: 0, usedPct: usedPct, theoPct: theoPct, ratio: null, exhausted: true, noData: false };
     }
-
-    // 时间理论进度(参考 public/index.html 紧张度算法)
-    var theoPct = 100;
-    if (limit.nextResetTime) {
-        var resetMs = new Date(limit.nextResetTime).getTime();
-        if (!isNaN(resetMs)) {
-            var elapsed = Date.now() - (resetMs - periodMs);
-            theoPct = elapsed > 0 ? Math.min(100, (elapsed / periodMs) * 100) : 0;
-        }
-    }
-
     // 暂无用量 → 最宽裕
     if (usedPct <= 0) {
-        return { score: 6, usedPct: usedPct, theoPct: theoPct, exhausted: false, noData: false };
+        return { score: 6, usedPct: usedPct, theoPct: theoPct, ratio: 0, exhausted: false, noData: false };
     }
-
-    // 用量分桶(base)
-    var base = bucketScore(usedPct);
-
-    // 时间速率修正:ratio = 实际用量% / 理论进度%
-    var ratio = theoPct > 0 ? usedPct / theoPct : 1;
-    var adj = 0;
-    if (ratio >= 2.0) adj = -2;        // 消耗远超时间进度 → 紧张降权
-    else if (ratio >= 1.3) adj = -1;
-    else if (ratio <= 0.5) adj = 1;    // 消耗远低于进度 → 宽裕加权
-
-    var score = Math.max(1, Math.min(6, base + adj));
-    return { score: score, usedPct: usedPct, theoPct: theoPct, exhausted: false, noData: false };
+    // 无重置时间 → 无法算速率,退回纯用量分桶
+    if (!hasTheo) {
+        return { score: bucketScore(usedPct), usedPct: usedPct, theoPct: theoPct, ratio: null, exhausted: false, noData: false };
+    }
+    var ratio = usedPct / theoPct;
+    // 周期刚开始(theoPct 过小,ratio 爆炸不可信):用绝对余量兜底抬高(刚重置低用量→高分;异常高用量→低分)
+    var score = theoPct < MIN_TRUST_THEO
+        ? Math.max(bucketScore(usedPct), rateScore(ratio))
+        : rateScore(ratio);
+    return { score: score, usedPct: usedPct, theoPct: theoPct, ratio: ratio, exhausted: false, noData: false };
 }
 
-// 账号综合权重:5h 与 7d 取瓶颈(min),任一窗口耗尽则整体 0。
-// cachedResult: usageCache 中 fetchGLMUsage 的返回({ data: { limits: [...] }, ... })
-// 返回 { weight, score5h, score7d, used5h, used7d, theo5h, theo7d, exhausted } 或 null(无可用窗口)
-// 火山账号各窗口最高用量%(火山A AgentPlan / 火山C CodingPlan)
-function volcMaxPct(usage) {
-    var max = -1;
-    if (!usage) return max;
-    if (Array.isArray(usage.QuotaUsage)) {
-        // 火山C:Percent 已是百分数(允许超额,可能 >100)
-        usage.QuotaUsage.forEach(function(q) {
-            if (q && typeof q.Percent === 'number' && q.Percent > max) max = q.Percent;
-        });
-    } else {
-        // 火山A:AFP* 桶 { Quota, Used }
-        [usage.AFPFiveHour, usage.AFPWeekly, usage.AFPMonthly, usage.AFPDaily].forEach(function(b) {
-            if (b && b.Quota > 0) { var p = (b.Used / b.Quota) * 100; if (p > max) max = p; }
-        });
-    }
-    return max;
+// 把 (label, usedPct, theoPct) 包成窗口对象(scoreWindow 结果 + label)
+function makeWindow(label, usedPct, theoPct) {
+    var sw = scoreWindow(usedPct, theoPct);
+    return {
+        label: label,
+        score: sw.score,
+        usedPct: sw.usedPct,
+        theoPct: sw.theoPct,
+        ratio: sw.ratio,
+        exhausted: sw.exhausted,
+        noData: sw.noData
+    };
 }
 
-// YesCode 账号各窗口最高用量%(今日/本周/本月)
-function yescodeMaxPct(d) {
-    var plan = (d && d.subscription_plan) || {};
-    var max = -1;
-    var dq = plan.daily_balance || 0;
-    if (dq > 0) {
-        var spent = Math.max(0, dq - (d.subscription_balance || 0));
-        var p = (spent / dq) * 100;
-        if (p > max) max = p;
-    }
-    if (plan.weekly_limit > 0) {
-        var pw = ((d.current_week_spend || 0) / plan.weekly_limit) * 100;
-        if (pw > max) max = pw;
-    }
-    if (plan.monthly_spend_limit > 0) {
-        var pm = ((d.current_month_spend || 0) / plan.monthly_spend_limit) * 100;
-        if (pm > max) max = pm;
-    }
-    return max;
+function pctOf(limit) {
+    return typeof limit.percentage === 'number'
+        ? limit.percentage
+        : (parseFloat(limit.percentage) || 0);
 }
 
-function scoreAccount(cachedResult) {
-    if (!cachedResult || !cachedResult.data) return null;
-    var platform = cachedResult.platform || 'glm';
-
-    // 火山:取各窗口最高用量%为瓶颈(任一 ≥99.9% → 耗尽 → 权重 0)
-    if (platform === 'volc') {
-        return packMaxPct(volcMaxPct(cachedResult.data.usage));
+function findWindow(windows, label) {
+    for (var i = 0; i < windows.length; i++) {
+        if (windows[i].label === label) return windows[i];
     }
-    // YesCode:今日/本周/本月 取最高用量%
-    if (platform === 'yescode') {
-        return packMaxPct(yescodeMaxPct(cachedResult.data));
-    }
-    // huoli 等其他平台暂无统一评分,落到下方 GLM 逻辑(无 limits 时返回 null → 默认权重)
+    return null;
+}
 
-    var data = cachedResult.data;
+function findLevel(arr, level) {
+    for (var i = 0; i < arr.length; i++) {
+        if (arr[i] && arr[i].Level === level) return arr[i];
+    }
+    return null;
+}
+
+// ============ 各平台 → 窗口数组 [{label, usedPct, theoPct, ...}] ============
+
+// GLM:limits 中 unit=3(5h) 与 unit=6(7d);_unlimited 跳过
+function glmWindows(data) {
     var limits = data && Array.isArray(data.limits) ? data.limits : [];
-
     var l5 = null, l7 = null;
     for (var i = 0; i < limits.length; i++) {
         if (!limits[i]) continue;
         if (limits[i].unit === 3) l5 = limits[i];
         else if (limits[i].unit === 6) l7 = limits[i];
     }
+    var ws = [];
+    if (l5 && !l5._unlimited) ws.push(makeWindow('5h', pctOf(l5), theoPctFromEnd(l5.nextResetTime, FIVE_HOURS_MS)));
+    if (l7 && !l7._unlimited) ws.push(makeWindow('7d', pctOf(l7), theoPctFromEnd(l7.nextResetTime, SEVEN_DAYS_MS)));
+    return ws;
+}
 
-    var w5 = scoreWindow(l5, FIVE_HOURS_MS);
-    var w7 = scoreWindow(l7, SEVEN_DAYS_MS);
-
-    // 两窗口都无数据(非 GLM 风格或缺少 5h/7d)→ 无法评分
-    if (w5.noData && w7.noData) return null;
-
-    // 任一窗口耗尽 → 整体 0
-    if (w5.exhausted || w7.exhausted) {
-        return {
-            weight: 0,
-            score5h: w5.score, score7d: w7.score,
-            used5h: w5.usedPct, used7d: w7.usedPct,
-            theo5h: w5.theoPct, theo7d: w7.theoPct,
-            exhausted: true
-        };
+// YesCode:今日/本周/本月,起点法(last_*_reset)
+function yescodeWindows(d) {
+    var plan = (d && d.subscription_plan) || {};
+    var ws = [];
+    var dq = plan.daily_balance || 0;
+    if (dq > 0) {
+        var spent = Math.max(0, dq - (d.subscription_balance || 0));
+        ws.push(makeWindow('今日', (spent / dq) * 100, theoPctFromStart(d.last_daily_balance_add, ONE_DAY_MS)));
     }
+    if (plan.weekly_limit > 0) {
+        ws.push(makeWindow('本周', ((d.current_week_spend || 0) / plan.weekly_limit) * 100, theoPctFromStart(d.last_week_reset, SEVEN_DAYS_MS)));
+    }
+    if (plan.monthly_spend_limit > 0) {
+        ws.push(makeWindow('本月', ((d.current_month_spend || 0) / plan.monthly_spend_limit) * 100, theoPctFromStart(d.last_month_reset, THIRTY_DAYS_MS)));
+    }
+    return ws;
+}
 
-    // 瓶颈原则:取两窗口较低者;仅一个有数据时取该窗口
-    var weight;
-    if (w5.noData) weight = w7.score;
-    else if (w7.noData) weight = w5.score;
-    else weight = Math.min(w5.score, w7.score);
+// huoli:data 为数组,取 data[0];今日/本周/本月,起点法(*_window_start)。月度用量字段对齐前端 index.html:1236
+function huoliWindows(data) {
+    var sub = Array.isArray(data) ? data[0] : data;
+    if (!sub) return [];
+    var grp = sub.group || {};
+    var ws = [];
+    if (grp.daily_limit_usd > 0) {
+        ws.push(makeWindow('今日', ((sub.daily_usage_usd || 0) / grp.daily_limit_usd) * 100, theoPctFromStart(sub.daily_window_start, ONE_DAY_MS)));
+    }
+    if (grp.weekly_limit_usd > 0) {
+        ws.push(makeWindow('本周', ((sub.weekly_usage_usd || 0) / grp.weekly_limit_usd) * 100, theoPctFromStart(sub.weekly_window_start, SEVEN_DAYS_MS)));
+    }
+    if (grp.monthly_limit_usd > 0) {
+        ws.push(makeWindow('本月', ((sub.monthly_usage_usd || 0) / grp.monthly_limit_usd) * 100, theoPctFromStart(sub.monthly_window_start, THIRTY_DAYS_MS)));
+    }
+    return ws;
+}
 
+// 火山C 月度实际周期:优先订阅 [StartTime, EndTime](首月约 32 天),回退 30 天。对齐前端 volcCodingMonthlyPeriodMs
+function volcCodingMonthlyPeriodMs(subscription) {
+    if (subscription && subscription.StartTime && subscription.EndTime) {
+        var start = new Date(subscription.StartTime).getTime();
+        var end = new Date(subscription.EndTime).getTime();
+        if (end > start) return end - start;
+    }
+    return THIRTY_DAYS_MS;
+}
+
+// 火山:按 planType 分派 A(AgentPlan)/ C(CodingPlan)
+function volcWindows(data, planType) {
+    var usage = (data && data.usage) || {};
+    var ws = [];
+    if (planType === 'coding') {
+        var monthlyPeriod = volcCodingMonthlyPeriodMs(data && data.subscription);
+        var levels = [
+            { label: '5h', level: 'session', period: FIVE_HOURS_MS },
+            { label: '7d', level: 'weekly', period: SEVEN_DAYS_MS },
+            { label: '月', level: 'monthly', period: monthlyPeriod }
+        ];
+        var arr = Array.isArray(usage.QuotaUsage) ? usage.QuotaUsage : [];
+        levels.forEach(function(it) {
+            var item = findLevel(arr, it.level);
+            if (item && typeof item.Percent === 'number') {
+                var resetIso = item.ResetTimestamp ? new Date(item.ResetTimestamp * 1000).toISOString() : null;
+                ws.push(makeWindow(it.label, item.Percent, theoPctFromEnd(resetIso, it.period)));
+            }
+        });
+    } else {
+        var buckets = [
+            { label: '5h', b: usage.AFPFiveHour, period: FIVE_HOURS_MS },
+            { label: '7d', b: usage.AFPWeekly, period: SEVEN_DAYS_MS },
+            { label: '月', b: usage.AFPMonthly, period: THIRTY_DAYS_MS }
+        ];
+        buckets.forEach(function(it) {
+            if (it.b && it.b.Quota > 0) {
+                ws.push(makeWindow(it.label, (it.b.Used / it.b.Quota) * 100, theoPctFromEnd(it.b.ResetTime, it.period)));
+            }
+        });
+    }
+    return ws;
+}
+
+// ============ 多窗口取瓶颈 ============
+
+// 任一窗口耗尽 → 整体 0;否则取所有有效窗口 score 的 min(最紧张=瓶颈);无有效窗口 → null
+function aggregate(windows) {
+    var valid = windows.filter(function(w) { return w && !w.noData; });
+    if (valid.length === 0) return null;
+    var anyExhausted = valid.some(function(w) { return w.exhausted; });
+    if (anyExhausted) return { weight: 0, exhausted: true, windows: valid };
+    var weight = Math.min.apply(null, valid.map(function(w) { return w.score; }));
+    return { weight: weight, exhausted: false, windows: valid };
+}
+
+// 映射到 scoreAccount 返回结构(兼容 api.js detail 的 score5h/score7d/used5h/used7d/theo5h/theo7d)
+// GLM:5h/7d 两窗口分别填对应槽位;其他平台:瓶颈窗(最低 score)填 7d 槽位,5h 留 null
+function buildResult(platform, agg) {
+    var windows = agg.windows;
+    var w5h = null, w7d = null;
+    if (platform === 'glm') {
+        w5h = findWindow(windows, '5h');
+        w7d = findWindow(windows, '7d');
+    } else if (windows.length > 0) {
+        w7d = windows.reduce(function(a, b) { return a.score <= b.score ? a : b; });
+    }
     return {
-        weight: weight,
-        score5h: w5.score, score7d: w7.score,
-        used5h: w5.usedPct, used7d: w7.usedPct,
-        theo5h: w5.theoPct, theo7d: w7.theoPct,
-        exhausted: false
+        weight: agg.weight,
+        score5h: w5h ? w5h.score : null,
+        score7d: w7d ? w7d.score : null,
+        used5h: w5h ? w5h.usedPct : null,
+        used7d: w7d ? w7d.usedPct : null,
+        theo5h: w5h ? w5h.theoPct : null,
+        theo7d: w7d ? w7d.theoPct : null,
+        exhausted: agg.exhausted,
+        windows: windows
     };
+}
+
+// 账号综合权重。cachedResult: usageCache 中各 fetch*Usage 的返回。
+// 返回 { weight, score5h, score7d, used5h, used7d, theo5h, theo7d, exhausted, windows } 或 null(无可用窗口)
+function scoreAccount(cachedResult) {
+    if (!cachedResult || !cachedResult.data) return null;
+    var platform = cachedResult.platform || 'glm';
+
+    var windows;
+    if (platform === 'glm') windows = glmWindows(cachedResult.data);
+    else if (platform === 'yescode') windows = yescodeWindows(cachedResult.data);
+    else if (platform === 'huoli') windows = huoliWindows(cachedResult.data);
+    else if (platform === 'volc') windows = volcWindows(cachedResult.data, cachedResult.planType);
+    else return null;
+
+    var agg = aggregate(windows);
+    if (!agg) return null;
+    return buildResult(platform, agg);
 }
 
 // ============ 权重策略与兜底(在 base 之上做最终计算,范围 0~10)============
@@ -215,12 +307,13 @@ function finalWeight(base, cfg) {
 
 module.exports = {
     EXHAUSTED_PCT: EXHAUSTED_PCT,
+    MIN_TRUST_THEO: MIN_TRUST_THEO,
     scoreWindow: scoreWindow,
+    rateScore: rateScore,
+    theoPctFromEnd: theoPctFromEnd,
+    theoPctFromStart: theoPctFromStart,
     scoreAccount: scoreAccount,
     bucketScore: bucketScore,
-    packMaxPct: packMaxPct,
-    volcMaxPct: volcMaxPct,
-    yescodeMaxPct: yescodeMaxPct,
     getWeightConfig: getWeightConfig,
     applyStrategy: applyStrategy,
     finalWeight: finalWeight,
