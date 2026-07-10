@@ -672,7 +672,7 @@ module.exports = function(app) {
             var json = await httpsGet(riskInfoUrl(), makeHeaders(account));
             var level = (json && json.data != null) ? json.data : null;
             var text = '';
-            if (level) text = RISK_TIPS[level] || RISK_TIPS_FALLBACK;
+            if (level) text = `(${level})` + (RISK_TIPS[level] || RISK_TIPS_FALLBACK);
 
             // 每次打开详情刷新:有风险则记录,已解除则清除
             var accounts = readAccounts();
