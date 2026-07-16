@@ -1,4 +1,4 @@
-// weights.js — 权重评分纯函数:把缓存的各平台用量数据映射为 0~6 权重。
+// weights.js — 权重评分纯函数:把缓存的各平台用量数据映射为分流权重。
 // 权重越高 = 越宽裕(中转站可多分配 token),0 = 已耗尽。
 //
 // 核心原则:权重由「消耗速率比 ratio = usedPct / theoPct」主导(即基于重置时间衡量,
@@ -18,6 +18,12 @@ var THIRTY_DAYS_MS = 30 * 86400000; // yescode/huoli/火山 月度默认
 var EXHAUSTED_PCT = 99.9;
 // 周期早期理论进度阈值(%):低于此值时样本不足、ratio 会爆炸,改用绝对用量兜底,避免刚重置就被误判紧张
 var MIN_TRUST_THEO = 3;
+
+// 智云为按量余额账号:预计可用天数先映射为 1~6 容量分，再叠加 CodingPlan
+// 紧张度与中国时区峰谷倍率。最终仍由 finalWeight 钳制到 0~10。
+var TELECOM_DAY_BUCKETS = [7, 14, 30, 60, 90];
+var TELECOM_PEAK_START_HOUR = 14;
+var TELECOM_PEAK_END_HOUR = 18;
 
 // 智谱个人账号「需要重置」建议阈值。只有周额度已经明显超前，且按当前速度会在
 // 官方重置前至少停用一天时才提示，避免给短时波动或临近重置的账号制造噪声。
@@ -328,6 +334,85 @@ function scoreAccount(cachedResult) {
     return buildResult(platform, agg);
 }
 
+// ============ 智云按量账号 ============
+
+function telecomCapacityScore(remainingDays) {
+    if (!(remainingDays > 0)) return 0;
+    for (var i = 0; i < TELECOM_DAY_BUCKETS.length; i++) {
+        if (remainingDays < TELECOM_DAY_BUCKETS[i]) return i + 1;
+    }
+    return 6;
+}
+
+// 其他 CodingPlan 的平均基础分越低，压力系数越高:平均 6 分 → ×1，平均 0 分 → ×2。
+// 无有效 CodingPlan 缓存时使用中性 ×1，避免凭空放大按量消费。
+function codingPressure(codingScores) {
+    var values = (codingScores || []).map(function(score) {
+        return score && typeof score.weight === 'number' && isFinite(score.weight)
+            ? Math.max(0, Math.min(6, score.weight))
+            : null;
+    }).filter(function(value) { return value !== null; });
+    if (values.length === 0) return { average: null, multiplier: 1, sampleSize: 0 };
+    var average = values.reduce(function(sum, value) { return sum + value; }, 0) / values.length;
+    return {
+        average: average,
+        multiplier: 1 + ((6 - average) / 6),
+        sampleSize: values.length
+    };
+}
+
+function telecomTimeMultiplier(nowMs) {
+    var now = new Date(typeof nowMs === 'number' ? nowMs : Date.now());
+    var chinaHour = (now.getUTCHours() + 8) % 24;
+    return chinaHour >= TELECOM_PEAK_START_HOUR && chinaHour < TELECOM_PEAK_END_HOUR ? 2 : 0.5;
+}
+
+function scoreTelecomAccount(cachedResult, codingScores, nowMs) {
+    if (!cachedResult || cachedResult.platform !== 'telecomjs' || !cachedResult.data) return null;
+    var data = cachedResult.data;
+    var balance = Math.max(0, Number(data.balance) || 0);
+    var gift = Math.max(0, Number(data.platformGiftBalance) || 0);
+    var available = balance + gift;
+    var hasSevenDayStats = data.sevenDayConsumption != null;
+    var rangeDays = data.consumptionRangeDays != null
+        ? Math.max(0, Number(data.consumptionRangeDays) || 0)
+        : (hasSevenDayStats ? 0 : 30);
+    var consumption = Math.max(0, Number(
+        hasSevenDayStats ? data.sevenDayConsumption
+            : (data.thirtyDayConsumption != null ? data.thirtyDayConsumption : data.timeRangeConsumption)
+    ) || 0);
+    var averageDaily = data.averageDailyConsumption != null
+        ? Math.max(0, Number(data.averageDailyConsumption) || 0)
+        : (rangeDays > 0 ? consumption / rangeDays : 0);
+    var remainingDays = available > 0 && averageDaily === 0 ? Infinity
+        : (averageDaily > 0 ? available / averageDaily : 0);
+    var capacityScore = telecomCapacityScore(remainingDays);
+    var pressure = codingPressure(codingScores);
+    var timeMultiplier = telecomTimeMultiplier(nowMs);
+    var exhausted = available <= 0;
+    return {
+        weight: exhausted ? 0 : capacityScore * pressure.multiplier * timeMultiplier,
+        score5h: null,
+        score7d: capacityScore,
+        used5h: null,
+        used7d: null,
+        theo5h: null,
+        theo7d: null,
+        exhausted: exhausted,
+        windows: [],
+        availableBalance: available,
+        averageDaily: averageDaily,
+        remainingDays: isFinite(remainingDays) ? remainingDays : null,
+        noConsumption: available > 0 && averageDaily === 0,
+        capacityScore: capacityScore,
+        codingAverage: pressure.average,
+        codingPressure: pressure.multiplier,
+        codingSampleSize: pressure.sampleSize,
+        timeMultiplier: timeMultiplier,
+        peak: timeMultiplier === 2
+    };
+}
+
 // ============ 权重策略与兜底(在 base 之上做最终计算,范围 0~10)============
 
 var DEFAULT_WEIGHT_CONFIG = { defaultWeight: 1, strategy: 'B', value: 1 };
@@ -373,6 +458,10 @@ module.exports = {
     theoPctFromStart: theoPctFromStart,
     getGLMResetRecommendation: getGLMResetRecommendation,
     scoreAccount: scoreAccount,
+    scoreTelecomAccount: scoreTelecomAccount,
+    telecomCapacityScore: telecomCapacityScore,
+    codingPressure: codingPressure,
+    telecomTimeMultiplier: telecomTimeMultiplier,
     bucketScore: bucketScore,
     getWeightConfig: getWeightConfig,
     applyStrategy: applyStrategy,

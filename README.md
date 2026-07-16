@@ -100,7 +100,7 @@ docker compose down           # 停止并移除容器(./data 账号数据保留)
 | YesCode | `cookie` | co.yes.vg 请求中的完整 `Cookie` |
 | 火狸 | `authorization`(Bearer)、可选 `huoli_email` + `huoli_password` | huolilink.com 请求头中的 `Authorization`;填了邮箱密码时 token 过期会自动重新登录 |
 | 火山(AgentPlan=火山A / CodingPlan=火山C) | `cookie`、`csrf`、可选 `web_id`、`planType` | console.volcengine.com 请求(用 cURL 复制带出完整 Cookie);添加账号时选套餐类型:AgentPlan 抓 `GetAgentPlanAFPUsage`,CodingPlan 抓 `GetCodingPlanUsage`。两者同一登录会话,Cookie/CSRF 共用 |
-| 智云 | `satoken`、`phone` | 可手动填写 token.telecomjs.com 请求头中的 `Satoken`;认证失效时卡片会提供重新登录入口，用户先核对账号登记手机号，再选择官方二维码或短信验证码登录，成功后自动回写。后端通过 Chrome 执行页面及瑞数脚本并查询余额 |
+| 智云 | `satoken`、`phone` | 可手动填写 token.telecomjs.com 请求头中的 `Satoken`;认证失效时卡片会提供重新登录入口，用户核对账号登记手机号后使用官方二维码扫码登录，成功后自动回写。后端通过 Chrome 执行页面及瑞数脚本并查询余额 |
 
 ## 后端 API
 
@@ -119,7 +119,7 @@ docker compose down           # 停止并移除容器(./data 账号数据保留)
 | POST / PUT / DELETE | `/api/accounts[/:index]` | ✅ | 账号增改删 / 整体排序 |
 | GET  | `/api/model-usage/:index?period=today\|7d\|30d` | - | 智谱用量曲线 |
 | GET  | `/api/expire[/:index]` | - | 订阅到期时间(24 小时缓存) |
-| GET  | `/api/weights` | 可选密码 | 公开账号 token 分配权重(0~6,纯读缓存) |
+| GET  | `/api/weights` | 可选密码 | 公开账号 token 分配权重(0~10,纯读缓存) |
 
 鉴权接口通过请求头 `X-Auth-Password` 传递管理密码。
 
@@ -131,18 +131,19 @@ docker compose down           # 停止并移除容器(./data 账号数据保留)
 
 **默认权重兜底**:token 失效 / 无缓存时,该账号按其「默认权重」配置返回(而非跳过)。默认权重初值 1,可逐账号配置。
 
-智云仅做余额监控,不属于 CodingPlan,因此不会出现在权重接口或权重配置中。扫码/短信登录是内存中的临时会话，5 分钟后自动过期；创建会话前必须输入与账号 `phone` 字段一致的手机号，短信流程也锁定该号码。二维码和验证码由智云官方页面处理，本项目只保存最终返回的 `satoken`。
+智云按量账号会出现在权重接口和权重配置中。扫码登录是内存中的临时会话，5 分钟后自动过期；创建会话前必须输入与账号 `phone` 字段一致的手机号。二维码由智云官方页面提供，本项目只保存最终返回的 `satoken`。
 
 **密码分层**:
 - 不带密码:`GET /api/weights` → 公开账号(`isPublic !== false`,未明确设为私有即默认公开)
 - 带正确密码:`GET /api/weights?password=<ADMIN_PASSWORD>` → 全部账号
-- 明细:`GET /api/weights?password=<PWD>&detail=1` → `{ weights, detail:[{name,weight,base,source,strategy,configValue,defaultWeight,score5h,score7d,used5h,used7d,cachedAt,exhausted}], generatedAt, cacheTtlMs }`(需密码)
+- 明细:`GET /api/weights?password=<PWD>&detail=1` → `{ weights, detail:[...], generatedAt, cacheTtlMs }`(需密码)；智云明细额外包含 `remainingDays`、`averageDaily`、`capacityScore`、`codingPressure`、`timeMultiplier`、`peak`
 
 **计算流程**:
-1. **base(0~6)**:取 `quota/limit` 的「每5小时」(unit=3)与「每周7天」(unit=6)两窗口,单窗口按已用%分桶(<15→6 … <100→1)+ 时间速率比修正(≥2倍速 −2、≥1.3倍速 −1、≤0.5倍速 +1)钳制 1~6;综合取 `min`(瓶颈),任一耗尽则 0。token 失效 / 非 GLM → base = null
-2. **策略**(在 base 上叠加,默认 B 倍率 ×1)
-3. **兜底**:base 为 null 时直接用默认权重
-4. **钳制**:最终结果统一 `clamp [0, 10]` 取整
+1. **CodingPlan base(0~6)**:各平台按 5 小时、周、月等有效窗口的实际消耗速度与理论进度评分，取最紧张窗口；任一有效窗口耗尽则为 0
+2. **智云 base**:`(账户余额 + 赠金) ÷ 近7日有消费日期的日均消费` 得到预计可用天数，按 `<7 / <14 / <30 / <60 / <90 / ≥90 天` 映射为容量分 `1~6`；再乘 CodingPlan 压力系数 `1 + (6 - CodingPlan平均基础分) / 6`，最后按中国时间 `14:00~18:00` 乘 `2`，其他时段乘 `0.5`。余额为 0 时恒为 0；有余额但暂无历史消费时容量分为 6
+3. **策略**(在 base 上叠加,默认 B 倍率 ×1)
+4. **兜底**:base 为 null 时直接用默认权重
+5. **钳制**:最终结果统一 `clamp [0, 10]` 并保留 1 位小数
 
 **权重策略**(每账号可配,管理员):
 

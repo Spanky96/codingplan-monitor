@@ -13,8 +13,6 @@ var config = require('./config');
 var COST_URL = 'https://token.telecomjs.com/finance/cost';
 var COST_API_PATH = '/heimdall-product/cost-center/customer/card-with-time-range';
 var LOGIN_URL = 'https://token.telecomjs.com/login';
-var SMS_SEND_PATH = '/api/udp-platform/api/customer/auth/send-sms-code';
-var SMS_LOGIN_PATH = '/api/udp-platform/api/customer/auth/sms-login';
 var FETCH_TIMEOUT = 60 * 1000;
 var LOGIN_TIMEOUT = 5 * 60 * 1000;
 var browserPromise = null;
@@ -142,26 +140,22 @@ async function getBrowser() {
     return browser;
 }
 
-function unwrapCostResponse(json) {
+function costResponseResult(json) {
     if (!json || typeof json !== 'object') throw new Error('智云返回了无效数据');
     var code = json.returncode != null ? Number(json.returncode) : Number(json.code);
     if (isFinite(code) && code !== 0 && code !== 200) {
         throw new Error('智云接口失败: ' + (json.message || json.msg || code));
     }
     var result = json.result || json.data;
+    return result && typeof result === 'object' ? result : null;
+}
+
+function unwrapCostResponse(json) {
+    var result = costResponseResult(json);
     if (!result || typeof result.balance !== 'number') {
         throw new Error('智云未返回余额，satoken 可能已失效');
     }
     return result;
-}
-
-function apiError(json, fallback) {
-    if (!json || typeof json !== 'object') return new Error(fallback || '智云返回了无效数据');
-    var code = json.returncode != null ? Number(json.returncode) : Number(json.code);
-    if (isFinite(code) && code !== 0 && code !== 200) {
-        return new Error(json.message || json.msg || (fallback + ': ' + code));
-    }
-    return null;
 }
 
 function publicLoginSession(session) {
@@ -169,7 +163,6 @@ function publicLoginSession(session) {
     return {
         id: session.id,
         status: session.status,
-        mode: session.mode,
         message: session.message || '',
         createdAt: session.createdAt,
         expiresAt: session.expiresAt
@@ -258,10 +251,8 @@ async function startLogin(options) {
     var session = {
         id: crypto.randomBytes(18).toString('hex'),
         accountKey: options.accountKey,
-        telephone: verifiedTelephone,
         onToken: options.onToken,
         status: 'starting',
-        mode: 'qr',
         message: '正在打开官方登录页',
         createdAt: now,
         expiresAt: now + LOGIN_TIMEOUT,
@@ -287,7 +278,7 @@ async function startLogin(options) {
         await session.page.waitForSelector('iframe', { timeout: 35 * 1000 });
         await delay(1500);
         session.status = 'pending';
-        session.message = '请扫码或使用短信验证码登录';
+        session.message = '请使用智云官方二维码扫码登录';
         session.pollTimer = setInterval(function() { pollLoginToken(session); }, 1000);
         if (session.pollTimer.unref) session.pollTimer.unref();
         session.expireTimer = setTimeout(function() {
@@ -328,59 +319,36 @@ async function getLoginScreenshot(id) {
     });
 }
 
-async function pageJsonRequest(session, pathName, body) {
-    if (!session || !session.page || session.status !== 'pending') throw new Error('登录会话不存在或已结束');
-    var response = await session.page.evaluate(function(input) {
-        return new Promise(function(resolve, reject) {
-            var xhr = new XMLHttpRequest();
-            xhr.open('POST', input.path);
-            xhr.setRequestHeader('Content-Type', 'application/json');
-            xhr.onload = function() { resolve({ status: xhr.status, body: xhr.responseText }); };
-            xhr.onerror = function() { reject(new Error('智云登录请求网络错误')); };
-            xhr.send(JSON.stringify(input.body));
-        });
-    }, { path: pathName, body: body });
-    if (response.status < 200 || response.status >= 300) {
-        throw new Error('智云登录接口 HTTP ' + response.status);
-    }
-    try { return JSON.parse(response.body); }
-    catch (err) { throw new Error('智云登录接口返回了无效 JSON'); }
-}
-
-async function sendSmsCode(id, telephone) {
-    var session = loginSessions.get(id);
-    telephone = normalizeTelephone(telephone);
-    if (!/^1[3-9]\d{9}$/.test(telephone)) throw new Error('手机号格式不正确');
-    if (!session || telephone !== session.telephone) throw new Error('手机号与当前登录会话不一致');
-    var json = await pageJsonRequest(session, SMS_SEND_PATH, { telephone: telephone });
-    var err = apiError(json, '验证码发送失败');
-    if (err) throw err;
-    session.mode = 'sms';
-    session.message = '验证码已发送，请查收短信';
-    return { success: true };
-}
-
-async function submitSmsCode(id, telephone, verifyCode) {
-    var session = loginSessions.get(id);
-    telephone = normalizeTelephone(telephone);
-    verifyCode = String(verifyCode || '').trim();
-    if (!/^1[3-9]\d{9}$/.test(telephone)) throw new Error('手机号格式不正确');
-    if (!session || telephone !== session.telephone) throw new Error('手机号与当前登录会话不一致');
-    if (!/^\d{4,8}$/.test(verifyCode)) throw new Error('短信验证码格式不正确');
-    var json = await pageJsonRequest(session, SMS_LOGIN_PATH, { telephone: telephone, verifyCode: verifyCode });
-    var err = apiError(json, '短信登录失败');
-    if (err) throw err;
-    var data = json.result || json.data || json;
-    var token = data && (data.token || data.satoken || data.saToken);
-    if (!token) throw new Error('短信登录成功但未返回 satoken');
-    await completeLogin(session, token);
-    if (session.status !== 'success') throw new Error(session.message || '自动更新 satoken 失败');
-    return { success: true };
-}
-
 function formatDate(date) {
     function pad(value) { return value < 10 ? '0' + value : String(value); }
     return date.getFullYear() + '-' + pad(date.getMonth() + 1) + '-' + pad(date.getDate());
+}
+
+function summarizeDailyCosts(entries) {
+    var dailyConsumptions = (entries || []).map(function(entry) {
+        var value = Number(entry && entry.data && entry.data.timeRangeConsumption);
+        return {
+            date: entry && entry.date,
+            consumption: isFinite(value) ? Math.max(0, value) : 0
+        };
+    });
+    var sevenDayConsumption = dailyConsumptions.reduce(function(sum, item) {
+        return sum + item.consumption;
+    }, 0);
+    var consumptionRangeDays = dailyConsumptions.filter(function(item) {
+        return item.consumption > 0;
+    }).length;
+    return {
+        dailyConsumptions: dailyConsumptions,
+        todayConsumption: dailyConsumptions.length
+            ? dailyConsumptions[dailyConsumptions.length - 1].consumption : 0,
+        yesterdayConsumption: dailyConsumptions.length > 1
+            ? dailyConsumptions[dailyConsumptions.length - 2].consumption : 0,
+        sevenDayConsumption: sevenDayConsumption,
+        consumptionRangeDays: consumptionRangeDays,
+        averageDailyConsumption: consumptionRangeDays > 0
+            ? sevenDayConsumption / consumptionRangeDays : 0
+    };
 }
 
 async function fetchBalanceNow(satoken) {
@@ -434,8 +402,12 @@ async function fetchBalanceNow(satoken) {
         await delay(1000);
 
         var end = new Date();
-        var start = new Date(end);
-        start.setDate(start.getDate() - 30);
+        var dates = [];
+        for (var dayOffset = 6; dayOffset >= 0; dayOffset--) {
+            var date = new Date(end);
+            date.setDate(date.getDate() - dayOffset);
+            dates.push(formatDate(date));
+        }
         var raw = await withTimeout(
             page.evaluate(function(input) {
                 function requestRange(startDate, endDate) {
@@ -449,28 +421,48 @@ async function fetchBalanceNow(satoken) {
                         xhr.send(JSON.stringify({ startDate: startDate, endDate: endDate, adminView: false }));
                     });
                 }
-                return requestRange(input.today, input.today).then(function(today) {
-                    return requestRange(input.startDate, input.today).then(function(thirtyDays) {
-                        return { today: today, thirtyDays: thirtyDays };
+                var results = [];
+                return input.dates.reduce(function(sequence, date) {
+                    return sequence.then(function() {
+                        return requestRange(date, date).then(function(response) {
+                            results.push({ date: date, response: response });
+                        });
                     });
-                });
-            }, { satoken: satoken, today: formatDate(end), startDate: formatDate(start) }),
+                }, Promise.resolve()).then(function() { return results; });
+            }, { satoken: satoken, dates: dates }),
             20 * 1000,
             '等待智云余额接口超时'
         );
-        debug('余额接口响应 今日=' + raw.today.status + '，近30日=' + raw.thirtyDays.status);
-        if (raw.today.status < 200 || raw.today.status >= 300) throw new Error('智云今日消费接口 HTTP ' + raw.today.status);
-        if (raw.thirtyDays.status < 200 || raw.thirtyDays.status >= 300) throw new Error('智云近30日消费接口 HTTP ' + raw.thirtyDays.status);
-        var todayJson, thirtyDaysJson;
-        try {
-            todayJson = JSON.parse(raw.today.body);
-            thirtyDaysJson = JSON.parse(raw.thirtyDays.body);
-        } catch (e) { throw new Error('智云余额接口返回了无效 JSON'); }
-        var todayData = unwrapCostResponse(todayJson);
-        var data = unwrapCostResponse(thirtyDaysJson);
-        data.todayConsumption = todayData.timeRangeConsumption || 0;
-        data.thirtyDayConsumption = data.timeRangeConsumption || 0;
-        data.consumptionRangeDays = 30;
+        debug('余额接口响应 近7日=' + raw.map(function(item) {
+            return item.date + ':' + item.response.status;
+        }).join(','));
+        var dailyData = raw.map(function(item, index) {
+            if (item.response.status < 200 || item.response.status >= 300) {
+                throw new Error('智云 ' + item.date + ' 消费接口 HTTP ' + item.response.status);
+            }
+            var json;
+            try {
+                json = JSON.parse(item.response.body);
+            } catch (e) {
+                throw new Error('智云 ' + item.date + ' 消费接口返回了无效 JSON');
+            }
+            var isToday = index === raw.length - 1;
+            var result;
+            try {
+                result = isToday ? unwrapCostResponse(json) : (costResponseResult(json) || {});
+            } catch (e) {
+                if (isToday) throw e;
+                debug(item.date + ' 无可统计数据: ' + e.message);
+                result = {};
+            }
+            return {
+                date: item.date,
+                data: result
+            };
+        });
+        var data = dailyData[dailyData.length - 1].data;
+        var summary = summarizeDailyCosts(dailyData);
+        Object.keys(summary).forEach(function(key) { data[key] = summary[key]; });
         return data;
     } catch (err) {
         if (err && err.name === 'TimeoutError') {
@@ -508,9 +500,8 @@ module.exports = {
     startLogin: startLogin,
     getLogin: getLogin,
     getLoginScreenshot: getLoginScreenshot,
-    sendSmsCode: sendSmsCode,
-    submitSmsCode: submitSmsCode,
     cancelLogin: cancelLogin,
     _unwrapCostResponse: unwrapCostResponse,
+    _summarizeDailyCosts: summarizeDailyCosts,
     _closeBrowser: closeBrowser
 };

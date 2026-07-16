@@ -83,6 +83,30 @@ function usageForResponse(result) {
     return safe;
 }
 
+// 同一权重请求先计算 CodingPlan，再用其平均基础分修正智云按量账号。
+// includePrivate=false 时完全排除私有账号，避免私有池状态影响公开返回。
+function buildWeightEntries(accounts, includePrivate, nowMs) {
+    var entries = [];
+    var codingScores = [];
+    for (var i = 0; i < accounts.length; i++) {
+        var account = accounts[i];
+        if (!account || (!includePrivate && account.isPublic === false)) continue;
+        var cached = getCachedLastKnown(i);
+        var platform = account.platform || 'glm';
+        var score = platform === 'telecomjs' ? null : (cached ? weights.scoreAccount(cached) : null);
+        if (score) codingScores.push(score);
+        entries.push({ index: i, account: account, platform: platform, cached: cached, score: score });
+    }
+    entries.forEach(function(entry) {
+        if (entry.platform === 'telecomjs') {
+            entry.score = entry.cached
+                ? weights.scoreTelecomAccount(entry.cached, codingScores, nowMs)
+                : null;
+        }
+    });
+    return entries;
+}
+
 var EXPIRE_CACHE_TTL = 24 * 60 * 60 * 1000;
 var expireCache = {};
 
@@ -567,34 +591,43 @@ module.exports = function(app) {
             var accounts = readAccounts();
             var result = {};
             var detail = [];
-            for (var i = 0; i < accounts.length; i++) {
-                var acc = accounts[i];
-                if (!acc) continue;
-                if ((acc.platform || 'glm') === 'telecomjs') continue; // 余额监控账号不参与 CodingPlan token 分配
-                // 未鉴权:返回公开账号(isPublic !== false,默认公开);带正确密码:全部账号
-                if (!authenticated && acc.isPublic === false) continue;
+            var generatedAt = Date.now();
+            var entries = buildWeightEntries(accounts, authenticated, generatedAt);
+            for (var i = 0; i < entries.length; i++) {
+                var entry = entries[i];
+                var acc = entry.account;
                 var cfg = weights.getWeightConfig(acc);
-                var cached = getCachedLastKnown(i);                 // 纯读最近已知(重启/过期也能返回真实权重),绝不触发官方刷新
-                var s = cached ? weights.scoreAccount(cached) : null;
+                var cached = entry.cached;                          // 纯读最近已知，绝不触发官方刷新
+                var s = entry.score;
                 var base = s ? s.weight : null;                      // token 失效/无缓存 → null → 走默认权重
                 var final = weights.finalWeight(base, cfg);
                 if (s && s.exhausted) final = 0;                     // 耗尽账号权重恒为 0,不受策略 A/D 复活
                 result[acc.name] = final;
                 if (wantDetail) {
                     detail.push({
-                        index: i, name: acc.name, weight: final,
+                        index: entry.index, name: acc.name, platform: entry.platform, weight: final,
                         base: base, source: base === null ? 'default' : 'computed',
                         strategy: cfg.strategy, configValue: cfg.value, defaultWeight: cfg.defaultWeight,
                         score5h: s ? s.score5h : null, score7d: s ? s.score7d : null,
                         used5h: s ? s.used5h : null, used7d: s ? s.used7d : null,
                         theo5h: s ? s.theo5h : null, theo7d: s ? s.theo7d : null,
                         exhausted: s ? s.exhausted : false,
+                        availableBalance: s && s.availableBalance != null ? s.availableBalance : null,
+                        averageDaily: s && s.averageDaily != null ? s.averageDaily : null,
+                        remainingDays: s && s.remainingDays != null ? s.remainingDays : null,
+                        noConsumption: s ? !!s.noConsumption : false,
+                        capacityScore: s && s.capacityScore != null ? s.capacityScore : null,
+                        codingAverage: s && s.codingAverage != null ? s.codingAverage : null,
+                        codingPressure: s && s.codingPressure != null ? s.codingPressure : null,
+                        codingSampleSize: s && s.codingSampleSize != null ? s.codingSampleSize : null,
+                        timeMultiplier: s && s.timeMultiplier != null ? s.timeMultiplier : null,
+                        peak: s ? !!s.peak : false,
                         cachedAt: cached ? cached.cachedAt : null
                     });
                 }
             }
             if (wantDetail) {
-                res.json({ weights: result, detail: detail, generatedAt: Date.now(), cacheTtlMs: CACHE_TTL });
+                res.json({ weights: result, detail: detail, generatedAt: generatedAt, cacheTtlMs: CACHE_TTL });
             } else {
                 res.json(result);
             }
@@ -606,17 +639,16 @@ module.exports = function(app) {
         try {
             var accounts = readAccounts();
             var list = [];
-            for (var i = 0; i < accounts.length; i++) {
-                var acc = accounts[i];
-                if (!acc) continue;
-                if ((acc.platform || 'glm') === 'telecomjs') continue;
+            var entries = buildWeightEntries(accounts, true, Date.now());
+            for (var i = 0; i < entries.length; i++) {
+                var entry = entries[i];
+                var acc = entry.account;
                 var cfg = weights.getWeightConfig(acc);
-                var cached = getCachedLastKnown(i);
-                var s = cached ? weights.scoreAccount(cached) : null;
+                var s = entry.score;
                 var base = s ? s.weight : null;
                 var finalW = weights.finalWeight(base, cfg);
                 if (s && s.exhausted) finalW = 0;                    // 耗尽账号权重恒为 0
-                list.push({ index: i, name: acc.name, platform: acc.platform || 'glm', config: cfg, base: base, final: finalW, exhausted: s ? s.exhausted : false });
+                list.push({ index: entry.index, name: acc.name, platform: entry.platform, config: cfg, base: base, final: finalW, exhausted: s ? s.exhausted : false });
             }
             res.json(list);
         } catch (err) { res.status(500).json({ error: err.message }); }
@@ -820,22 +852,6 @@ module.exports = function(app) {
             res.set('Cache-Control', 'no-store');
             res.type('png').send(png);
         } catch (err) { res.status(410).json({ error: err.message }); }
-    });
-
-    app.post('/api/telecomjs/login/:sessionId/sms/send', jsonParser, async function(req, res) {
-        try {
-            res.json(await telecomjs.sendSmsCode(req.params.sessionId, req.body && req.body.telephone));
-        } catch (err) { res.status(400).json({ error: err.message }); }
-    });
-
-    app.post('/api/telecomjs/login/:sessionId/sms/verify', jsonParser, async function(req, res) {
-        try {
-            res.json(await telecomjs.submitSmsCode(
-                req.params.sessionId,
-                req.body && req.body.telephone,
-                req.body && req.body.verifyCode
-            ));
-        } catch (err) { res.status(400).json({ error: err.message }); }
     });
 
     app.delete('/api/telecomjs/login/:sessionId', async function(req, res) {
