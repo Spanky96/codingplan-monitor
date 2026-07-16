@@ -75,24 +75,26 @@
     .theo-label { position: absolute; top: -15px; transform: translateX(-50%); font-size: 10px; color: #667eea; white-space: nowrap; pointer-events: none; }
     .tension-row { display: flex; justify-content: space-between; margin-top: 4px; font-size: 11px; }
 
-    .card-footer { padding: 10px 20px; border-top: 1px solid #f0f0f0; display: flex; justify-content: space-between; align-items: center; font-size: 12px; }
-    .card-footer-left { display: flex; align-items: center; gap: 8px; }
-    .level-badge { padding: 2px 8px; border-radius: 4px; background: #f0f5ff; color: #2f54eb; border: 1px solid #adc6ff; }
+    .card-footer { padding: 9px 14px; border-top: 1px solid #f0f0f0; display: flex; justify-content: space-between; align-items: flex-end; gap: 8px; font-size: 12px; }
+    .card-footer-left { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 6px; min-width: 0; }
+    .level-badge { padding: 1px 6px; border-radius: 4px; background: #f0f5ff; color: #2f54eb; border: 1px solid #adc6ff; white-space: nowrap; flex-shrink: 0; }
     .weight-badge { padding: 1px 9px; border-radius: 10px; font-size: 12px; font-weight: 700; cursor: pointer; border: 1px solid #d9d9d9; background: #fafafa; color: #595959; user-select: none; transition: transform 0.15s; }
     .weight-badge:hover { transform: scale(1.06); }
     .weight-badge.w-0 { background: #fff1f0; color: #cf1322; border-color: #ffa39e; }
     .weight-badge.w-low { background: #fff7e6; color: #d46b08; border-color: #ffd591; }
     .weight-badge.w-mid { background: #f0f5ff; color: #2f54eb; border-color: #adc6ff; }
     .weight-badge.w-high { background: #f6ffed; color: #389e0d; border-color: #b7eb8f; }
-    .risk-badge { padding: 1px 9px; border-radius: 10px; font-size: 12px; font-weight: 700; background: #fff1f0; color: #cf1322; border: 1px solid #ffa39e; cursor: help; white-space: nowrap; }
-    .reset-badge { padding: 1px 9px; border-radius: 10px; font-size: 12px; font-weight: 700; background: #fff7e6; color: #ad4e00; border: 1px solid #ffbb96; cursor: help; white-space: nowrap; }
-    .card.reset-needed { box-shadow: inset 4px 0 0 #fa8c16, 0 2px 8px rgba(0,0,0,0.06); }
-    .list-row.reset-needed { box-shadow: inset 4px 0 0 #fa8c16, 0 1px 4px rgba(0,0,0,0.05); }
+    .risk-badge { padding: 1px 7px; border-radius: 10px; font-size: 11px; font-weight: 700; background: #fff1f0; color: #cf1322; border: 1px solid #ffa39e; cursor: help; white-space: nowrap; flex-shrink: 0; }
+    .reset-badge { padding: 1px 7px; border-radius: 10px; font-size: 11px; font-weight: 700; background: #fff7e6; color: #ad4e00; border: 1px solid #ffbb96; cursor: help; white-space: nowrap; flex-shrink: 0; }
+    .card.reset-needed { box-shadow: inset 0 3px 0 #fa8c16, 0 2px 8px rgba(0,0,0,0.06); }
+    .list-row.reset-needed { box-shadow: inset 0 3px 0 #fa8c16, 0 1px 4px rgba(0,0,0,0.05); }
     .risk-banner { display: flex; gap: 8px; align-items: flex-start; margin: 0 0 12px; padding: 10px 14px; border-radius: 6px; background: #fff1f0; border: 1px solid #ffa39e; color: #a8071a; font-size: 13px; line-height: 1.5; }
     .risk-banner .risk-icon { flex-shrink: 0; font-size: 15px; line-height: 1.4; }
-    .cache-time { color: #bfbfbf; }
-    .detail-btn { background: none; border: 1px solid #d9d9d9; color: #595959; padding: 4px 14px; border-radius: 4px; cursor: pointer; font-size: 13px; transition: all 0.2s; }
+    .cache-time { color: #bfbfbf; white-space: nowrap; flex-shrink: 0; }
+    .detail-btn { background: none; border: 1px solid #d9d9d9; color: #595959; padding: 4px 12px; border-radius: 4px; cursor: pointer; font-size: 13px; transition: all 0.2s; flex-shrink: 0; }
     .detail-btn:hover { border-color: #667eea; color: #667eea; }
+    .badge-tooltip { position: fixed; z-index: 3000; max-width: min(360px, calc(100vw - 16px)); padding: 8px 10px; border-radius: 6px; background: rgba(38,38,38,0.96); color: #fff; box-shadow: 0 4px 16px rgba(0,0,0,0.2); font-size: 12px; line-height: 1.55; overflow-wrap: anywhere; pointer-events: none; opacity: 0; visibility: hidden; transition: opacity 0.12s; }
+    .badge-tooltip.visible { opacity: 1; visibility: visible; }
 .expire-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 20px; border-top: 1px solid #f0f0f0; font-size: 13px; cursor: pointer; transition: background 0.15s; }
 .expire-row:hover { background: #f0f5ff; }
 .expire-label { color: #8c8c8c; }
@@ -340,9 +342,10 @@ body.dark .platform-telecomjs { background: #450a0a; color: #fca5a5; border-colo
     body.dark .level-badge { background: #1e1b4b; color: #a5b4fc; border-color: #3730a3; }
     body.dark .risk-badge { background: #3a1212; color: #ff7875; border-color: #5c2020; }
     body.dark .reset-badge { background: #3b2507; color: #ffc069; border-color: #874d00; }
-    body.dark .card.reset-needed, body.dark .list-row.reset-needed { box-shadow: inset 4px 0 0 #d46b08, 0 2px 8px rgba(0,0,0,0.3); }
+    body.dark .card.reset-needed, body.dark .list-row.reset-needed { box-shadow: inset 0 3px 0 #d46b08, 0 2px 8px rgba(0,0,0,0.3); }
     body.dark .risk-banner { background: #2a1414; border-color: #5c2020; color: #ffa39e; }
     body.dark .cache-time { color: #555; }
+    body.dark .badge-tooltip { background: rgba(245,245,245,0.98); color: #262626; box-shadow: 0 4px 18px rgba(0,0,0,0.45); }
     body.dark .detail-btn { border-color: #444; color: #bbb; background: #1a1a1a; }
     body.dark .detail-btn:hover { border-color: #8b5cf6; color: #8b5cf6; }
 
@@ -545,6 +548,8 @@ body.dark .platform-telecomjs { background: #450a0a; color: #fca5a5; border-colo
     </div>
     <div class="card-grid" id="cardGrid"></div>
   </div>
+
+  <div class="badge-tooltip" id="badgeTooltip" role="tooltip"></div>
 
   <!-- 密码验证 -->
   <div class="modal-overlay" id="pwdOverlay">
@@ -769,6 +774,58 @@ body.dark .platform-telecomjs { background: #450a0a; color: #fca5a5; border-colo
 
     function esc(s) { return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
+    // 卡片会裁剪内部内容，因此徽章说明统一渲染到 body 层的浮层中。
+    (function initBadgeTooltip() {
+      var tooltip = document.getElementById('badgeTooltip');
+      var activeTarget = null;
+
+      function positionTooltip(target) {
+        var targetRect = target.getBoundingClientRect();
+        var tooltipRect = tooltip.getBoundingClientRect();
+        var gap = 7;
+        var left = targetRect.left + (targetRect.width - tooltipRect.width) / 2;
+        left = Math.max(8, Math.min(left, window.innerWidth - tooltipRect.width - 8));
+        var top = targetRect.top - tooltipRect.height - gap;
+        if (top < 8) top = targetRect.bottom + gap;
+        tooltip.style.left = Math.round(left) + 'px';
+        tooltip.style.top = Math.round(top) + 'px';
+      }
+
+      function showTooltip(target) {
+        var text = target && target.getAttribute('data-tooltip');
+        if (!text) return;
+        activeTarget = target;
+        tooltip.textContent = text;
+        tooltip.classList.add('visible');
+        positionTooltip(target);
+      }
+
+      function hideTooltip() {
+        activeTarget = null;
+        tooltip.classList.remove('visible');
+      }
+
+      document.addEventListener('mouseover', function(e) {
+        var target = e.target.closest('[data-tooltip]');
+        if (target && !target.contains(e.relatedTarget)) showTooltip(target);
+      });
+      document.addEventListener('mouseout', function(e) {
+        var target = e.target.closest('[data-tooltip]');
+        if (target && !target.contains(e.relatedTarget)) hideTooltip();
+      });
+      document.addEventListener('focusin', function(e) {
+        var target = e.target.closest('[data-tooltip]');
+        if (target) showTooltip(target);
+      });
+      document.addEventListener('focusout', function(e) {
+        if (e.target.closest('[data-tooltip]')) hideTooltip();
+      });
+      window.addEventListener('resize', function() {
+        if (activeTarget) positionTooltip(activeTarget);
+      });
+      window.addEventListener('scroll', hideTooltip, true);
+    })();
+
     // 隐私模式：账号名称 → 站点名 + 站点内序号（按全局顺序，1 起）
     function platformLabel(platform) {
       if (platform === 'yescode') return 'YesCode';
@@ -788,7 +845,8 @@ body.dark .platform-telecomjs { background: #450a0a; color: #fca5a5; border-colo
     // 风控/异常:卡片与列表用的小徽章,hover 显示完整文案;无风险返回空串
     function riskBadgeHTML(acc) {
       if (!acc || !acc.risk || !acc.risk.text) return '';
-      return '<span class="risk-badge" title="' + esc(acc.risk.text) + '">&#x26a0;&#xfe0f; 异常</span>';
+      var text = esc(acc.risk.text);
+      return '<span class="risk-badge" title="" data-tooltip="' + text + '" aria-label="' + text + '" tabindex="0">&#x26a0;&#xfe0f; 异常</span>';
     }
     function resetBadgeHTML(acc) {
       var r = acc && acc.resetRecommendation;
@@ -799,7 +857,8 @@ body.dark .platform-telecomjs { background: #450a0a; color: #fca5a5; border-colo
         : Math.round(r.unavailableHours) + ' 小时';
       var title = '周用量 ' + Math.round(r.weeklyPct) + '%，理论 ' + Math.round(r.theoPct)
         + '%；按当前速度预计会在重置前提前耗尽，约 ' + duration + ' 无法使用';
-      return '<span class="reset-badge" title="' + esc(title) + '">需要重置</span>';
+      var text = esc(title);
+      return '<span class="reset-badge" title="" data-tooltip="' + text + '" aria-label="' + text + '" tabindex="0">需要重置</span>';
     }
     // 风控/异常:详情页顶部横幅,展示完整提示文案;无风险返回空串
     function riskBannerHTML(acc) {
