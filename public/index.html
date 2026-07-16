@@ -1185,7 +1185,7 @@ body.dark .platform-telecomjs { background: #450a0a; color: #fca5a5; border-colo
 
     function isTelecomAuthError(acc) {
       if (!acc || (acc.platform || 'glm') !== 'telecomjs' || acc.success) return false;
-      return /认证失败|无法访问系统资源|satoken.*(?:失效|过期)|未返回余额|\b401\b/i.test(acc.error || '');
+      return /认证失败|无法访问系统资源|satoken.*(?:失效|过期)|未返回余额|超时|网络错误|\b401\b/i.test(acc.error || '');
     }
 
     function telecomReloginButton(index) {

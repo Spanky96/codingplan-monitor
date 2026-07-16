@@ -430,8 +430,8 @@ async function fetchBalanceNow(satoken) {
                     });
                 }, Promise.resolve()).then(function() { return results; });
             }, { satoken: satoken, dates: dates }),
-            20 * 1000,
-            '等待智云余额接口超时'
+            FETCH_TIMEOUT,
+            '等待智云近7日余额接口超时，请刷新重试或重新登录'
         );
         debug('余额接口响应 近7日=' + raw.map(function(item) {
             return item.date + ':' + item.response.status;
