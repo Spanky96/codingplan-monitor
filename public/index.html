@@ -85,6 +85,9 @@
     .weight-badge.w-mid { background: #f0f5ff; color: #2f54eb; border-color: #adc6ff; }
     .weight-badge.w-high { background: #f6ffed; color: #389e0d; border-color: #b7eb8f; }
     .risk-badge { padding: 1px 9px; border-radius: 10px; font-size: 12px; font-weight: 700; background: #fff1f0; color: #cf1322; border: 1px solid #ffa39e; cursor: help; white-space: nowrap; }
+    .reset-badge { padding: 1px 9px; border-radius: 10px; font-size: 12px; font-weight: 700; background: #fff7e6; color: #ad4e00; border: 1px solid #ffbb96; cursor: help; white-space: nowrap; }
+    .card.reset-needed { box-shadow: inset 4px 0 0 #fa8c16, 0 2px 8px rgba(0,0,0,0.06); }
+    .list-row.reset-needed { box-shadow: inset 4px 0 0 #fa8c16, 0 1px 4px rgba(0,0,0,0.05); }
     .risk-banner { display: flex; gap: 8px; align-items: flex-start; margin: 0 0 12px; padding: 10px 14px; border-radius: 6px; background: #fff1f0; border: 1px solid #ffa39e; color: #a8071a; font-size: 13px; line-height: 1.5; }
     .risk-banner .risk-icon { flex-shrink: 0; font-size: 15px; line-height: 1.4; }
     .cache-time { color: #bfbfbf; }
@@ -336,6 +339,8 @@ body.dark .platform-telecomjs { background: #450a0a; color: #fca5a5; border-colo
     body.dark .card-footer { border-top-color: #2a2a2a; }
     body.dark .level-badge { background: #1e1b4b; color: #a5b4fc; border-color: #3730a3; }
     body.dark .risk-badge { background: #3a1212; color: #ff7875; border-color: #5c2020; }
+    body.dark .reset-badge { background: #3b2507; color: #ffc069; border-color: #874d00; }
+    body.dark .card.reset-needed, body.dark .list-row.reset-needed { box-shadow: inset 4px 0 0 #d46b08, 0 2px 8px rgba(0,0,0,0.3); }
     body.dark .risk-banner { background: #2a1414; border-color: #5c2020; color: #ffa39e; }
     body.dark .cache-time { color: #555; }
     body.dark .detail-btn { border-color: #444; color: #bbb; background: #1a1a1a; }
@@ -784,6 +789,17 @@ body.dark .platform-telecomjs { background: #450a0a; color: #fca5a5; border-colo
     function riskBadgeHTML(acc) {
       if (!acc || !acc.risk || !acc.risk.text) return '';
       return '<span class="risk-badge" title="' + esc(acc.risk.text) + '">&#x26a0;&#xfe0f; 异常</span>';
+    }
+    function resetBadgeHTML(acc) {
+      var r = acc && acc.resetRecommendation;
+      if (!r || !r.needed) return '';
+      var unavailableDays = r.unavailableHours / 24;
+      var duration = unavailableDays >= 2
+        ? unavailableDays.toFixed(1).replace(/\.0$/, '') + ' 天'
+        : Math.round(r.unavailableHours) + ' 小时';
+      var title = '周用量 ' + Math.round(r.weeklyPct) + '%，理论 ' + Math.round(r.theoPct)
+        + '%；按当前速度预计会在重置前提前耗尽，约 ' + duration + ' 无法使用';
+      return '<span class="reset-badge" title="' + esc(title) + '">需要重置</span>';
     }
     // 风控/异常:详情页顶部横幅,展示完整提示文案;无风险返回空串
     function riskBannerHTML(acc) {
@@ -1295,10 +1311,12 @@ body.dark .platform-telecomjs { background: #450a0a; color: #fca5a5; border-colo
       }
       var keyBadge = acc.keyCount != null ? '<span class="level-badge" style="background:#f6ffed;color:#389e0d;border-color:#b7eb8f">Key: ' + acc.keyCount + '个</span>' : '';
       var rBadge = riskBadgeHTML(acc);
-      return '<div class="card" id="card-' + i + '"><div class="card-header">' + headerLeft
+      var resetBadge = resetBadgeHTML(acc);
+      var resetClass = resetBadge ? ' reset-needed' : '';
+      return '<div class="card' + resetClass + '" id="card-' + i + '"><div class="card-header">' + headerLeft
         + '<div class="card-header-right">' + btn + '<span class="card-status ' + getStatusClass(mp) + '">' + getStatusText(mp) + '</span></div></div>'
         + '<div class="card-body">' + limits.map(renderLimitRow).join('') + '</div>' + expHtml
-        + '<div class="card-footer"><div class="card-footer-left"><span class="level-badge">' + level + '</span>' + keyBadge + rBadge + cache + '</div>'
+        + '<div class="card-footer"><div class="card-footer-left"><span class="level-badge">' + level + '</span>' + keyBadge + resetBadge + rBadge + cache + '</div>'
         + '<button class="detail-btn" onclick="showDetail(' + i + ')">详情</button></div></div>';
     }
 
@@ -1519,6 +1537,7 @@ body.dark .platform-telecomjs { background: #450a0a; color: #fca5a5; border-colo
       var level = levelLabel(acc);
       var b = '<span class="level-badge">' + level + '</span>';
       if (acc.keyCount != null) b += '<span class="level-badge" style="background:#f6ffed;color:#389e0d;border-color:#b7eb8f">Key: ' + acc.keyCount + '个</span>';
+      b += resetBadgeHTML(acc);
       b += riskBadgeHTML(acc);
       return b;
     }
@@ -1553,7 +1572,8 @@ body.dark .platform-telecomjs { background: #450a0a; color: #fca5a5; border-colo
           + (expireHtml ? '<div class="list-row-meta">' + expireHtml + '</div>' : '');
       }
 
-      return '<div class="list-row" id="card-' + i + '" onclick="showDetail(' + i + ')" title="点击查看详情">'
+      var resetClass = acc.resetRecommendation && acc.resetRecommendation.needed ? ' reset-needed' : '';
+      return '<div class="list-row' + resetClass + '" id="card-' + i + '" onclick="showDetail(' + i + ')" title="点击查看详情">'
         + leftBlock + middle + '<div class="list-row-right">' + right + '</div>' + refresh + '</div>';
     }
 

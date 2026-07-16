@@ -71,7 +71,13 @@ function normalizeTelephone(value) {
 }
 
 function usageForResponse(result) {
-    if (!result || result.platform !== 'telecomjs') return result;
+    if (!result) return result;
+    if ((result.platform || 'glm') === 'glm' && result.success) {
+        return Object.assign({}, result, {
+            resetRecommendation: weights.getGLMResetRecommendation(result) || undefined
+        });
+    }
+    if (result.platform !== 'telecomjs') return result;
     var safe = Object.assign({}, result);
     delete safe.phone;
     return safe;
@@ -228,7 +234,9 @@ async function fetchGLMUsage(account, index) {
         var url = 'https://bigmodel.cn/api/monitor/usage/quota/limit';
         if (account.teamEdition) url += '?type=2';
         var json = await httpsGet(url, makeHeaders(account));
-        var result = { index: index, name: account.name, platform: 'glm', responsiblePerson: account.responsiblePerson, phone: account.phone, notes: account.notes, keyCount: account.keyCount, teamEdition: account.teamEdition || undefined, isPublic: account.isPublic, risk: account.risk || undefined, data: json.data, success: true, cachedAt: Date.now() };
+        var userType = decodeJwtUserType(account.authorization);
+        var personalEdition = userType ? userType === 'PERSONAL' : !account.teamEdition;
+        var result = { index: index, name: account.name, platform: 'glm', responsiblePerson: account.responsiblePerson, phone: account.phone, notes: account.notes, keyCount: account.keyCount, teamEdition: account.teamEdition || undefined, personalEdition: personalEdition, isPublic: account.isPublic, risk: account.risk || undefined, data: json.data, success: true, cachedAt: Date.now() };
         setCache(index, result);
         return result;
     } catch (err) {

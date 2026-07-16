@@ -4,7 +4,8 @@
   "description": "智谱 GLM / YesCode / 火狸 / 火山 / 智云多账号用量监控面板",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "test": "node --test test/*.test.js"
   },
   "keywords": [
     "glm",

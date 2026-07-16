@@ -19,6 +19,14 @@ var EXHAUSTED_PCT = 99.9;
 // 周期早期理论进度阈值(%):低于此值时样本不足、ratio 会爆炸,改用绝对用量兜底,避免刚重置就被误判紧张
 var MIN_TRUST_THEO = 3;
 
+// 智谱个人账号「需要重置」建议阈值。只有周额度已经明显超前，且按当前速度会在
+// 官方重置前至少停用一天时才提示，避免给短时波动或临近重置的账号制造噪声。
+var RESET_MIN_WEEKLY_PCT = 60;
+var RESET_MIN_EXCESS_PCT = 15;
+var RESET_MIN_RATE_RATIO = 1.3;
+var RESET_MIN_REMAINING_MS = ONE_DAY_MS;
+var RESET_MIN_UNAVAILABLE_MS = ONE_DAY_MS;
+
 // 纯用量分桶 → 1~6(用量越高分越低);用于「无重置时间」与「周期刚开始」两种兜底场景
 function bucketScore(usedPct) {
     if (usedPct < 15) return 6;
@@ -133,6 +141,57 @@ function glmWindows(data) {
     if (l5 && !l5._unlimited) ws.push(makeWindow('5h', pctOf(l5), theoPctFromEnd(l5.nextResetTime, FIVE_HOURS_MS)));
     if (l7 && !l7._unlimited) ws.push(makeWindow('7d', pctOf(l7), theoPctFromEnd(l7.nextResetTime, SEVEN_DAYS_MS)));
     return ws;
+}
+
+// 智谱个人账号周额度重置建议。返回 null 表示无需提示；返回对象供 API 和前端展示原因。
+// nowMs 可注入，便于稳定测试。personalEdition=false 或 teamEdition=true 明确排除团队账号。
+function getGLMResetRecommendation(cachedResult, nowMs) {
+    if (!cachedResult || (cachedResult.platform || 'glm') !== 'glm' || !cachedResult.data) return null;
+    if (cachedResult.teamEdition || cachedResult.personalEdition === false) return null;
+
+    var limits = Array.isArray(cachedResult.data.limits) ? cachedResult.data.limits : [];
+    var activeLimits = limits.filter(function(limit) { return limit && !limit._unlimited; });
+    // 任一额度已经耗尽时不再建议申请重置。
+    if (activeLimits.some(function(limit) { return pctOf(limit) >= EXHAUSTED_PCT; })) return null;
+
+    var weekly = null;
+    for (var i = 0; i < activeLimits.length; i++) {
+        if (activeLimits[i].unit === 6) { weekly = activeLimits[i]; break; }
+    }
+    if (!weekly) return null;
+
+    var weeklyPct = pctOf(weekly);
+    if (weeklyPct < RESET_MIN_WEEKLY_PCT) return null;
+
+    var now = typeof nowMs === 'number' ? nowMs : Date.now();
+    var resetAt = weekly.nextResetTime ? new Date(weekly.nextResetTime).getTime() : NaN;
+    if (!isFinite(resetAt)) return null;
+    var remainingMs = resetAt - now;
+    if (remainingMs < RESET_MIN_REMAINING_MS) return null;
+
+    var elapsedMs = now - (resetAt - SEVEN_DAYS_MS);
+    if (elapsedMs <= 0 || elapsedMs >= SEVEN_DAYS_MS) return null;
+    var theoPct = (elapsedMs / SEVEN_DAYS_MS) * 100;
+    if (theoPct <= 0) return null;
+
+    var excessPct = weeklyPct - theoPct;
+    var rateRatio = weeklyPct / theoPct;
+    if (excessPct < RESET_MIN_EXCESS_PCT || rateRatio < RESET_MIN_RATE_RATIO) return null;
+
+    var timeToExhaustMs = elapsedMs * ((100 - weeklyPct) / weeklyPct);
+    var unavailableMs = remainingMs - timeToExhaustMs;
+    if (unavailableMs < RESET_MIN_UNAVAILABLE_MS) return null;
+
+    return {
+        needed: true,
+        weeklyPct: weeklyPct,
+        theoPct: theoPct,
+        excessPct: excessPct,
+        rateRatio: rateRatio,
+        resetAt: new Date(resetAt).toISOString(),
+        projectedExhaustAt: new Date(now + timeToExhaustMs).toISOString(),
+        unavailableHours: unavailableMs / 3600000
+    };
 }
 
 // YesCode:今日/本周/本月,起点法(last_*_reset)
@@ -312,6 +371,7 @@ module.exports = {
     rateScore: rateScore,
     theoPctFromEnd: theoPctFromEnd,
     theoPctFromStart: theoPctFromStart,
+    getGLMResetRecommendation: getGLMResetRecommendation,
     scoreAccount: scoreAccount,
     bucketScore: bucketScore,
     getWeightConfig: getWeightConfig,
