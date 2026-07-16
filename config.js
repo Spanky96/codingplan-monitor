@@ -15,6 +15,8 @@ const config = {
   accountsFile: process.env.ACCOUNTS_FILE
     ? path.resolve(process.env.ACCOUNTS_FILE)
     : path.join(__dirname, 'accounts.json'),
+  // 智云抓取使用的 Chrome/Chromium；留空时按操作系统常见路径自动发现
+  telecomjsChromePath: process.env.TELECOMJS_CHROME_PATH || process.env.PUPPETEER_EXECUTABLE_PATH || '',
   // 运行环境
   nodeEnv: process.env.NODE_ENV || 'development',
 };

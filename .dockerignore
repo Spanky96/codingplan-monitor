@@ -7,6 +7,8 @@ npm-debug.log
 .env
 accounts.json
 data/
+tmp/
+token.telecomjs.com/
 
 # Git / 编辑器 / 系统
 .git

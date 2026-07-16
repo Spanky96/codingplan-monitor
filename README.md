@@ -1,6 +1,6 @@
 # GLM 用量监控
 
-多账号 API 用量监控面板,支持 **智谱 GLM(bigmodel.cn)**、**YesCode(co.yes.vg)**、**火狸(huolilink.com)**、**火山(AgentPlan / CodingPlan 同一登录会话)** 等账号,以卡片 + 用量曲线的形式集中展示额度消耗、订阅到期、API Key 管理。
+多账号 API 用量监控面板,支持 **智谱 GLM(bigmodel.cn)**、**YesCode(co.yes.vg)**、**火狸(huolilink.com)**、**火山(AgentPlan / CodingPlan 同一登录会话)**、**智云(token.telecomjs.com)** 等账号,以卡片 + 用量曲线的形式集中展示额度消耗、余额、订阅到期、API Key 管理。
 
 ## 效果展示
 
@@ -46,6 +46,7 @@ npm start
 | `ADMIN_PASSWORD` | `123456` | 管理密码(账号增删改、Key 复制/创建/删除需校验) |
 | `ACCOUNTS_FILE` | `./accounts.json` | 账号数据文件路径(Docker 持久化用,本地留空) |
 | `NODE_ENV` | `development` | 运行环境 |
+| `TELECOMJS_CHROME_PATH` | 自动发现 | 智云抓取所用 Chrome/Chromium 可执行文件路径 |
 
 `.env` 示例:
 
@@ -60,7 +61,7 @@ ADMIN_PASSWORD=my-secret
 
 ## Docker 部署
 
-镜像基于 `node:22-alpine`。账号数据通过宿主机 `./data` 目录持久化,`.env` 通过 `env_file` 注入容器。
+镜像基于 `node:22-alpine`,并安装 Chromium 供智云页面完成瑞数校验。账号数据通过宿主机 `./data` 目录持久化,`.env` 通过 `env_file` 注入容器。
 
 ```bash
 cp .env.example .env          # 先准备 .env 并修改 ADMIN_PASSWORD
@@ -99,6 +100,7 @@ docker compose down           # 停止并移除容器(./data 账号数据保留)
 | YesCode | `cookie` | co.yes.vg 请求中的完整 `Cookie` |
 | 火狸 | `authorization`(Bearer)、可选 `huoli_email` + `huoli_password` | huolilink.com 请求头中的 `Authorization`;填了邮箱密码时 token 过期会自动重新登录 |
 | 火山(AgentPlan=火山A / CodingPlan=火山C) | `cookie`、`csrf`、可选 `web_id`、`planType` | console.volcengine.com 请求(用 cURL 复制带出完整 Cookie);添加账号时选套餐类型:AgentPlan 抓 `GetAgentPlanAFPUsage`,CodingPlan 抓 `GetCodingPlanUsage`。两者同一登录会话,Cookie/CSRF 共用 |
+| 智云 | `satoken`、`phone` | 可手动填写 token.telecomjs.com 请求头中的 `Satoken`;认证失效时卡片会提供重新登录入口，用户先核对账号登记手机号，再选择官方二维码或短信验证码登录，成功后自动回写。后端通过 Chrome 执行页面及瑞数脚本并查询余额 |
 
 ## 后端 API
 
@@ -129,6 +131,8 @@ docker compose down           # 停止并移除容器(./data 账号数据保留)
 
 **默认权重兜底**:token 失效 / 无缓存时,该账号按其「默认权重」配置返回(而非跳过)。默认权重初值 1,可逐账号配置。
 
+智云仅做余额监控,不属于 CodingPlan,因此不会出现在权重接口或权重配置中。扫码/短信登录是内存中的临时会话，5 分钟后自动过期；创建会话前必须输入与账号 `phone` 字段一致的手机号，短信流程也锁定该号码。二维码和验证码由智云官方页面处理，本项目只保存最终返回的 `satoken`。
+
 **密码分层**:
 - 不带密码:`GET /api/weights` → 公开账号(`isPublic !== false`,未明确设为私有即默认公开)
 - 带正确密码:`GET /api/weights?password=<ADMIN_PASSWORD>` → 全部账号
@@ -158,7 +162,7 @@ docker compose down           # 停止并移除容器(./data 账号数据保留)
 ## 前端功能
 
 - 卡片视图:各账号额度进度、紧张度(实际用量 vs 理论进度)、重置时间、订阅到期倒计时
-- 站点筛选(全部 / 智谱 / YesCode / 火狸 / 火山)+ 紧张度排序
+- 站点筛选(全部 / 智谱 / YesCode / 火狸 / 火山 / 智云)+ 紧张度排序
 - 详情弹窗:负责人信息、余额、消费周期、API Key 表格、用量曲线(echarts)
 - 深色模式(从按钮处径向扩散动画)+ 隐私模式(隐藏账号名)
 - 账号管理:拖拽排序、粘贴 fetch/cURL 快速导入
@@ -167,4 +171,4 @@ docker compose down           # 停止并移除容器(./data 账号数据保留)
 
 - `accounts.json` 与 `.env` 均含明文凭证 / 密码,切勿提交到公开仓库(均已加入 `.gitignore`);`accounts.json` 删除后重启会自动重建空文件。
 - 所有对 bigmodel.cn / co.yes.vg / huolilink.com 的请求由服务端代理转发,浏览器不直接持有凭证。
-- 凭证(JWT / Cookie / Token)会过期,失败时面板显示「请求失败」;智谱需重新抓 token,YesCode 需重抓 Cookie,火狸若配了邮箱密码会自动续登,火山(AgentPlan / CodingPlan 两种套餐)需在控制台重新登录后用 cURL 重抓 Cookie(同一会话,两边的 Cookie/CSRF 一起更新)。
+- 凭证(JWT / Cookie / Token)会过期,失败时面板显示「请求失败」;智谱需重新抓 token,YesCode 需重抓 Cookie,火狸若配了邮箱密码会自动续登,火山需重抓 Cookie/CSRF,智云认证失败时可从卡片核对手机号并重新登录，自动更新 Satoken。

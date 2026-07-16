@@ -4,6 +4,7 @@ accounts.json
 *.log
 /tmp
 usage-cache.json
+token.telecomjs.com/
 
 # 本地环境变量(含密码等敏感信息,不提交;.env.example 仍入库)
 .env

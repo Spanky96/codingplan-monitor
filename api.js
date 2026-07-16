@@ -5,6 +5,7 @@ var express = require('express');
 var jsonParser = express.json();
 
 var config = require('./config');
+var telecomjs = require('./telecomjs');
 var glmAccountsFile = config.accountsFile;
 var PASSWORD = config.adminPassword;
 var weights = require('./weights');
@@ -15,6 +16,7 @@ var CACHE_FILE = process.env.USAGE_CACHE_FILE
 
 var usageCache = {};
 var _persistTimer = null;
+var telecomPhoneAttempts = new Map();
 
 // 启动加载持久化缓存:让 /api/weights 在重启/冷启动后也能立即返回最近已知权重(耗尽=0),
 // 而不是退回默认权重。中转站轮询抓到的永远是「最近一次抓取」的真实评分。
@@ -53,6 +55,26 @@ function setCache(index, result) {
 function clearCache() {
     usageCache = {}; expireCache = {};
     try { fs.writeFileSync(CACHE_FILE, '{}'); } catch (e) { /* 忽略 */ }
+}
+
+function clearCacheIndex(index) {
+    delete usageCache[index];
+    delete expireCache[index];
+    try { fs.writeFileSync(CACHE_FILE, JSON.stringify(usageCache)); } catch (e) { /* 忽略 */ }
+}
+
+function normalizeTelephone(value) {
+    var phone = String(value || '').replace(/[\s()-]/g, '');
+    if (phone.indexOf('+86') === 0) phone = phone.slice(3);
+    else if (phone.indexOf('86') === 0 && phone.length === 13) phone = phone.slice(2);
+    return phone;
+}
+
+function usageForResponse(result) {
+    if (!result || result.platform !== 'telecomjs') return result;
+    var safe = Object.assign({}, result);
+    delete safe.phone;
+    return safe;
 }
 
 var EXPIRE_CACHE_TTL = 24 * 60 * 60 * 1000;
@@ -431,6 +453,38 @@ async function fetchVolcUsage(account, index) {
     }
 }
 
+// ============ 智云账号（真实浏览器执行瑞数挑战）============
+
+async function fetchTelecomUsage(account, index) {
+    try {
+        var data = await telecomjs.fetchBalance(account.satoken);
+        var result = {
+            index: index,
+            name: account.name,
+            platform: 'telecomjs',
+            responsiblePerson: account.responsiblePerson,
+            notes: account.notes,
+            isPublic: account.isPublic,
+            data: data,
+            success: true,
+            cachedAt: Date.now()
+        };
+        setCache(index, result);
+        return result;
+    } catch (err) {
+        return {
+            index: index,
+            name: account.name,
+            platform: 'telecomjs',
+            responsiblePerson: account.responsiblePerson,
+            notes: account.notes,
+            isPublic: account.isPublic,
+            error: err.message,
+            success: false
+        };
+    }
+}
+
 // ============ 统一调度 ============
 
 async function fetchAccountUsage(account, index) {
@@ -444,12 +498,15 @@ async function fetchAccountUsage(account, index) {
     if (platform === 'volc') {
         return fetchVolcUsage(account, index);
     }
+    if (platform === 'telecomjs') {
+        return fetchTelecomUsage(account, index);
+    }
     return fetchGLMUsage(account, index);
 }
 
 async function fetchAccountExpire(account, index) {
     var platform = account.platform || 'glm';
-    if (platform === 'yescode' || platform === 'huoli' || platform === 'volc') {
+    if (platform !== 'glm') {
         // 这些平台到期信息从各自接口获取，由前端渲染
         return { success: false, cachedAt: Date.now() };
     }
@@ -479,7 +536,7 @@ module.exports = function(app) {
                 if (!force) { var c = getCached(i); if (c) return c; }
                 return fetchAccountUsage(account, i);
             }));
-            res.json(results.filter(Boolean));
+            res.json(results.filter(Boolean).map(usageForResponse));
         } catch (err) { res.status(500).json({ error: err.message }); }
     });
 
@@ -489,8 +546,8 @@ module.exports = function(app) {
             var account = getAccount(req);
             if (!account) return res.status(404).json({ error: '未找到账号' });
             if (isHiddenFromGuest(req, account)) return res.status(404).json({ error: '未找到账号' });
-            if (req.query.force !== '1') { var c = getCached(i); if (c) return res.json(c); }
-            res.json(await fetchAccountUsage(account, i));
+            if (req.query.force !== '1') { var c = getCached(i); if (c) return res.json(usageForResponse(c)); }
+            res.json(usageForResponse(await fetchAccountUsage(account, i)));
         } catch (err) { res.status(500).json({ error: err.message }); }
     });
 
@@ -505,6 +562,7 @@ module.exports = function(app) {
             for (var i = 0; i < accounts.length; i++) {
                 var acc = accounts[i];
                 if (!acc) continue;
+                if ((acc.platform || 'glm') === 'telecomjs') continue; // 余额监控账号不参与 CodingPlan token 分配
                 // 未鉴权:返回公开账号(isPublic !== false,默认公开);带正确密码:全部账号
                 if (!authenticated && acc.isPublic === false) continue;
                 var cfg = weights.getWeightConfig(acc);
@@ -543,6 +601,7 @@ module.exports = function(app) {
             for (var i = 0; i < accounts.length; i++) {
                 var acc = accounts[i];
                 if (!acc) continue;
+                if ((acc.platform || 'glm') === 'telecomjs') continue;
                 var cfg = weights.getWeightConfig(acc);
                 var cached = getCachedLastKnown(i);
                 var s = cached ? weights.scoreAccount(cached) : null;
@@ -580,7 +639,7 @@ module.exports = function(app) {
             var account = getAccount(req);
             if (!account) return res.status(404).json({ error: '未找到账号' });
             if (isHiddenFromGuest(req, account)) return res.status(404).json({ error: '未找到账号' });
-            if ((account.platform || 'glm') === 'yescode' || (account.platform || 'glm') === 'huoli' || (account.platform || 'glm') === 'volc') {
+            if ((account.platform || 'glm') !== 'glm') {
                 return res.json([]);
             }
             var json = await httpsGet(keysUrl(account, '?keyType=1'), makeHeaders(account));
@@ -691,6 +750,94 @@ module.exports = function(app) {
         } catch (err) { res.status(500).json({ error: err.message }); }
     });
 
+    // ============ 智云自助登录（手机号核对后，成功自动更新 satoken）============
+
+    app.post('/api/telecomjs/login/:index', jsonParser, async function(req, res) {
+        try {
+            var idx = parseInt(req.params.index);
+            var accounts = readAccounts();
+            var account = accounts[idx];
+            if (!account) return res.status(404).json({ error: '未找到账号' });
+            if (isHiddenFromGuest(req, account)) return res.status(404).json({ error: '未找到账号' });
+            if ((account.platform || 'glm') !== 'telecomjs') {
+                return res.status(400).json({ error: '该账号不是智云账号' });
+            }
+            var expectedTelephone = normalizeTelephone(account.phone);
+            if (!/^1[3-9]\d{9}$/.test(expectedTelephone)) {
+                return res.status(409).json({ error: '该账号未配置有效的管辖手机号，请联系管理员维护' });
+            }
+            var submittedTelephone = normalizeTelephone(req.body && req.body.telephone);
+            var attemptKey = String(req.ip || req.socket.remoteAddress || '') + ':' + idx;
+            var attempt = telecomPhoneAttempts.get(attemptKey);
+            var now = Date.now();
+            if (attempt && now - attempt.startedAt < 10 * 60 * 1000 && attempt.count >= 8) {
+                return res.status(429).json({ error: '手机号核对失败次数过多，请 10 分钟后重试' });
+            }
+            if (submittedTelephone !== expectedTelephone) {
+                if (!attempt || now - attempt.startedAt >= 10 * 60 * 1000) attempt = { count: 0, startedAt: now };
+                attempt.count++;
+                telecomPhoneAttempts.set(attemptKey, attempt);
+                return res.status(403).json({ error: '手机号与该账号登记信息不一致' });
+            }
+            telecomPhoneAttempts.delete(attemptKey);
+            var expectedName = account.name || '';
+            var session = await telecomjs.startLogin({
+                accountKey: idx + ':' + expectedName,
+                telephone: expectedTelephone,
+                onToken: async function(token) {
+                    var latest = readAccounts();
+                    var target = latest[idx];
+                    if (!target || (target.platform || 'glm') !== 'telecomjs' || (target.name || '') !== expectedName
+                        || normalizeTelephone(target.phone) !== expectedTelephone) {
+                        throw new Error('账号信息已发生变化，请重新核对手机号');
+                    }
+                    target.satoken = token;
+                    writeAccounts(latest);
+                    clearCacheIndex(idx);
+                }
+            });
+            res.json(session);
+        } catch (err) { res.status(500).json({ error: err.message }); }
+    });
+
+    app.get('/api/telecomjs/login/:sessionId', function(req, res) {
+        var session = telecomjs.getLogin(req.params.sessionId);
+        if (!session) return res.status(404).json({ error: '登录会话不存在或已过期' });
+        res.json(session);
+    });
+
+    app.get('/api/telecomjs/login/:sessionId/screenshot', async function(req, res) {
+        try {
+            var png = await telecomjs.getLoginScreenshot(req.params.sessionId);
+            res.set('Cache-Control', 'no-store');
+            res.type('png').send(png);
+        } catch (err) { res.status(410).json({ error: err.message }); }
+    });
+
+    app.post('/api/telecomjs/login/:sessionId/sms/send', jsonParser, async function(req, res) {
+        try {
+            res.json(await telecomjs.sendSmsCode(req.params.sessionId, req.body && req.body.telephone));
+        } catch (err) { res.status(400).json({ error: err.message }); }
+    });
+
+    app.post('/api/telecomjs/login/:sessionId/sms/verify', jsonParser, async function(req, res) {
+        try {
+            res.json(await telecomjs.submitSmsCode(
+                req.params.sessionId,
+                req.body && req.body.telephone,
+                req.body && req.body.verifyCode
+            ));
+        } catch (err) { res.status(400).json({ error: err.message }); }
+    });
+
+    app.delete('/api/telecomjs/login/:sessionId', async function(req, res) {
+        try {
+            var found = await telecomjs.cancelLogin(req.params.sessionId);
+            if (!found) return res.status(404).json({ error: '登录会话不存在或已过期' });
+            res.json({ success: true });
+        } catch (err) { res.status(500).json({ error: err.message }); }
+    });
+
     // ============ 账号管理（需密码） ============
 
     app.get('/api/accounts', checkAuth, function(req, res) {
@@ -751,8 +898,8 @@ module.exports = function(app) {
             var account = getAccount(req);
             if (!account) return res.status(404).json({ error: '未找到账号' });
             if (isHiddenFromGuest(req, account)) return res.status(404).json({ error: '未找到账号' });
-            if ((account.platform || 'glm') === 'yescode' || (account.platform || 'glm') === 'huoli' || (account.platform || 'glm') === 'volc') {
-                var platName = account.platform === 'huoli' ? '火狸' : (account.platform === 'volc' ? '火山' : 'YesCode');
+            if ((account.platform || 'glm') !== 'glm') {
+                var platName = account.platform === 'huoli' ? '火狸' : (account.platform === 'volc' ? '火山' : (account.platform === 'telecomjs' ? '智云' : 'YesCode'));
                 return res.json({ error: platName + ' 暂不支持用量曲线' });
             }
             var period = req.query.period || '7d';

@@ -27,7 +27,7 @@
     .toolbar-count { margin-left: auto; font-size: 12px; color: #8c8c8c; }
     .card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
 
-    .card { background: #fff; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); overflow: hidden; transition: transform 0.2s, box-shadow 0.2s; }
+    .card { background: #fff; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); overflow: hidden; transition: transform 0.2s, box-shadow 0.2s; display: flex; flex-direction: column; }
     .card:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,0,0,0.1); }
 
     .card-header { padding: 14px 20px; border-bottom: 1px solid #f0f0f0; display: flex; justify-content: space-between; align-items: center; }
@@ -40,6 +40,7 @@
 .platform-huoli { background: #fff7e6; color: #d4380d; border: 1px solid #ffd591; }
 .platform-volc { background: #e6fffb; color: #08979c; border: 1px solid #5cdbd3; }
 .platform-volcc { background: #f9f0ff; color: #531dab; border: 1px solid #d3adf7; }
+.platform-telecomjs { background: #fff1f0; color: #cf1322; border: 1px solid #ffa39e; }
     .card-status { font-size: 12px; padding: 2px 10px; border-radius: 10px; font-weight: 500; }
     .status-ok { background: #f6ffed; color: #52c41a; border: 1px solid #b7eb8f; }
     .status-warn { background: #fffbe6; color: #d48806; border: 1px solid #ffe58f; }
@@ -50,13 +51,16 @@
     .card-refresh:hover { color: #667eea; background: #f0f5ff; }
     .card-refresh.spinning { animation: spin 0.8s linear infinite; color: #667eea; }
 
-    .card-body { padding: 16px 20px; }
+    .card-body { padding: 16px 20px; flex: 1; }
 
     .limit-row { margin-bottom: 14px; }
     .limit-row:last-child { margin-bottom: 0; }
     .limit-label { display: flex; justify-content: space-between; margin-bottom: 5px; font-size: 13px; }
     .limit-name { color: #8c8c8c; }
     .limit-value { font-weight: 500; font-variant-numeric: tabular-nums; }
+    .telecom-stat-row { min-height: 47px; }
+    .telecom-stat-row .limit-value { font-size: 15px; font-weight: 650; }
+    .telecom-stat-hint { color: #bfbfbf; font-size: 11px; line-height: 1.4; font-variant-numeric: tabular-nums; }
     .limit-bar { height: 6px; background: #f0f0f0; border-radius: 3px; overflow: hidden; }
     .limit-fill { height: 100%; border-radius: 3px; transition: width 0.6s ease; min-width: 2px; }
     .fill-green { background: linear-gradient(90deg, #95de64, #389e0d); }
@@ -176,6 +180,23 @@
     .btn-default { padding: 8px 24px; border-radius: 6px; border: 1px solid #d9d9d9; background: #fff; cursor: pointer; font-size: 13px; color: #595959; }
     .btn-default:hover { border-color: #667eea; color: #667eea; }
 
+    .telecom-relogin-actions { margin-top: 14px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .telecom-relogin-actions .btn-primary { padding-left: 18px; padding-right: 18px; }
+    .telecom-phone-check { max-width: 420px; margin: 0 auto; }
+    .telecom-phone-check .form-actions { margin-top: 12px; }
+    .telecom-login-tabs { display: grid; grid-template-columns: 1fr 1fr; border-bottom: 1px solid #f0f0f0; margin: -4px 0 18px; }
+    .telecom-login-tab { border: none; border-bottom: 2px solid transparent; background: none; padding: 10px; color: #8c8c8c; cursor: pointer; font-size: 14px; }
+    .telecom-login-tab.active { color: #667eea; border-bottom-color: #667eea; font-weight: 600; }
+    .telecom-qr-wrap { width: min(100%, 360px); aspect-ratio: 318 / 324; margin: 0 auto; display: flex; align-items: center; justify-content: center; overflow: hidden; border: 1px solid #f0f0f0; background: #fafafa; }
+    .telecom-qr-wrap img { width: 100%; height: 100%; display: block; object-fit: contain; }
+    .telecom-login-status { min-height: 22px; margin-top: 12px; text-align: center; color: #595959; font-size: 13px; line-height: 1.6; }
+    .telecom-login-status.error { color: #cf1322; }
+    .telecom-login-status.success { color: #389e0d; font-weight: 600; }
+    .telecom-sms-actions { display: flex; gap: 8px; align-items: stretch; }
+    .telecom-sms-actions .form-input { min-width: 0; }
+    .telecom-sms-actions .btn-default { padding-left: 16px; padding-right: 16px; white-space: nowrap; }
+    .telecom-verified-phone { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 12px; margin-bottom: 14px; border-bottom: 1px solid #f0f0f0; color: #595959; font-size: 13px; }
+
     .import-section { margin-bottom: 18px; padding: 14px; background: #f9f9fb; border-radius: 8px; border: 1px dashed #d9d9d9; }
     .import-toggle { cursor: pointer; font-size: 13px; color: #667eea; user-select: none; display: flex; align-items: center; gap: 4px; }
     .import-toggle:hover { color: #5a6fd6; }
@@ -195,6 +216,10 @@
     .period-btn.active { background: #667eea; border-color: #667eea; color: #fff; }
     .chart-wrap { position: relative; min-height: 260px; }
     .chart-loading { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; font-size: 13px; color: #8c8c8c; background: rgba(255,255,255,0.92); }
+    /* 用量曲线上方的总量汇总：随按钮行右侧展示 */
+    .chart-summary { margin-left: auto; display: flex; gap: 8px; align-items: baseline; font-size: 12px; color: #8c8c8c; flex-wrap: wrap; justify-content: flex-end; }
+    .chart-summary .sum-total { font-size: 19px; font-weight: 700; color: #667eea; line-height: 1; }
+    .chart-summary .sum-divider { color: #d9d9d9; }
 
     /* ============ View Toggle (block / list) ============ */
     .view-toggle { display: flex; background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.2); border-radius: 7px; padding: 2px; gap: 2px; }
@@ -245,9 +270,13 @@
     @media (max-width: 768px) {
       .header { padding: 14px 16px; }
       .header h1 { font-size: 17px; }
+      .header-right { gap: 6px; }
+      .last-updated { display: none; }
+      .header-btn { padding-left: 10px; padding-right: 10px; }
       .container { padding: 0 12px; margin: 16px auto; }
       .card-grid { grid-template-columns: 1fr; }
       .form-row { grid-template-columns: 1fr; }
+      .telecom-sms-actions { align-items: stretch; }
       .list-row { flex-direction: column; align-items: stretch; gap: 10px; padding: 12px 14px; }
       .list-row-left { width: auto; min-width: 0; }
       .list-row-right { align-items: flex-start; }
@@ -284,6 +313,7 @@
 body.dark .platform-huoli { background: #422006; color: #fb923c; border-color: #854d0e; }
 body.dark .platform-volc { background: #042f2e; color: #5eead4; border-color: #0e7490; }
 body.dark .platform-volcc { background: #22113d; color: #b37feb; border-color: #531dab; }
+body.dark .platform-telecomjs { background: #450a0a; color: #fca5a5; border-color: #991b1b; }
     body.dark .status-ok { background: #14532d; color: #4ade80; border-color: #166534; }
     body.dark .status-warn { background: #422006; color: #fbbf24; border-color: #854d0e; }
     body.dark .status-danger { background: #450a0a; color: #fca5a5; border-color: #991b1b; }
@@ -293,6 +323,7 @@ body.dark .platform-volcc { background: #22113d; color: #b37feb; border-color: #
     body.dark .card-refresh:hover { color: #8b5cf6; background: #2a2a2a; }
 
     body.dark .card-body { }
+    body.dark .telecom-stat-hint { color: #777; }
     body.dark .limit-name { color: #999; }
     body.dark .limit-value { color: #e0e0e0; }
     body.dark .limit-bar { background: #2a2a2a; }
@@ -370,6 +401,14 @@ body.dark .platform-volcc { background: #22113d; color: #b37feb; border-color: #
     body.dark .btn-primary:hover { background: #7c3aed; }
     body.dark .btn-default { border-color: #444; background: #1a1a1a; color: #bbb; }
     body.dark .btn-default:hover { border-color: #8b5cf6; color: #8b5cf6; }
+    body.dark .telecom-login-tabs { border-bottom-color: #333; }
+    body.dark .telecom-login-tab { color: #888; }
+    body.dark .telecom-login-tab.active { color: #8b5cf6; border-bottom-color: #8b5cf6; }
+    body.dark .telecom-qr-wrap { border-color: #333; background: #141414; }
+    body.dark .telecom-login-status { color: #bbb; }
+    body.dark .telecom-login-status.error { color: #f87171; }
+    body.dark .telecom-login-status.success { color: #4ade80; }
+    body.dark .telecom-verified-phone { color: #bbb; border-bottom-color: #333; }
 
     body.dark .import-section { background: #181818; border-color: #333; }
     body.dark .import-toggle { color: #8b5cf6; }
@@ -381,6 +420,9 @@ body.dark .platform-volcc { background: #22113d; color: #b37feb; border-color: #
     body.dark .period-btn:hover { border-color: #8b5cf6; color: #8b5cf6; }
     body.dark .period-btn.active { background: #8b5cf6; border-color: #8b5cf6; color: #fff; }
     body.dark .chart-loading { background: rgba(31,31,31,0.92); color: #888; }
+    body.dark .chart-summary { color: #888; }
+    body.dark .chart-summary .sum-total { color: #8b5cf6; }
+    body.dark .chart-summary .sum-divider { color: #444; }
 
     body.dark .view-toggle { background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.12); }
     body.dark .view-btn { color: rgba(255,255,255,0.55); }
@@ -539,6 +581,50 @@ body.dark .platform-volcc { background: #22113d; color: #b37feb; border-color: #
     </div>
   </div>
 
+  <!-- 智云登录 Modal -->
+  <div class="modal-overlay" id="telecomLoginOverlay">
+    <div class="modal" style="width:600px">
+      <div class="modal-header">
+        <h3>智云登录续期</h3>
+        <button class="modal-close" onclick="closeModal('telecomLoginOverlay')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="telecom-phone-check" id="telecomPhoneCheck">
+          <div class="form-group">
+            <label class="form-label">账号登记手机号</label>
+            <input class="form-input" id="telecomAccountPhone" inputmode="numeric" maxlength="11" autocomplete="tel" placeholder="请输入 11 位手机号" onkeydown="if(event.key==='Enter')verifyTelecomAccountPhone()">
+          </div>
+          <div class="form-actions"><button class="btn-primary" id="telecomPhoneCheckBtn" onclick="verifyTelecomAccountPhone()">核对并继续</button></div>
+        </div>
+        <div id="telecomLoginOptions" style="display:none">
+          <div class="telecom-login-tabs">
+            <button class="telecom-login-tab active" id="telecomQrTab" onclick="switchTelecomLoginTab('qr')">扫码登录</button>
+            <button class="telecom-login-tab" id="telecomSmsTab" onclick="switchTelecomLoginTab('sms')">短信登录</button>
+          </div>
+          <div id="telecomQrPanel">
+            <div class="telecom-qr-wrap">
+              <img id="telecomQrImage" alt="智云官方登录二维码">
+            </div>
+          </div>
+          <div id="telecomSmsPanel" style="display:none">
+            <div class="telecom-verified-phone"><span>已核对手机号</span><strong id="telecomVerifiedPhone">-</strong></div>
+            <div class="form-group">
+              <label class="form-label">短信验证码</label>
+              <div class="telecom-sms-actions">
+                <input class="form-input" id="telecomVerifyCode" inputmode="numeric" maxlength="8" placeholder="请输入短信验证码">
+                <button class="btn-default" id="telecomSendSmsBtn" onclick="sendTelecomSms()">获取验证码</button>
+              </div>
+            </div>
+            <div class="form-actions">
+              <button class="btn-primary" id="telecomVerifyBtn" onclick="verifyTelecomSms()">登录并更新 Satoken</button>
+            </div>
+          </div>
+        </div>
+        <div class="telecom-login-status" id="telecomLoginStatus">请输入账号登记的手机号</div>
+      </div>
+    </div>
+  </div>
+
   <!-- 权重配置 Modal -->
   <div class="modal-overlay" id="weightOverlay">
     <div class="modal" style="width:420px">
@@ -567,6 +653,17 @@ body.dark .platform-volcc { background: #22113d; color: #b37feb; border-color: #
     var _sortMode = 'default';
     var _privacyMode = localStorage.getItem('usage_privacy') === 'true';
     var _viewMode = localStorage.getItem('usage_view') === 'list' ? 'list' : 'block';
+    var _telecomLoginSessionId = null;
+    var _telecomLoginIndex = -1;
+    var _telecomLoginPollTimer = null;
+    var _telecomQrTimer = null;
+    var _telecomQrObjectUrl = null;
+    var _telecomSmsTimer = null;
+    var _telecomLoginGeneration = 0;
+    var _telecomLoginMode = 'qr';
+    var _telecomQrLoading = false;
+    var _telecomLoginHandled = false;
+    var _telecomVerifiedPhone = '';
 
     // ============ Dark Mode ============
     (function() {
@@ -672,6 +769,7 @@ body.dark .platform-volcc { background: #22113d; color: #b37feb; border-color: #
       if (platform === 'yescode') return 'YesCode';
       if (platform === 'huoli') return '火狸';
       if (platform === 'volc') return '火山';
+      if (platform === 'telecomjs') return '智云';
       return '智谱';
     }
     // 团队版 level 翻译：pro→团队标准版, max→团队高级版; 非团队版原样返回
@@ -817,6 +915,7 @@ body.dark .platform-volcc { background: #22113d; color: #b37feb; border-color: #
       if (platform === 'volc') return planType === 'coding'
         ? '<span class="platform-tag platform-volcc">火山C</span>'
         : '<span class="platform-tag platform-volc">火山A</span>';
+      if (platform === 'telecomjs') return '<span class="platform-tag platform-telecomjs">智云</span>';
       return '<span class="platform-tag platform-glm">智谱</span>';
     }
 
@@ -997,21 +1096,86 @@ body.dark .platform-volcc { background: #22113d; color: #b37feb; border-color: #
       return Math.max(dPct, w, m);
     }
 
+    function telecomMetrics(d, cachedAt) {
+      d = d || {};
+      var balance = +(d.balance || 0);
+      var gift = +(d.platformGiftBalance || 0);
+      var available = Math.max(0, balance + gift);
+      var today = +(d.todayConsumption || 0);
+      var thirtyDays = +(d.thirtyDayConsumption != null ? d.thirtyDayConsumption : (d.timeRangeConsumption || 0));
+      var rangeDays = +(d.consumptionRangeDays || 30);
+      var avgDaily = rangeDays > 0 ? thirtyDays / rangeDays : 0;
+      var now = new Date(cachedAt || Date.now());
+      var elapsedSeconds = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
+      var dayFraction = Math.max(1 / 24, elapsedSeconds / 86400);
+      var projectedToday = today > 0 ? today / dayFraction : 0;
+      var dailyRate = projectedToday > 0 ? projectedToday : avgDaily;
+      return {
+        balance: balance,
+        gift: gift,
+        available: available,
+        today: today,
+        projectedToday: projectedToday,
+        avgDaily: avgDaily,
+        dailyRate: dailyRate,
+        rateBasis: projectedToday > 0 ? '按今日折算' : '按近30日日均',
+        remainingDays: dailyRate > 0 ? available / dailyRate : null,
+        thirtyDays: thirtyDays
+      };
+    }
+
+    function telecomDaysText(days) {
+      if (days == null || !isFinite(days)) return '暂无消耗';
+      if (days < 1) return '不足 1 天';
+      if (days >= 1000) return '超过 999 天';
+      return Math.floor(days) + ' 天';
+    }
+
+    function isTelecomAuthError(acc) {
+      if (!acc || (acc.platform || 'glm') !== 'telecomjs' || acc.success) return false;
+      return /认证失败|无法访问系统资源|satoken.*(?:失效|过期)|未返回余额|\b401\b/i.test(acc.error || '');
+    }
+
+    function telecomReloginButton(index) {
+      return '<div class="telecom-relogin-actions"><button class="btn-primary" onclick="event.stopPropagation();openTelecomLogin(' + index + ')">重新登录</button></div>';
+    }
+
     function renderCardHTML(i, acc) {
       var platform = acc.platform || 'glm';
       var btn = isAdmin() ? '<button class="card-refresh" id="refresh-' + i + '" onclick="refreshCard(' + i + ')" title="刷新">&#x21bb;</button>' : '';
       var pTag = platformTag(platform, acc.planType);
-      var wBadge = weightBadgeHTML(acc.name, i);
+      var wBadge = platform === 'telecomjs' ? '' : weightBadgeHTML(acc.name, i);
       var headerLeft = '<div class="card-header-left">' + pTag + wBadge + '<h3>' + esc(displayName(acc, i)) + '</h3></div>';
 
       if (!acc.success) {
+        var relogin = isTelecomAuthError(acc) ? telecomReloginButton(i) : '';
         return '<div class="card" id="card-' + i + '"><div class="card-header">' + headerLeft
           + '<div class="card-header-right">' + btn + '<span class="card-status status-error">请求失败</span></div></div>'
-          + '<div class="card-body"><p class="error-text">' + esc(acc.error||'未知错误') + '</p></div>'
+          + '<div class="card-body"><p class="error-text">' + esc(acc.error||'未知错误') + '</p>' + relogin + '</div>'
           + '<div class="card-footer"><span></span><button class="detail-btn" onclick="showDetail(' + i + ')">详情</button></div></div>';
       }
 
       var cache = acc.cachedAt ? '<span class="cache-time">' + timeAgo(acc.cachedAt) + '</span>' : '';
+
+      if (platform === 'telecomjs') {
+        var td = acc.data || {};
+        var tm = telecomMetrics(td, acc.cachedAt);
+        function telecomRow(label, value, hint) {
+          return '<div class="limit-row telecom-stat-row"><div class="limit-label"><span class="limit-name">' + label + '</span><span class="limit-value">' + value + '</span></div>'
+            + '<div class="telecom-stat-hint">' + hint + '</div></div>';
+        }
+        var telecomBody = telecomRow('可用余额', '¥' + tm.available.toFixed(2), '账户 ¥' + tm.balance.toFixed(2) + ' · 赠金 ¥' + tm.gift.toFixed(2))
+          + telecomRow('今日消费', '¥' + tm.today.toFixed(2), '近30日累计 ¥' + tm.thirtyDays.toFixed(2))
+          + telecomRow('消耗速度', '¥' + tm.dailyRate.toFixed(2) + '/天', '今日折算 ¥' + tm.projectedToday.toFixed(2) + '/天 · 30日均 ¥' + tm.avgDaily.toFixed(2) + '/天')
+          + telecomRow('预计可用', telecomDaysText(tm.remainingDays), tm.rateBasis + ' ¥' + tm.dailyRate.toFixed(2) + '/天');
+        var telecomStatusClass = tm.remainingDays != null && tm.remainingDays < 30 ? 'status-danger'
+          : (tm.remainingDays != null && tm.remainingDays < 90 ? 'status-warn' : 'status-ok');
+        return '<div class="card" id="card-' + i + '"><div class="card-header">' + headerLeft
+          + '<div class="card-header-right">' + btn + '<span class="card-status ' + telecomStatusClass + '">' + telecomDaysText(tm.remainingDays) + '</span></div></div>'
+          + '<div class="card-body">' + telecomBody + '</div>'
+          + '<div class="card-footer"><div class="card-footer-left"><span class="level-badge">累计消费 ¥' + (+(td.totalConsumption || 0)).toFixed(2) + '</span>' + cache + '</div>'
+          + '<button class="detail-btn" onclick="showDetail(' + i + ')">详情</button></div></div>';
+      }
 
       if (platform === 'yescode') {
         var d = acc.data || {};
@@ -1278,6 +1442,8 @@ body.dark .platform-volcc { background: #22113d; color: #b37feb; border-color: #
         return rings;
       }
 
+      if (plat === 'telecomjs') return rings;
+
       // GLM：与卡片一致的顺序（MCP额度 → 每5小时 → 每周 → 其他）
       var limits = acc.data && acc.data.limits ? acc.data.limits : [];
       var hasWeekly = limits.some(function(l) { return l.unit === 6; });
@@ -1344,6 +1510,12 @@ body.dark .platform-volcc { background: #22113d; color: #b37feb; border-color: #
           : (usage.PlanType || (sub && sub.BizInfo) || '-');
         return '<span class="level-badge">' + esc(badge) + '</span>';
       }
+      if (platform === 'telecomjs') {
+        var td = acc.data || {};
+        var tm = telecomMetrics(td, acc.cachedAt);
+        return '<span class="level-badge">余额 ¥' + tm.available.toFixed(2) + '</span>'
+          + '<span class="level-badge">可用 ' + telecomDaysText(tm.remainingDays) + '</span>';
+      }
       var level = levelLabel(acc);
       var b = '<span class="level-badge">' + level + '</span>';
       if (acc.keyCount != null) b += '<span class="level-badge" style="background:#f6ffed;color:#389e0d;border-color:#b7eb8f">Key: ' + acc.keyCount + '个</span>';
@@ -1361,13 +1533,18 @@ body.dark .platform-volcc { background: #22113d; color: #b37feb; border-color: #
       if (!acc.success) {
         var errStatus = '<div class="list-row-status"><span class="card-status status-error">请求失败</span></div>';
         leftBlock = '<div class="list-row-left"><div class="list-row-title">' + pTag + '<h3>' + name + '</h3></div>' + errStatus + '</div>';
-        middle = '<div class="list-rings"><span class="list-row-error">' + esc(acc.error || '未知错误') + '</span></div>';
+        middle = '<div class="list-rings"><div><span class="list-row-error">' + esc(acc.error || '未知错误') + '</span>'
+          + (isTelecomAuthError(acc) ? telecomReloginButton(i) : '') + '</div></div>';
         right = '';
       } else {
         var mp = getAccMaxPct(acc);
         var rings = getRings(acc);
-        var ringsHtml = rings.length ? rings.map(renderRing).join('') : '<span class="ring-value" style="text-align:left">暂无用量数据</span>';
-        var okStatus = '<div class="list-row-status"><span class="card-status ' + getStatusClass(mp) + '">' + getStatusText(mp) + '</span></div>';
+        var ringsHtml = platform === 'telecomjs'
+          ? (function() { var tm = telecomMetrics(acc.data, acc.cachedAt); return '<span class="ring-value" style="text-align:left">今日 ¥' + tm.today.toFixed(2) + '　速度 ¥' + tm.dailyRate.toFixed(2) + '/天　预计可用 ' + telecomDaysText(tm.remainingDays) + '</span>'; })()
+          : (rings.length ? rings.map(renderRing).join('') : '<span class="ring-value" style="text-align:left">暂无用量数据</span>');
+        var okStatus = platform === 'telecomjs'
+          ? '<div class="list-row-status"><span class="card-status status-ok">余额</span></div>'
+          : '<div class="list-row-status"><span class="card-status ' + getStatusClass(mp) + '">' + getStatusText(mp) + '</span></div>';
         leftBlock = '<div class="list-row-left"><div class="list-row-title">' + pTag + '<h3>' + name + '</h3></div>' + okStatus + '</div>';
         middle = '<div class="list-rings">' + ringsHtml + '</div>';
         var cache = acc.cachedAt ? '<span class="cache-time">' + timeAgo(acc.cachedAt) + '</span>' : '';
@@ -1396,6 +1573,7 @@ body.dark .platform-volcc { background: #22113d; color: #b37feb; border-color: #
         var mPct = (grp.monthly_limit_usd || 0) > 0 ? Math.min(100, ((sub.monthly_usage_usd || 0) / grp.monthly_limit_usd) * 100) : 0;
         return Math.max(dPct, wPct, mPct);
       }
+      if (plat === 'telecomjs') return 0;
       var limits = acc.data.limits || [];
       return maxPct(limits);
     }
@@ -1434,7 +1612,7 @@ body.dark .platform-volcc { background: #22113d; color: #b37feb; border-color: #
     }
 
     // 按固定顺序展示用户实际拥有的站点，没添加的类型不显示
-    var PLATFORM_ORDER = ['glm', 'yescode', 'huoli', 'volc'];
+    var PLATFORM_ORDER = ['glm', 'yescode', 'huoli', 'volc', 'telecomjs'];
     function renderPlatformFilters(data) {
       var box = document.getElementById('platformFilters');
       if (!box) return;
@@ -1759,6 +1937,32 @@ body.dark .platform-volcc { background: #22113d; color: #b37feb; border-color: #
       document.getElementById('modalBody').innerHTML = html;
     }
 
+    function renderTelecomDetail(index, acc) {
+      var d = acc.data || {};
+      var tm = telecomMetrics(d, acc.cachedAt);
+      function money(value) { return '¥' + (+(value || 0)).toFixed(2); }
+      var html = '<div class="info-section"><div class="info-section-title">负责人信息</div><div class="info-grid">'
+        + '<span class="info-label">负责人</span><span class="info-value">' + esc(acc.responsiblePerson||'-') + '</span>'
+        + '<span class="info-label">电话</span><span class="info-value">' + esc(acc.phone||'-') + '</span>'
+        + '<span class="info-label">备注</span><span class="info-value">' + esc(acc.notes||'-') + '</span>'
+        + '</div></div>';
+      html += '<div class="info-section"><div class="info-section-title">余额详情</div><div class="info-grid">'
+        + '<span class="info-label">账户余额</span><span class="info-value">' + money(d.balance) + '</span>'
+        + '<span class="info-label">赠金余额</span><span class="info-value">' + money(d.platformGiftBalance) + '</span>'
+        + '<span class="info-label">累计充值</span><span class="info-value">' + money(d.totalRecharge) + '</span>'
+        + '<span class="info-label">累计消费</span><span class="info-value">' + money(d.totalConsumption) + '</span>'
+        + '<span class="info-label">今日消费</span><span class="info-value">' + money(tm.today) + '</span>'
+        + '<span class="info-label">今日折算速度</span><span class="info-value">' + money(tm.projectedToday) + '/天</span>'
+        + '<span class="info-label">近30日消费</span><span class="info-value">' + money(tm.thirtyDays) + '</span>'
+        + '<span class="info-label">近30日日均</span><span class="info-value">' + money(tm.avgDaily) + '/天</span>'
+        + '<span class="info-label">预计可用</span><span class="info-value">' + telecomDaysText(tm.remainingDays) + '（' + tm.rateBasis + '）</span>'
+        + '<span class="info-label">模型组</span><span class="info-value">' + (d.modelGroupCount != null ? d.modelGroupCount : '-') + '</span>'
+        + '<span class="info-label">模型数</span><span class="info-value">' + (d.modelCount != null ? d.modelCount : '-') + '</span>'
+        + '<span class="info-label">官网</span><span class="info-value"><a href="https://token.telecomjs.com/finance/cost" target="_blank" rel="noopener" style="color:#667eea;text-decoration:none">智云费用中心 ↗</a></span>'
+        + '</div></div>';
+      document.getElementById('modalBody').innerHTML = html;
+    }
+
     function showDetail(index) {
       // Dispose existing chart if any
       if (_usageCharts[_detailIndex]) { _usageCharts[_detailIndex].dispose(); delete _usageCharts[_detailIndex]; }
@@ -1782,6 +1986,12 @@ body.dark .platform-volcc { background: #22113d; color: #b37feb; border-color: #
       if ((acc.platform || 'glm') === 'volc') {
         if (acc.planType === 'coding') renderVolcCDetail(index, acc);
         else renderVolcDetail(index, acc);
+        document.getElementById('modalOverlay').classList.add('active');
+        return;
+      }
+
+      if ((acc.platform || 'glm') === 'telecomjs') {
+        renderTelecomDetail(index, acc);
         document.getElementById('modalOverlay').classList.add('active');
         return;
       }
@@ -1811,6 +2021,7 @@ body.dark .platform-volcc { background: #22113d; color: #b37feb; border-color: #
         + '<button class="period-btn active" id="period-today-' + index + '" onclick="loadUsageChart(' + index + ',\'today\')">当日</button>'
         + '<button class="period-btn" id="period-7d-' + index + '" onclick="loadUsageChart(' + index + ',\'7d\')">近7天</button>'
         + '<button class="period-btn" id="period-30d-' + index + '" onclick="loadUsageChart(' + index + ',\'30d\')">近30天</button>'
+        + '<div class="chart-summary" id="chartSummary-' + index + '"></div>'
         + '</div>'
         + '<div class="chart-wrap"><div id="chartContainer-' + index + '" style="width:100%;height:320px"></div>'
         + '<div class="chart-loading" id="chartLoading-' + index + '"></div></div>'
@@ -1890,6 +2101,7 @@ body.dark .platform-volcc { background: #22113d; color: #b37feb; border-color: #
     function renderUsageChart(idx, data, period) {
       var container = document.getElementById('chartContainer-' + idx);
       if (!container) return;
+      renderUsageSummary(idx, data);
       if (_usageCharts[idx]) { _usageCharts[idx].dispose(); }
       var chart = echarts.init(container);
       _usageCharts[idx] = chart;
@@ -1947,6 +2159,19 @@ body.dark .platform-volcc { background: #22113d; color: #b37feb; border-color: #
       if (v >= 1000000) return (v / 1000000).toFixed(1) + 'M';
       if (v >= 1000) return (v / 1000).toFixed(1) + 'K';
       return '' + v;
+    }
+
+    // 用量曲线顶部总量汇总：totalTokensUsage 统一换算为 M 单位
+    function renderUsageSummary(idx, data) {
+      var el = document.getElementById('chartSummary-' + idx);
+      if (!el) return;
+      var tu = (data && data.totalUsage) || {};
+      var totalTokens = tu.totalTokensUsage || 0;
+      var totalCalls = tu.totalModelCallCount || 0;
+      el.innerHTML = '<span>总用量</span>'
+        + '<span class="sum-total">' + (totalTokens / 1000000).toFixed(2) + ' M</span>'
+        + '<span class="sum-divider">·</span>'
+        + '<span>调用 ' + totalCalls.toLocaleString() + '</span>';
     }
 
     function renderKeysTable(idx, keys, admin) {
@@ -2241,9 +2466,10 @@ body.dark .platform-volcc { background: #22113d; color: #b37feb; border-color: #
       var yesDisp = platform === 'yescode' ? '' : 'none';
       var huoliDisp = platform === 'huoli' ? '' : 'none';
       var volcDisp = platform === 'volc' ? '' : 'none';
+      var telecomDisp = platform === 'telecomjs' ? '' : 'none';
       document.getElementById('mgmtBody').innerHTML = ''
         + '<div class="import-section"><div class="import-toggle" onclick="this.nextElementSibling.classList.toggle(\'open\')">&#9660; 快速导入（粘贴 fetch 命令）</div>'
-        + '<div class="import-body"><textarea class="form-input" id="f_fetch" placeholder="粘贴 fetch(...) 命令，自动识别智谱 / YesCode / 火狸 / 火山A / 火山C"></textarea>'
+        + '<div class="import-body"><textarea class="form-input" id="f_fetch" placeholder="粘贴 fetch / cURL 命令，自动识别智谱 / YesCode / 火狸 / 火山 / 智云"></textarea>'
         + '<div class="import-actions"><button class="btn-primary" style="padding:5px 16px;font-size:12px" onclick="parseFetch()">解析并填充</button></div></div></div>'
         + '<div class="form-row">'
         + '<div class="form-group"><label class="form-label">站点</label><select class="form-input" id="f_platform" onchange="onPlatformChange()">'
@@ -2251,6 +2477,7 @@ body.dark .platform-volcc { background: #22113d; color: #b37feb; border-color: #
         + '<option value="yescode"' + (platform==='yescode'?' selected':'') + '>YesCode</option>'
         + '<option value="huoli"' + (platform==='huoli'?' selected':'') + '>火狸</option>'
         + '<option value="volc"' + (platform==='volc'?' selected':'') + '>火山</option>'
+        + '<option value="telecomjs"' + (platform==='telecomjs'?' selected':'') + '>智云</option>'
         + '</select></div>'
         + '<div class="form-group"><label class="form-label">账号名称</label><input class="form-input" id="f_name" value="' + esc(a.name||'') + '"></div>'
         + '</div>'
@@ -2277,6 +2504,9 @@ body.dark .platform-volcc { background: #22113d; color: #b37feb; border-color: #
         + '<div class="form-row"><div class="form-group"><label class="form-label">X-CSRF-Token</label><input class="form-input" id="f_volc_csrf" value="' + esc(a.csrf||'') + '"></div>'
         + '<div class="form-group"><label class="form-label">X-Web-Id（可选）</label><input class="form-input" id="f_volc_webid" value="' + esc(a.web_id||'') + '"></div></div>'
         + '</div>'
+        + '<div id="f_telecom_fields" style="display:' + telecomDisp + '">'
+        + '<div class="form-group"><label class="form-label">Satoken</label><textarea class="form-input" id="f_satoken" placeholder="智云页面请求头中的 Satoken">' + esc(a.satoken||'') + '</textarea></div>'
+        + '</div>'
         + '<div class="form-row"><div class="form-group"><label class="form-label">负责人</label><input class="form-input" id="f_person" value="' + esc(a.responsiblePerson||'') + '"></div>'
         + '<div class="form-group"><label class="form-label">电话</label><input class="form-input" id="f_phone" value="' + esc(a.phone||'') + '"></div></div>'
         + '<div class="form-group"><label class="form-label">备注</label><input class="form-input" id="f_notes" value="' + esc(a.notes||'') + '"></div>'
@@ -2290,6 +2520,7 @@ body.dark .platform-volcc { background: #22113d; color: #b37feb; border-color: #
       document.getElementById('f_yescode_fields').style.display = p === 'yescode' ? '' : 'none';
       document.getElementById('f_huoli_fields').style.display = p === 'huoli' ? '' : 'none';
       document.getElementById('f_volc_fields').style.display = p === 'volc' ? '' : 'none';
+      document.getElementById('f_telecom_fields').style.display = p === 'telecomjs' ? '' : 'none';
     }
 
     // 从 fetch / Node fetch / cURL 文本中提取指定 header 值
@@ -2321,7 +2552,17 @@ body.dark .platform-volcc { background: #22113d; color: #b37feb; border-color: #
       var isYescode = /yes\.vg/i.test(t);
       var isHuoli = /huolilink\.com/i.test(t);
       var isVolc = /volcengine\.com|console\.volcengine/i.test(t);
+      var isTelecom = /token\.telecomjs\.com|card-with-time-range|satoken/i.test(t);
       var isGlm = /bigmodel\.cn|bigmodel-organization|bigmodel-project/i.test(t);
+
+      if (isTelecom && !isGlm) {
+        document.getElementById('f_platform').value = 'telecomjs';
+        onPlatformChange();
+        var satoken = extractHeader(t, 'satoken');
+        if (satoken) document.getElementById('f_satoken').value = satoken;
+        else alert('未能解析出 Satoken，请从智云费用接口请求头复制 Satoken。');
+        return;
+      }
 
       if (isVolc && !isGlm) {
         var coding = /GetCodingPlanUsage|coding-plan/i.test(t);
@@ -2401,6 +2642,9 @@ body.dark .platform-volcc { background: #22113d; color: #b37feb; border-color: #
         var planSel = document.querySelector('input[name=f_volc_plan]:checked');
         body.planType = planSel ? planSel.value : 'agent';
         if (!body.name || !body.cookie || !body.csrf) { alert('账号名称、Cookie 和 X-CSRF-Token 不能为空'); return; }
+      } else if (platform === 'telecomjs') {
+        body.satoken = document.getElementById('f_satoken').value.trim();
+        if (!body.name || !body.satoken) { alert('账号名称和 Satoken 不能为空'); return; }
       } else {
         body.authorization = document.getElementById('f_auth').value.trim();
         body.organization = document.getElementById('f_org').value.trim();
@@ -2422,19 +2666,221 @@ body.dark .platform-volcc { background: #22113d; color: #b37feb; border-color: #
       });
     }
 
+    // ============ 智云扫码 / 短信登录 ============
+
+    function telecomJsonFetch(url, options) {
+      options = options || {};
+      options.headers = authHeaders();
+      return fetch(url, options).then(function(r) {
+        return r.json().catch(function(){ return {}; }).then(function(d) {
+          if (!r.ok || d.error) throw new Error(d.error || ('请求失败: HTTP ' + r.status));
+          return d;
+        });
+      });
+    }
+
+    function setTelecomLoginStatus(text, type) {
+      var el = document.getElementById('telecomLoginStatus');
+      if (!el) return;
+      el.textContent = text || '';
+      el.className = 'telecom-login-status' + (type ? ' ' + type : '');
+    }
+
+    function clearTelecomLoginTimers() {
+      if (_telecomLoginPollTimer) clearInterval(_telecomLoginPollTimer);
+      if (_telecomQrTimer) clearInterval(_telecomQrTimer);
+      if (_telecomSmsTimer) clearInterval(_telecomSmsTimer);
+      _telecomLoginPollTimer = null;
+      _telecomQrTimer = null;
+      _telecomSmsTimer = null;
+      if (_telecomQrObjectUrl) URL.revokeObjectURL(_telecomQrObjectUrl);
+      _telecomQrObjectUrl = null;
+      _telecomQrLoading = false;
+    }
+
+    function stopTelecomLogin(cancelRemote) {
+      _telecomLoginGeneration++;
+      clearTelecomLoginTimers();
+      var sessionId = _telecomLoginSessionId;
+      _telecomLoginSessionId = null;
+      _telecomLoginIndex = -1;
+      _telecomVerifiedPhone = '';
+      if (cancelRemote && sessionId) {
+        fetch('/api/telecomjs/login/' + encodeURIComponent(sessionId), { method: 'DELETE', headers: authHeaders() }).catch(function(){});
+      }
+    }
+
+    function switchTelecomLoginTab(mode) {
+      _telecomLoginMode = mode === 'sms' ? 'sms' : 'qr';
+      document.getElementById('telecomQrTab').classList.toggle('active', _telecomLoginMode === 'qr');
+      document.getElementById('telecomSmsTab').classList.toggle('active', _telecomLoginMode === 'sms');
+      document.getElementById('telecomQrPanel').style.display = _telecomLoginMode === 'qr' ? '' : 'none';
+      document.getElementById('telecomSmsPanel').style.display = _telecomLoginMode === 'sms' ? '' : 'none';
+      if (_telecomLoginMode === 'qr') updateTelecomQrImage();
+      else setTimeout(function(){ document.getElementById('telecomVerifyCode').focus(); }, 50);
+    }
+
+    function updateTelecomQrImage() {
+      if (!_telecomLoginSessionId || _telecomLoginMode !== 'qr' || _telecomQrLoading) return;
+      _telecomQrLoading = true;
+      var id = _telecomLoginSessionId;
+      fetch('/api/telecomjs/login/' + encodeURIComponent(id) + '/screenshot?t=' + Date.now(), { headers: authHeaders() })
+        .then(function(r) { if (!r.ok) throw new Error('二维码加载失败'); return r.blob(); })
+        .then(function(blob) {
+          if (id !== _telecomLoginSessionId) return;
+          var nextUrl = URL.createObjectURL(blob);
+          document.getElementById('telecomQrImage').src = nextUrl;
+          if (_telecomQrObjectUrl) URL.revokeObjectURL(_telecomQrObjectUrl);
+          _telecomQrObjectUrl = nextUrl;
+        })
+        .catch(function(){})
+        .finally(function(){ _telecomQrLoading = false; });
+    }
+
+    function handleTelecomLoginSuccess() {
+      if (_telecomLoginHandled) return;
+      _telecomLoginHandled = true;
+      clearTelecomLoginTimers();
+      setTelecomLoginStatus('登录成功，Satoken 已自动更新', 'success');
+      loadData(true);
+      setTimeout(function() { closeModal('telecomLoginOverlay'); }, 1200);
+    }
+
+    function pollTelecomLogin() {
+      if (!_telecomLoginSessionId) return;
+      var id = _telecomLoginSessionId;
+      telecomJsonFetch('/api/telecomjs/login/' + encodeURIComponent(id))
+        .then(function(d) {
+          if (id !== _telecomLoginSessionId) return;
+          if (d.status === 'success') { handleTelecomLoginSuccess(); return; }
+          if (d.status === 'error' || d.status === 'expired' || d.status === 'cancelled') {
+            clearTelecomLoginTimers();
+            setTelecomLoginStatus(d.message || '登录会话已结束，请重试', 'error');
+            return;
+          }
+          if (d.status === 'saving') setTelecomLoginStatus(d.message || '正在更新 Satoken...');
+        })
+        .catch(function(err) {
+          if (id === _telecomLoginSessionId) setTelecomLoginStatus(err.message, 'error');
+        });
+    }
+
+    function openTelecomLogin(index) {
+      stopTelecomLogin(true);
+      _telecomLoginIndex = index;
+      _telecomLoginHandled = false;
+      _telecomLoginMode = 'qr';
+      _telecomVerifiedPhone = '';
+      document.getElementById('telecomQrImage').removeAttribute('src');
+      document.getElementById('telecomAccountPhone').value = '';
+      document.getElementById('telecomVerifyCode').value = '';
+      document.getElementById('telecomPhoneCheck').style.display = '';
+      document.getElementById('telecomLoginOptions').style.display = 'none';
+      document.getElementById('telecomPhoneCheckBtn').disabled = false;
+      document.getElementById('telecomSendSmsBtn').disabled = false;
+      document.getElementById('telecomSendSmsBtn').textContent = '获取验证码';
+      document.getElementById('telecomVerifyBtn').disabled = false;
+      switchTelecomLoginTab('qr');
+      setTelecomLoginStatus('请输入账号登记的手机号');
+      document.getElementById('telecomLoginOverlay').classList.add('active');
+      setTimeout(function(){ document.getElementById('telecomAccountPhone').focus(); }, 80);
+    }
+
+    function maskTelephone(telephone) {
+      return telephone.slice(0, 3) + '****' + telephone.slice(-4);
+    }
+
+    function verifyTelecomAccountPhone() {
+      var telephone = document.getElementById('telecomAccountPhone').value.replace(/\s+/g, '');
+      if (!/^1[3-9]\d{9}$/.test(telephone)) { setTelecomLoginStatus('请输入正确的 11 位手机号', 'error'); return; }
+      var btn = document.getElementById('telecomPhoneCheckBtn');
+      btn.disabled = true;
+      setTelecomLoginStatus('正在核对手机号...');
+      var generation = _telecomLoginGeneration;
+      telecomJsonFetch('/api/telecomjs/login/' + _telecomLoginIndex, {
+        method: 'POST', body: JSON.stringify({ telephone: telephone })
+      })
+        .then(function(d) {
+          if (generation !== _telecomLoginGeneration) {
+            fetch('/api/telecomjs/login/' + encodeURIComponent(d.id), { method: 'DELETE', headers: authHeaders() }).catch(function(){});
+            return;
+          }
+          _telecomVerifiedPhone = telephone;
+          _telecomLoginSessionId = d.id;
+          document.getElementById('telecomVerifiedPhone').textContent = maskTelephone(telephone);
+          document.getElementById('telecomPhoneCheck').style.display = 'none';
+          document.getElementById('telecomLoginOptions').style.display = '';
+          switchTelecomLoginTab('qr');
+          setTelecomLoginStatus('手机号核对通过，请选择登录方式');
+          updateTelecomQrImage();
+          _telecomQrTimer = setInterval(updateTelecomQrImage, 5000);
+          _telecomLoginPollTimer = setInterval(pollTelecomLogin, 1200);
+        })
+        .catch(function(err) {
+          if (generation === _telecomLoginGeneration) {
+            btn.disabled = false;
+            setTelecomLoginStatus(err.message, 'error');
+          }
+        });
+    }
+
+    function sendTelecomSms() {
+      if (!_telecomLoginSessionId) { setTelecomLoginStatus('登录会话尚未就绪，请稍候', 'error'); return; }
+      var telephone = _telecomVerifiedPhone;
+      var btn = document.getElementById('telecomSendSmsBtn');
+      btn.disabled = true;
+      setTelecomLoginStatus('正在发送验证码...');
+      telecomJsonFetch('/api/telecomjs/login/' + encodeURIComponent(_telecomLoginSessionId) + '/sms/send', {
+        method: 'POST', body: JSON.stringify({ telephone: telephone })
+      }).then(function() {
+        setTelecomLoginStatus('验证码已发送，请查收短信');
+        var seconds = 60;
+        btn.textContent = seconds + ' 秒后重试';
+        _telecomSmsTimer = setInterval(function() {
+          seconds--;
+          if (seconds <= 0) {
+            clearInterval(_telecomSmsTimer); _telecomSmsTimer = null;
+            btn.disabled = false; btn.textContent = '重新获取';
+          } else btn.textContent = seconds + ' 秒后重试';
+        }, 1000);
+      }).catch(function(err) {
+        btn.disabled = false;
+        setTelecomLoginStatus('验证码发送失败: ' + err.message, 'error');
+      });
+    }
+
+    function verifyTelecomSms() {
+      if (!_telecomLoginSessionId) { setTelecomLoginStatus('登录会话尚未就绪，请稍候', 'error'); return; }
+      var telephone = _telecomVerifiedPhone;
+      var verifyCode = document.getElementById('telecomVerifyCode').value.trim();
+      if (!/^1[3-9]\d{9}$/.test(telephone) || !/^\d{4,8}$/.test(verifyCode)) {
+        setTelecomLoginStatus('请检查手机号和短信验证码', 'error'); return;
+      }
+      var btn = document.getElementById('telecomVerifyBtn');
+      btn.disabled = true;
+      setTelecomLoginStatus('正在验证并更新 Satoken...');
+      telecomJsonFetch('/api/telecomjs/login/' + encodeURIComponent(_telecomLoginSessionId) + '/sms/verify', {
+        method: 'POST', body: JSON.stringify({ telephone: telephone, verifyCode: verifyCode })
+      }).then(handleTelecomLoginSuccess).catch(function(err) {
+        btn.disabled = false;
+        setTelecomLoginStatus('登录失败: ' + err.message, 'error');
+      });
+    }
+
     // ============ 弹窗控制 ============
 
     function closeModal(id) {
       document.getElementById(id).classList.remove('active');
+      if (id === 'telecomLoginOverlay') stopTelecomLogin(true);
       if (id === 'modalOverlay' && _usageCharts[_detailIndex]) {
         _usageCharts[_detailIndex].dispose();
         delete _usageCharts[_detailIndex];
       }
     }
-    ['pwdOverlay','modalOverlay','mgmtOverlay','weightOverlay'].forEach(function(id){
+    ['pwdOverlay','modalOverlay','mgmtOverlay','telecomLoginOverlay','weightOverlay'].forEach(function(id){
       document.getElementById(id).addEventListener('click', function(e){ if(e.target===e.currentTarget) closeModal(id); });
     });
-    document.addEventListener('keydown', function(e){ if(e.key==='Escape') ['pwdOverlay','modalOverlay','mgmtOverlay','weightOverlay'].forEach(closeModal); });
+    document.addEventListener('keydown', function(e){ if(e.key==='Escape') ['pwdOverlay','modalOverlay','mgmtOverlay','telecomLoginOverlay','weightOverlay'].forEach(closeModal); });
 
     // ============ 权重徽标与配置(管理员)============
 

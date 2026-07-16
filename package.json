@@ -1,7 +1,7 @@
 {
   "name": "codingplan-monitor",
   "version": "1.0.0",
-  "description": "智谱 GLM / YesCode / 火狸 多账号 API 用量监控面板",
+  "description": "智谱 GLM / YesCode / 火狸 / 火山 / 智云多账号用量监控面板",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
@@ -18,10 +18,11 @@
   ],
   "license": "MIT",
   "engines": {
-    "node": ">=18"
+    "node": ">=22.12"
   },
   "dependencies": {
     "dotenv": "^17.4.2",
-    "express": "^4.21.2"
+    "express": "^4.21.2",
+    "puppeteer-core": "^25.3.0"
   }
 }
