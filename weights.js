@@ -150,10 +150,12 @@ function glmWindows(data) {
 }
 
 // 智谱个人账号周额度重置建议。返回 null 表示无需提示；返回对象供 API 和前端展示原因。
-// nowMs 可注入，便于稳定测试。personalEdition=false 或 teamEdition=true 明确排除团队账号。
+// nowMs 可注入，便于稳定测试。
+// 仅排除「团队版」账号（accounts.teamEdition / 接口 type=2）。不要用 JWT user_type：
+// 部分个人订阅账号的 JWT 也会标 ENTERPRISE，按 JWT 会误杀真正该提示的个人号。
 function getGLMResetRecommendation(cachedResult, nowMs) {
     if (!cachedResult || (cachedResult.platform || 'glm') !== 'glm' || !cachedResult.data) return null;
-    if (cachedResult.teamEdition || cachedResult.personalEdition === false) return null;
+    if (cachedResult.teamEdition) return null;
 
     var limits = Array.isArray(cachedResult.data.limits) ? cachedResult.data.limits : [];
     var activeLimits = limits.filter(function(limit) { return limit && !limit._unlimited; });
