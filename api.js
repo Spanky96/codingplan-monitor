@@ -292,11 +292,84 @@ function isValidIp(ip) {
 
 // ============ GLM 账号 ============
 
+function genAnonymousId() {
+    function hex(n) {
+        var s = '';
+        for (var i = 0; i < n; i++) s += Math.floor(Math.random() * 16).toString(16);
+        return s;
+    }
+    return hex(12) + '-' + hex(13) + '-' + hex(8) + '-' + hex(6) + '-' + hex(12);
+}
+
+function isGlmAuthError(err) {
+    var msg = String((err && err.message) || err || '');
+    // 参考抢号脚本：preview 失效常见 401/405；用量接口也可能 401/403
+    return /\bHTTP\s+(401|403|405)\b/.test(msg)
+        || /认证失败|token.*(?:失效|过期)|未登录|登录已过期|unauthorized/i.test(msg);
+}
+
+function hasGlmLoginCredentials(account) {
+    return !!(account && String(account.glm_username || '').trim() && String(account.glm_password || '') !== '');
+}
+
+// 参考 glm-coding-grabber/index-v3.js：POST /api/auth/login 刷新 access_token
+async function loginGlm(username, password) {
+    var body = {
+        phoneNumber: '',
+        countryCode: '',
+        username: String(username || '').trim(),
+        smsCode: '',
+        password: String(password || ''),
+        loginType: 'password',
+        grantType: 'customer',
+        userType: 'PERSONAL',
+        userCode: '',
+        appId: '',
+        anonymousId: genAnonymousId()
+    };
+    var json = await httpsRequest('POST', 'https://bigmodel.cn/api/auth/login', {
+        'accept': 'application/json, text/plain, */*',
+        'content-type': 'application/json;charset=UTF-8'
+    }, body);
+    var token = json && json.data && json.data.access_token;
+    if (!(json && (json.code === 200 || json.code === 0) && token)) {
+        throw new Error('智谱登录失败: ' + ((json && (json.msg || json.message)) || '未知错误'));
+    }
+    // 面板存的是裸 JWT；请求头 makeHeaders 直接塞 authorization
+    return String(token).replace(/^Bearer\s+/i, '');
+}
+
+function saveGlmToken(index, newAuth) {
+    try {
+        var accounts = readAccounts();
+        if (!accounts[index]) return;
+        var platform = accounts[index].platform || 'glm';
+        if (platform !== 'glm') return;
+        accounts[index].authorization = newAuth;
+        writeAccounts(accounts);
+    } catch (e) { /* ignore write errors */ }
+}
+
+async function withGlmAuthRetry(account, index, requestFn) {
+    try {
+        return await requestFn(account);
+    } catch (authErr) {
+        if (!isGlmAuthError(authErr) || !hasGlmLoginCredentials(account)) throw authErr;
+        var newAuth = await loginGlm(account.glm_username, account.glm_password);
+        saveGlmToken(index, newAuth);
+        // 本进程内后续请求立即用新 token（accounts.json 也可能被其他写覆盖，以内存更新为准）
+        account.authorization = newAuth;
+        return await requestFn(account);
+    }
+}
+
 async function fetchGLMUsage(account, index) {
     try {
-        var url = 'https://bigmodel.cn/api/monitor/usage/quota/limit';
-        if (account.teamEdition) url += '?type=2';
-        var json = await httpsGet(url, makeHeaders(account));
+        var json = await withGlmAuthRetry(account, index, async function(acc) {
+            var url = 'https://bigmodel.cn/api/monitor/usage/quota/limit';
+            if (acc.teamEdition) url += '?type=2';
+            return httpsGet(url, makeHeaders(acc));
+        });
         var userType = decodeJwtUserType(account.authorization);
         var personalEdition = userType ? userType === 'PERSONAL' : !account.teamEdition;
         var result = { index: index, name: account.name, platform: 'glm', responsiblePerson: account.responsiblePerson, phone: account.phone, notes: account.notes, keyCount: account.keyCount, teamEdition: account.teamEdition || undefined, personalEdition: personalEdition, isPublic: account.isPublic, risk: account.risk || undefined, data: json.data, success: true, cachedAt: Date.now() };
@@ -309,7 +382,9 @@ async function fetchGLMUsage(account, index) {
 
 async function fetchGLMExpire(account, index) {
     try {
-        var json = await httpsGet('https://bigmodel.cn/api/biz/trial-cards/current-user', makeHeaders(account));
+        var json = await withGlmAuthRetry(account, index, async function(acc) {
+            return httpsGet('https://bigmodel.cn/api/biz/trial-cards/current-user', makeHeaders(acc));
+        });
         var result = { expireTime: json.data && json.data.expireTime, inviteCode: json.data && json.data.inviteCode, success: true, cachedAt: Date.now() };
         setExpireCache(index, result);
         return result;
@@ -751,7 +826,9 @@ module.exports = function(app) {
             if ((account.platform || 'glm') !== 'glm') {
                 return res.json([]);
             }
-            var json = await httpsGet(keysUrl(account, '?keyType=1'), makeHeaders(account));
+            var json = await withGlmAuthRetry(account, i, function(acc) {
+                return httpsGet(keysUrl(acc, '?keyType=1'), makeHeaders(acc));
+            });
             var keys = json.data || [];
             var accounts = readAccounts();
             accounts[i].keyCount = keys.length;
@@ -764,27 +841,36 @@ module.exports = function(app) {
 
     app.get('/api/keys/:index/copy/:apiKey', checkAuth, async function(req, res) {
         try {
+            var i = parseInt(req.params.index);
             var account = getAccount(req);
             if (!account) return res.status(404).json({ error: '未找到账号' });
-            var json = await httpsGet(keysUrl(account, '/copy/' + req.params.apiKey), makeHeaders(account));
+            var json = await withGlmAuthRetry(account, i, function(acc) {
+                return httpsGet(keysUrl(acc, '/copy/' + req.params.apiKey), makeHeaders(acc));
+            });
             res.json(json.data || {});
         } catch (err) { res.status(500).json({ error: err.message }); }
     });
 
     app.post('/api/keys/:index', jsonParser, checkAuth, async function(req, res) {
         try {
+            var i = parseInt(req.params.index);
             var account = getAccount(req);
             if (!account) return res.status(404).json({ error: '未找到账号' });
-            var json = await httpsRequest('POST', keysUrl(account), makeHeaders(account), { name: req.body.name, keyType: 1 });
+            var json = await withGlmAuthRetry(account, i, function(acc) {
+                return httpsRequest('POST', keysUrl(acc), makeHeaders(acc), { name: req.body.name, keyType: 1 });
+            });
             res.json(json.data || {});
         } catch (err) { res.status(500).json({ error: err.message }); }
     });
 
     app.delete('/api/keys/:index/:apiKey', checkAuth, async function(req, res) {
         try {
+            var i = parseInt(req.params.index);
             var account = getAccount(req);
             if (!account) return res.status(404).json({ error: '未找到账号' });
-            await httpsRequest('DELETE', keysUrl(account, '/' + req.params.apiKey), makeHeaders(account));
+            await withGlmAuthRetry(account, i, function(acc) {
+                return httpsRequest('DELETE', keysUrl(acc, '/' + req.params.apiKey), makeHeaders(acc));
+            });
             res.json({ success: true });
         } catch (err) { res.status(500).json({ error: err.message }); }
     });
@@ -793,10 +879,13 @@ module.exports = function(app) {
 
     app.get('/api/ip-whitelist/:index', checkAuth, async function(req, res) {
         try {
+            var i = parseInt(req.params.index);
             var account = getAccount(req);
             if (!account) return res.status(404).json({ error: '未找到账号' });
             if ((account.platform || 'glm') !== 'glm') return res.json([]);
-            var json = await httpsGet(ipWhitelistUrl(account, '/list'), makeHeaders(account));
+            var json = await withGlmAuthRetry(account, i, function(acc) {
+                return httpsGet(ipWhitelistUrl(acc, '/list'), makeHeaders(acc));
+            });
             if (json && json.code != null && json.code !== 200) throw new Error(json.msg || '查询失败');
             res.json(json.rows || []);
         } catch (err) { res.status(500).json({ error: err.message }); }
@@ -804,11 +893,14 @@ module.exports = function(app) {
 
     app.post('/api/ip-whitelist/:index', jsonParser, checkAuth, async function(req, res) {
         try {
+            var i = parseInt(req.params.index);
             var account = getAccount(req);
             if (!account) return res.status(404).json({ error: '未找到账号' });
             var ip = (req.body && req.body.ipAddress || '').trim();
             if (!isValidIp(ip)) return res.status(400).json({ error: 'IP 地址格式不正确,支持 IPv4 或 IPv4/CIDR,如 1.2.3.4 或 10.0.0.0/8' });
-            var json = await httpsRequest('POST', ipWhitelistUrl(account), makeHeaders(account), { ipAddress: ip });
+            var json = await withGlmAuthRetry(account, i, function(acc) {
+                return httpsRequest('POST', ipWhitelistUrl(acc), makeHeaders(acc), { ipAddress: ip });
+            });
             if (json && json.code != null && json.code !== 200) throw new Error(json.msg || '添加失败');
             res.json({ success: true });
         } catch (err) { res.status(500).json({ error: err.message }); }
@@ -816,9 +908,12 @@ module.exports = function(app) {
 
     app.delete('/api/ip-whitelist/:index/:id', checkAuth, async function(req, res) {
         try {
+            var i = parseInt(req.params.index);
             var account = getAccount(req);
             if (!account) return res.status(404).json({ error: '未找到账号' });
-            var json = await httpsRequest('DELETE', ipWhitelistUrl(account, '/' + req.params.id), makeHeaders(account));
+            var json = await withGlmAuthRetry(account, i, function(acc) {
+                return httpsRequest('DELETE', ipWhitelistUrl(acc, '/' + req.params.id), makeHeaders(acc));
+            });
             if (json && json.code != null && json.code !== 200) throw new Error(json.msg || '删除失败');
             res.json({ success: true });
         } catch (err) { res.status(500).json({ error: err.message }); }
@@ -837,7 +932,9 @@ module.exports = function(app) {
             if (decodeJwtUserType(account.authorization) !== 'PERSONAL') {
                 return res.json({ level: null, text: '', teamEdition: true });
             }
-            var json = await httpsGet(riskInfoUrl(), makeHeaders(account));
+            var json = await withGlmAuthRetry(account, i, function(acc) {
+                return httpsGet(riskInfoUrl(), makeHeaders(acc));
+            });
             var level = (json && json.data != null) ? json.data : null;
             var text = '';
             if (level) text = `(${level})` + (RISK_TIPS[level] || RISK_TIPS_FALLBACK);
@@ -988,6 +1085,7 @@ module.exports = function(app) {
 
     app.get('/api/model-usage/:index', async function(req, res) {
         try {
+            var i = parseInt(req.params.index);
             var account = getAccount(req);
             if (!account) return res.status(404).json({ error: '未找到账号' });
             if (isHiddenFromGuest(req, account)) return res.status(404).json({ error: '未找到账号' });
@@ -1011,7 +1109,9 @@ module.exports = function(app) {
             var startDate = fmtDate(startD, '00:00:00');
             var url = 'https://bigmodel.cn/api/monitor/usage/model-usage?startTime='
                 + encodeURIComponent(startDate) + '&endTime=' + encodeURIComponent(endDate);
-            var json = await httpsGet(url, makeHeaders(account));
+            var json = await withGlmAuthRetry(account, i, function(acc) {
+                return httpsGet(url, makeHeaders(acc));
+            });
             res.json(json);
         } catch (err) { res.status(500).json({ error: err.message }); }
     });
@@ -1043,3 +1143,10 @@ module.exports = function(app) {
     });
 
 };
+
+// 供单测覆盖 GLM 自动重登路径（不走 HTTP 路由）
+module.exports._isGlmAuthError = isGlmAuthError;
+module.exports._hasGlmLoginCredentials = hasGlmLoginCredentials;
+module.exports._loginGlm = loginGlm;
+module.exports._fetchGLMUsage = fetchGLMUsage;
+module.exports._withGlmAuthRetry = withGlmAuthRetry;

@@ -2617,6 +2617,8 @@ body.dark .platform-telecomjs { background: #450a0a; color: #fca5a5; border-colo
         + '<div class="form-group"><label class="form-label">Authorization Token</label><textarea class="form-input" id="f_auth">' + esc(a.authorization||'') + '</textarea></div>'
         + '<div class="form-row"><div class="form-group"><label class="form-label">Organization ID</label><input class="form-input" id="f_org" value="' + esc(a.organization||'') + '"></div>'
         + '<div class="form-group"><label class="form-label">Project ID</label><input class="form-input" id="f_proj" value="' + esc(a.project||'') + '"></div></div>'
+        + '<div class="form-row"><div class="form-group"><label class="form-label">登录账号（可选）</label><input class="form-input" id="f_glm_username" placeholder="Token 失效时自动重新登录" value="' + esc(a.glm_username||'') + '" autocomplete="off"></div>'
+        + '<div class="form-group"><label class="form-label">登录密码（可选）</label><input class="form-input" type="password" id="f_glm_password" placeholder="非必填；与账号同时填写才启用自动重登" value="' + esc(a.glm_password||'') + '" autocomplete="new-password"></div></div>'
         + '<div class="form-group"><label class="form-label" style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="f_team_edition"' + (a.teamEdition ? ' checked' : '') + ' style="width:16px;height:16px;cursor:pointer"> 团队版（接口 URL 加 type=2）</label></div>'
         + '</div>'
         + '<div id="f_yescode_fields" style="display:' + yesDisp + '">'
@@ -2781,8 +2783,14 @@ body.dark .platform-telecomjs { background: #450a0a; color: #fca5a5; border-colo
         body.authorization = document.getElementById('f_auth').value.trim();
         body.organization = document.getElementById('f_org').value.trim();
         body.project = document.getElementById('f_proj').value.trim();
+        body.glm_username = document.getElementById('f_glm_username').value.trim();
+        body.glm_password = document.getElementById('f_glm_password').value;
         body.teamEdition = document.getElementById('f_team_edition').checked || undefined;
         if (!body.name || !body.authorization) { alert('账号名称和 Token 不能为空'); return; }
+        // 账密需成对：只填其一也允许保存，但不会触发自动重登
+        if ((body.glm_username && !body.glm_password) || (!body.glm_username && body.glm_password)) {
+          if (!confirm('登录账号/密码需同时填写才会在 Token 失效时自动重登。当前只填了一项，仍要保存吗？')) return;
+        }
       }
       var method = editingIndex>=0?'PUT':'POST', url = editingIndex>=0?'/api/accounts/'+editingIndex:'/api/accounts';
       fetch(url,{method:method,headers:authHeaders(),body:JSON.stringify(body)}).then(function(r){return r.json()}).then(function(d){

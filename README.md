@@ -96,11 +96,11 @@ docker compose down           # 停止并移除容器(./data 账号数据保留)
 
 | 平台 | 必填凭证 | 抓取方式 |
 |------|----------|----------|
-| 智谱 GLM | `authorization`(JWT)、`organization`、`project` | bigmodel.cn 任意请求头中的 `authorization` / `bigmodel-organization` / `bigmodel-project` |
+| 智谱 GLM | `authorization`(JWT)、`organization`、`project`；可选 `glm_username` + `glm_password` | bigmodel.cn 任意请求头中的 `authorization` / `bigmodel-organization` / `bigmodel-project`；填了账号密码时 token 过期（401/403/405）会自动重新登录并回写 JWT |
 | YesCode | `cookie` | co.yes.vg 请求中的完整 `Cookie` |
 | 火狸 | `authorization`(Bearer)、可选 `huoli_email` + `huoli_password` | huolilink.com 请求头中的 `Authorization`;填了邮箱密码时 token 过期会自动重新登录 |
 | 火山(AgentPlan=火山A / CodingPlan=火山C) | `cookie`、`csrf`、可选 `web_id`、`planType` | console.volcengine.com 请求(用 cURL 复制带出完整 Cookie);添加账号时选套餐类型:AgentPlan 抓 `GetAgentPlanAFPUsage`,CodingPlan 抓 `GetCodingPlanUsage`。两者同一登录会话,Cookie/CSRF 共用 |
-| 智云 | `satoken`、`phone` | 可手动填写 token.telecomjs.com 请求头中的 `Satoken`;认证失效时卡片会提供重新登录入口，用户核对账号登记手机号后使用官方二维码扫码登录，成功后自动回写。后端通过 Chrome 执行页面及瑞数脚本并查询余额 |
+| 智云 | `satoken`、`phone` | 可手动填写 token.telecomjs.com 请求头中的 `Satoken`;认证失效时卡片会提供重新登录入口，用户核对账号登记手机号后使用官方二维码扫码登录，成功后自动回写。扫码页会自动勾选「一周内自动登录」（若未勾选）。后端通过 Chrome 执行页面及瑞数脚本并查询余额 |
 
 ## 后端 API
 
@@ -173,4 +173,4 @@ docker compose down           # 停止并移除容器(./data 账号数据保留)
 
 - `accounts.json` 与 `.env` 均含明文凭证 / 密码,切勿提交到公开仓库(均已加入 `.gitignore`);`accounts.json` 删除后重启会自动重建空文件。
 - 所有对 bigmodel.cn / co.yes.vg / huolilink.com 的请求由服务端代理转发,浏览器不直接持有凭证。
-- 凭证(JWT / Cookie / Token)会过期,失败时面板显示「请求失败」;智谱需重新抓 token,YesCode 需重抓 Cookie,火狸若配了邮箱密码会自动续登,火山需重抓 Cookie/CSRF,智云认证失败时可从卡片核对手机号并重新登录，自动更新 Satoken。
+- 凭证(JWT / Cookie / Token)会过期,失败时面板显示「请求失败」;智谱若配了登录账号密码会在 401/403/405 时自动重登并回写 JWT,否则需重新抓 token;YesCode 需重抓 Cookie;火狸若配了邮箱密码会自动续登;火山需重抓 Cookie/CSRF;智云认证失败时可从卡片核对手机号并重新登录，自动更新 Satoken；扫码时后端会尽量勾选天翼「一周内自动登录」。

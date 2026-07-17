@@ -183,6 +183,91 @@ async function disposeLoginPage(session) {
     if (context) await context.close().catch(function() {});
 }
 
+// 在天翼账号登录页（含 iframe）内勾选「一周内自动登录」；已勾选则跳过。
+// 该函数会原样注入到页面/iframe 中执行，依赖浏览器 document。
+function markWeekAutoLoginCheckbox() {
+    function normalize(text) {
+        return String(text || '').replace(/\s+/g, '');
+    }
+    function isAutoLoginLabel(text) {
+        var t = normalize(text);
+        if (!t) return false;
+        if (t.indexOf('一周内自动登录') >= 0 || t.indexOf('一周内自动登陆') >= 0) return true;
+        return t.indexOf('一周') >= 0 && (t.indexOf('自动登录') >= 0 || t.indexOf('自动登陆') >= 0);
+    }
+    function markChecked(input) {
+        if (!input || input.disabled) return false;
+        if (input.checked) return true;
+        try { input.click(); } catch (e) { /* ignore */ }
+        if (!input.checked) {
+            input.checked = true;
+            try {
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+                input.dispatchEvent(new Event('change', { bubbles: true }));
+            } catch (e) { /* ignore */ }
+        }
+        return !!input.checked;
+    }
+    function labelTextFor(input) {
+        var parts = [];
+        if (input.id) {
+            var byFor = document.querySelector('label[for="' + input.id.replace(/"/g, '\\"') + '"]');
+            if (byFor) parts.push(byFor.textContent || '');
+        }
+        var parentLabel = input.closest && input.closest('label');
+        if (parentLabel) parts.push(parentLabel.textContent || '');
+        if (input.parentElement) parts.push(input.parentElement.textContent || '');
+        if (input.nextElementSibling) parts.push(input.nextElementSibling.textContent || '');
+        if (input.previousElementSibling) parts.push(input.previousElementSibling.textContent || '');
+        var aria = input.getAttribute && input.getAttribute('aria-label');
+        if (aria) parts.push(aria);
+        var title = input.getAttribute && input.getAttribute('title');
+        if (title) parts.push(title);
+        return parts.join(' ');
+    }
+
+    var inputs = Array.prototype.slice.call(document.querySelectorAll('input[type="checkbox"]'));
+    var i;
+    for (i = 0; i < inputs.length; i++) {
+        if (isAutoLoginLabel(labelTextFor(inputs[i]))) {
+            return markChecked(inputs[i]);
+        }
+    }
+
+    // 兜底：按附近文案找「一周内自动登录」旁的 checkbox
+    var candidates = Array.prototype.slice.call(document.querySelectorAll('label, span, p, div, a, li'));
+    for (i = 0; i < candidates.length; i++) {
+        var node = candidates[i];
+        var text = normalize(node.textContent || '');
+        if (!text || text.length > 48 || !isAutoLoginLabel(text)) continue;
+        var cb = node.querySelector('input[type="checkbox"]');
+        if (!cb && node.previousElementSibling && node.previousElementSibling.matches
+            && node.previousElementSibling.matches('input[type="checkbox"]')) {
+            cb = node.previousElementSibling;
+        }
+        if (!cb && node.parentElement) cb = node.parentElement.querySelector('input[type="checkbox"]');
+        if (cb) return markChecked(cb);
+    }
+    return false;
+}
+
+async function ensureWeekAutoLogin(page) {
+    if (!page) return false;
+    var frames = [];
+    try { frames = page.frames(); } catch (e) { return false; }
+    var any = false;
+    for (var i = 0; i < frames.length; i++) {
+        var frame = frames[i];
+        try {
+            var ok = await frame.evaluate(markWeekAutoLoginCheckbox);
+            if (ok) any = true;
+        } catch (e) {
+            // iframe 尚未就绪或跨域瞬态失败时忽略，由外层重试
+        }
+    }
+    return any;
+}
+
 function scheduleLoginRemoval(session) {
     if (!session || session.removalTimer) return;
     session.removalTimer = setTimeout(function() {
@@ -277,8 +362,18 @@ async function startLogin(options) {
         await session.page.goto(LOGIN_URL, { waitUntil: 'domcontentloaded', timeout: FETCH_TIMEOUT });
         await session.page.waitForSelector('iframe', { timeout: 35 * 1000 });
         await delay(1500);
+        // 天翼登录 iframe 异步渲染；未勾选「一周内自动登录」时自动勾上，减少每天重复扫码
+        var autoLoginOk = false;
+        for (var attempt = 0; attempt < 10; attempt++) {
+            autoLoginOk = await ensureWeekAutoLogin(session.page);
+            if (autoLoginOk) break;
+            await delay(400);
+        }
+        debug(autoLoginOk ? '已勾选一周内自动登录' : '未找到一周内自动登录勾选框（将继续扫码）');
         session.status = 'pending';
-        session.message = '请使用智云官方二维码扫码登录';
+        session.message = autoLoginOk
+            ? '请使用智云官方二维码扫码登录（已勾选一周内自动登录）'
+            : '请使用智云官方二维码扫码登录';
         session.pollTimer = setInterval(function() { pollLoginToken(session); }, 1000);
         if (session.pollTimer.unref) session.pollTimer.unref();
         session.expireTimer = setTimeout(function() {
@@ -501,6 +596,8 @@ module.exports = {
     getLogin: getLogin,
     getLoginScreenshot: getLoginScreenshot,
     cancelLogin: cancelLogin,
+    ensureWeekAutoLogin: ensureWeekAutoLogin,
+    _markWeekAutoLoginCheckbox: markWeekAutoLoginCheckbox,
     _unwrapCostResponse: unwrapCostResponse,
     _summarizeDailyCosts: summarizeDailyCosts,
     _closeBrowser: closeBrowser
