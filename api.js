@@ -54,13 +54,52 @@ function setCache(index, result) {
 }
 function clearCache() {
     usageCache = {}; expireCache = {};
+    usageInflight = {};
     try { fs.writeFileSync(CACHE_FILE, '{}'); } catch (e) { /* 忽略 */ }
 }
 
 function clearCacheIndex(index) {
     delete usageCache[index];
     delete expireCache[index];
+    delete usageInflight[index];
     try { fs.writeFileSync(CACHE_FILE, JSON.stringify(usageCache)); } catch (e) { /* 忽略 */ }
+}
+
+// 同账号并发抓取去重:列表接口触发后台刷新时,单卡补齐可 join 同一 Promise
+var usageInflight = {};
+
+// 列表秒开时的轻量占位(不含凭证)。前端按 loading/pending 渲染骨架并逐卡补齐。
+function accountUsageShell(account, index) {
+    return {
+        index: index,
+        name: account.name,
+        platform: account.platform || 'glm',
+        planType: account.planType || undefined,
+        responsiblePerson: account.responsiblePerson,
+        notes: account.notes,
+        keyCount: account.keyCount,
+        teamEdition: account.teamEdition || undefined,
+        isPublic: account.isPublic,
+        risk: account.risk || undefined,
+        success: false,
+        loading: true,
+        pending: true
+    };
+}
+
+// force=true 时跳过新鲜缓存并重新抓取;已有进行中的抓取则 join,避免智云等慢源被重复打开。
+// 优先 join inflight:列表 force 已启动抓取时,单卡补齐即使 force=false 也要等到新结果,不能直接吐旧缓存。
+function ensureUsageFetch(account, index, force) {
+    if (usageInflight[index]) return usageInflight[index];
+    if (!force) {
+        var fresh = getCached(index);
+        if (fresh) return Promise.resolve(fresh);
+    }
+    var p = fetchAccountUsage(account, index).finally(function() {
+        if (usageInflight[index] === p) delete usageInflight[index];
+    });
+    usageInflight[index] = p;
+    return p;
 }
 
 function normalizeTelephone(value) {
@@ -558,17 +597,42 @@ module.exports = function(app) {
     });
 
     // ============ 用量查询 ============
+    // /api/usage 始终秒回:有缓存(含过期)先展示,缺失则返回 loading 骨架;
+    // 需要刷新的账号在后台抓取,前端再调 /api/usage/:index 补齐(join 同一 inflight)。
 
     app.get('/api/usage', async function(req, res) {
         try {
             var accounts = readAccounts();
             var force = req.query.force === '1';
-            var results = await Promise.all(accounts.map(function(account, i) {
-                if (isHiddenFromGuest(req, account)) return null;  // 游客跳过私有账号:不返回也不抓取
-                if (!force) { var c = getCached(i); if (c) return c; }
-                return fetchAccountUsage(account, i);
-            }));
-            res.json(results.filter(Boolean).map(usageForResponse));
+            var results = [];
+            for (var i = 0; i < accounts.length; i++) {
+                var account = accounts[i];
+                if (!account || isHiddenFromGuest(req, account)) continue;
+
+                var fresh = getCached(i);
+                var lastKnown = getCachedLastKnown(i);
+
+                // 非强制且缓存仍新鲜:直接返回,不触发抓取
+                if (!force && fresh) {
+                    results.push(usageForResponse(fresh));
+                    continue;
+                }
+
+                // 需要刷新:后台启动(不 await),响应立刻带着旧数据或骨架返回
+                ensureUsageFetch(account, i, force || !fresh).catch(function() { /* 单卡补齐时会再取错误结果 */ });
+
+                if (lastKnown) {
+                    var shown = usageForResponse(lastKnown);
+                    results.push(Object.assign({}, shown, {
+                        pending: true,
+                        stale: !fresh,
+                        refreshing: !!force
+                    }));
+                } else {
+                    results.push(accountUsageShell(account, i));
+                }
+            }
+            res.json(results);
         } catch (err) { res.status(500).json({ error: err.message }); }
     });
 
@@ -578,8 +642,13 @@ module.exports = function(app) {
             var account = getAccount(req);
             if (!account) return res.status(404).json({ error: '未找到账号' });
             if (isHiddenFromGuest(req, account)) return res.status(404).json({ error: '未找到账号' });
-            if (req.query.force !== '1') { var c = getCached(i); if (c) return res.json(usageForResponse(c)); }
-            res.json(usageForResponse(await fetchAccountUsage(account, i)));
+            var force = req.query.force === '1';
+            if (!force) {
+                var c = getCached(i);
+                if (c) return res.json(usageForResponse(c));
+            }
+            // 等待后台抓取完成(与列表接口共享 inflight);完成后返回最终结果
+            res.json(usageForResponse(await ensureUsageFetch(account, i, force)));
         } catch (err) { res.status(500).json({ error: err.message }); }
     });
 

@@ -109,8 +109,8 @@ docker compose down           # 停止并移除容器(./data 账号数据保留)
 | 方法 | 路径 | 鉴权 | 说明 |
 |------|------|------|------|
 | POST | `/api/auth` | - | 校验管理密码 |
-| GET  | `/api/usage` | - | 全部账号用量(5 分钟缓存,`?force=1` 强刷) |
-| GET  | `/api/usage/:index` | - | 单账号用量 |
+| GET  | `/api/usage` | - | 全部账号用量(秒回:新鲜缓存直接返回,缺失/强刷时先返回旧数据或 loading 骨架并后台抓取;前端再按卡补齐) |
+| GET  | `/api/usage/:index` | - | 单账号用量(可 join 列表触发的进行中抓取) |
 | GET  | `/api/keys/:index` | - | 智谱账号 API Key 列表 |
 | GET  | `/api/keys/:index/copy/:apiKey` | ✅ | 复制 Key 明文 |
 | POST | `/api/keys/:index` | ✅ | 创建 Key |
