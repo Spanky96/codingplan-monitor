@@ -827,7 +827,7 @@ module.exports = function(app) {
                 return res.json([]);
             }
             var json = await withGlmAuthRetry(account, i, function(acc) {
-                return httpsGet(keysUrl(acc, '?keyType=1'), makeHeaders(acc));
+                return httpsGet(keysUrl(acc, '?keyType=' + (acc.teamEdition ? 2 : 1)), makeHeaders(acc));
             });
             var keys = json.data || [];
             var accounts = readAccounts();
@@ -857,7 +857,7 @@ module.exports = function(app) {
             var account = getAccount(req);
             if (!account) return res.status(404).json({ error: '未找到账号' });
             var json = await withGlmAuthRetry(account, i, function(acc) {
-                return httpsRequest('POST', keysUrl(acc), makeHeaders(acc), { name: req.body.name, keyType: 1 });
+                return httpsRequest('POST', keysUrl(acc), makeHeaders(acc), { name: req.body.name, keyType: acc.teamEdition ? 2 : 1 });
             });
             res.json(json.data || {});
         } catch (err) { res.status(500).json({ error: err.message }); }
@@ -1109,6 +1109,8 @@ module.exports = function(app) {
             var startDate = fmtDate(startD, '00:00:00');
             var url = 'https://bigmodel.cn/api/monitor/usage/model-usage?startTime='
                 + encodeURIComponent(startDate) + '&endTime=' + encodeURIComponent(endDate);
+            // 团队版需带 type=2，否则拿到的是个人维度数据（与 quota/limit 口径一致）
+            if (account.teamEdition) url += '&type=2';
             var json = await withGlmAuthRetry(account, i, function(acc) {
                 return httpsGet(url, makeHeaders(acc));
             });
