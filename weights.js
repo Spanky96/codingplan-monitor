@@ -282,6 +282,21 @@ function volcWindows(data, planType) {
     return ws;
 }
 
+// 千问 token plan:data.usage 含 per5HourPercentage(5h)/ per1WeekPercentage(7d),均为 0~100。
+// 接口同时返回重置时间戳 per5HourResetTime/per1WeekResetTime,据此算 theoPct 走速率评分;
+// 缺失时 theoPct=-1(无重置时间)-> scoreWindow 退回 bucketScore 纯用量分桶。
+function qwenWindows(data) {
+    var usage = (data && data.usage) || {};
+    var p5 = typeof usage.per5HourPercentage === 'number' ? usage.per5HourPercentage : 0;
+    var p7 = typeof usage.per1WeekPercentage === 'number' ? usage.per1WeekPercentage : 0;
+    var r5 = usage.per5HourResetTime ? new Date(usage.per5HourResetTime).toISOString() : null;
+    var r7 = usage.per1WeekResetTime ? new Date(usage.per1WeekResetTime).toISOString() : null;
+    return [
+        makeWindow('5h', p5, theoPctFromEnd(r5, FIVE_HOURS_MS)),
+        makeWindow('7d', p7, theoPctFromEnd(r7, SEVEN_DAYS_MS))
+    ];
+}
+
 // ============ 多窗口取瓶颈 ============
 
 // 任一窗口耗尽 → 整体 0;否则取所有有效窗口 score 的 min(最紧张=瓶颈);无有效窗口 → null
@@ -329,6 +344,7 @@ function scoreAccount(cachedResult) {
     else if (platform === 'yescode') windows = yescodeWindows(cachedResult.data);
     else if (platform === 'huoli') windows = huoliWindows(cachedResult.data);
     else if (platform === 'volc') windows = volcWindows(cachedResult.data, cachedResult.planType);
+    else if (platform === 'qwen') windows = qwenWindows(cachedResult.data);
     else return null;
 
     var agg = aggregate(windows);

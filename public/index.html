@@ -41,6 +41,7 @@
 .platform-volc { background: #e6fffb; color: #08979c; border: 1px solid #5cdbd3; }
 .platform-volcc { background: #f9f0ff; color: #531dab; border: 1px solid #d3adf7; }
 .platform-telecomjs { background: #fff1f0; color: #cf1322; border: 1px solid #ffa39e; }
+.platform-qwen { background: #fff0f6; color: #c41d7f; border: 1px solid #ffadd2; }
     .card-status { font-size: 12px; padding: 2px 10px; border-radius: 10px; font-weight: 500; }
     .status-ok { background: #f6ffed; color: #52c41a; border: 1px solid #b7eb8f; }
     .status-warn { background: #fffbe6; color: #d48806; border: 1px solid #ffe58f; }
@@ -322,6 +323,7 @@ body.dark .platform-huoli { background: #422006; color: #fb923c; border-color: #
 body.dark .platform-volc { background: #042f2e; color: #5eead4; border-color: #0e7490; }
 body.dark .platform-volcc { background: #22113d; color: #b37feb; border-color: #531dab; }
 body.dark .platform-telecomjs { background: #450a0a; color: #fca5a5; border-color: #991b1b; }
+body.dark .platform-qwen { background: #520339; color: #ff85c0; border-color: #9e1068; }
     body.dark .status-ok { background: #14532d; color: #4ade80; border-color: #166534; }
     body.dark .status-warn { background: #422006; color: #fbbf24; border-color: #854d0e; }
     body.dark .status-danger { background: #450a0a; color: #fca5a5; border-color: #991b1b; }
@@ -811,6 +813,7 @@ body.dark .platform-telecomjs { background: #450a0a; color: #fca5a5; border-colo
       if (platform === 'huoli') return '火狸';
       if (platform === 'volc') return '火山';
       if (platform === 'telecomjs') return '智云';
+      if (platform === 'qwen') return '千问';
       return '智谱';
     }
     // 团队版 level 翻译：pro→团队标准版, max→团队高级版; 非团队版原样返回
@@ -970,6 +973,7 @@ body.dark .platform-telecomjs { background: #450a0a; color: #fca5a5; border-colo
         ? '<span class="platform-tag platform-volcc">火山C</span>'
         : '<span class="platform-tag platform-volc">火山A</span>';
       if (platform === 'telecomjs') return '<span class="platform-tag platform-telecomjs">智云</span>';
+      if (platform === 'qwen') return '<span class="platform-tag platform-qwen">千问</span>';
       return '<span class="platform-tag platform-glm">智谱</span>';
     }
 
@@ -1216,6 +1220,53 @@ body.dark .platform-telecomjs { background: #450a0a; color: #fca5a5; border-colo
       return !!(acc && (acc.loading || acc.pending) && !acc.success && !acc.error);
     }
 
+    // 千问套餐规格 -> 展示名
+    function qwenSpecName(code) {
+      if (!code) return '-';
+      var map = { standard: 'Standard套餐', lite: 'Lite套餐', pro: 'Pro套餐' };
+      return map[code] || code;
+    }
+    // 千问订阅状态 -> 中文
+    function qwenStatusText(status) {
+      var map = { VALID: '生效中', EXPIRED: '已过期', CANCELLED: '已取消' };
+      return map[status] || status || '-';
+    }
+    // 千问用量行：分段进度条 + 理论水位线 + tension + 重置时间（结构与智谱/火山一致）
+    function qwenRow(label, pct, resetMs, periodMs, segments) {
+      pct = Math.max(0, Math.min(100, pct || 0));
+      var pctRound = pct.toFixed(1).replace(/\.0$/, '');
+      var value = '已用 ' + pctRound + '%';
+      var resetTxt = resetMs ? '重置 ' + formatTime(resetMs) : '';
+      var theoPct = -1;
+      if (resetMs) {
+        var elapsed = Date.now() - (resetMs - periodMs);
+        if (elapsed > 0) theoPct = Math.min(100, (elapsed / periodMs) * 100);
+      }
+      var html = '<div class="limit-row"><div class="limit-label"><span class="limit-name">' + label + '</span><span class="limit-value">' + value + '</span></div>';
+      if (segments && segments > 0) {
+        var segPct = 100 / segments;
+        var segHtml = '';
+        for (var i = 0; i < segments; i++) {
+          var segStart = i * segPct, segEnd = (i + 1) * segPct, fillW = 0;
+          if (pct >= segEnd) fillW = 100;
+          else if (pct > segStart) fillW = ((pct - segStart) / segPct) * 100;
+          segHtml += '<div class="seg"><div class="seg-fill ' + getColorClass(pct) + '" style="width:' + fillW + '%"></div></div>';
+        }
+        html += '<div class="limit-bar-wrap"><div class="limit-bar-seg">' + segHtml + '</div>';
+      } else {
+        html += '<div class="limit-bar-wrap"><div class="limit-bar"><div class="limit-fill ' + getColorClass(pct) + '" style="width:' + pct + '%"></div></div>';
+      }
+      if (theoPct >= 0) html += '<div class="theo-marker" style="left:' + theoPct + '%"></div>';
+      html += '</div>';
+      if (theoPct >= 0) {
+        var ti = tensionInfo(pct, theoPct);
+        html += '<div class="tension-row"><span style="color:' + ti.color + ';font-weight:500">' + ti.text + '</span><span style="color:#bfbfbf">理论 ' + theoPct.toFixed(0) + '%</span></div>';
+      }
+      if (resetTxt) html += '<div style="font-size:11px;color:#bfbfbf;margin-top:2px">' + resetTxt + '</div>';
+      html += '</div>';
+      return html;
+    }
+
     function renderCardHTML(i, acc) {
       var platform = acc.platform || 'glm';
       var btn = isAdmin() ? '<button class="card-refresh" id="refresh-' + i + '" onclick="refreshCard(' + i + ')" title="刷新">&#x21bb;</button>' : '';
@@ -1355,6 +1406,32 @@ body.dark .platform-telecomjs { background: #450a0a; color: #fca5a5; border-colo
           + '<div class="card-header-right">' + btn + '<span class="card-status ' + getStatusClass(mpV) + '">' + getStatusText(mpV) + '</span></div></div>'
           + '<div class="card-body">' + bodyHtml + '</div>' + expHtmlV
           + '<div class="card-footer"><div class="card-footer-left">' + planBadgeV + cache + '</div>'
+          + '<button class="detail-btn" onclick="showDetail(' + i + ')">详情</button></div></div>';
+      }
+
+      if (platform === 'qwen') {
+        var qU = (acc.data && acc.data.usage) || {};
+        var qS = (acc.data && acc.data.subscription) || null;
+        var q5 = typeof qU.per5HourPercentage === 'number' ? qU.per5HourPercentage : 0;
+        var q7 = typeof qU.per1WeekPercentage === 'number' ? qU.per1WeekPercentage : 0;
+        var qR5 = qU.per5HourResetTime || 0;
+        var qR7 = qU.per1WeekResetTime || 0;
+        var mpQ = Math.max(q5, q7);
+        var qBody = qwenRow('每5小时', q5, qR5, 5 * 3600000, 5) + qwenRow('每周', q7, qR7, 7 * 86400000, 7);
+        var qPlanBadge = '<span class="level-badge">' + esc(qwenSpecName(qS && qS.specCode)) + '</span>';
+        var qDaysBadge = (qS && qS.remainingDays != null) ? '<span class="level-badge" style="background:#f6ffed;color:#389e0d;border-color:#b7eb8f">剩余 ' + qS.remainingDays + '天</span>' : '';
+        var qExpHtml = '';
+        if (qS && qS.endTime) {
+          var qExpDate = new Date(qS.endTime);
+          var qDaysLeft = Math.ceil((qExpDate - Date.now()) / 86400000);
+          var qExpCls = qDaysLeft <= 10 ? 'expire-danger' : '';
+          var qExpHint = qDaysLeft <= 0 ? '已过期' : qDaysLeft + '天后到期';
+          qExpHtml = '<div class="expire-row" title="订阅到期"><span class="expire-label">订阅到期</span><span class="expire-value ' + qExpCls + '">' + esc(qExpDate.toLocaleDateString('zh-CN')) + '<span class="expire-hint">' + qExpHint + '</span></span></div>';
+        }
+        return '<div class="card" id="card-' + i + '"><div class="card-header">' + headerLeft
+          + '<div class="card-header-right">' + btn + '<span class="card-status ' + getStatusClass(mpQ) + '">' + getStatusText(mpQ) + '</span></div></div>'
+          + '<div class="card-body">' + qBody + '</div>' + qExpHtml
+          + '<div class="card-footer"><div class="card-footer-left">' + qPlanBadge + qDaysBadge + cache + '</div>'
           + '<button class="detail-btn" onclick="showDetail(' + i + ')">详情</button></div></div>';
       }
 
@@ -1529,6 +1606,15 @@ body.dark .platform-telecomjs { background: #450a0a; color: #fca5a5; border-colo
         return rings;
       }
 
+      if (plat === 'qwen') {
+        var qU = (acc.data && acc.data.usage) || {};
+        var q5 = typeof qU.per5HourPercentage === 'number' ? qU.per5HourPercentage : 0;
+        var q7 = typeof qU.per1WeekPercentage === 'number' ? qU.per1WeekPercentage : 0;
+        push('5小时', q5, q5.toFixed(1) + '%', { segments: 5, theoPct: theoPctFromEnd(qU.per5HourResetTime, 5 * 3600000), title: '每5小时已用 ' + q5.toFixed(1) + '%' });
+        push('本周', q7, q7.toFixed(1) + '%', { segments: 7, theoPct: theoPctFromEnd(qU.per1WeekResetTime, 7 * 86400000), title: '每周已用 ' + q7.toFixed(1) + '%' });
+        return rings;
+      }
+
       if (plat === 'telecomjs') return rings;
 
       // GLM：与卡片一致的顺序（MCP额度 → 每5小时 → 每周 → 其他）
@@ -1569,6 +1655,9 @@ body.dark .platform-telecomjs { background: #450a0a; color: #fca5a5; border-colo
       } else if (platform === 'volc') {
         var sv = acc.data && acc.data.subscription;
         if (sv && sv.EndTime) { expTime = sv.EndTime; txt = esc(new Date(expTime).toLocaleDateString('zh-CN')); }
+      } else if (platform === 'qwen') {
+        var qs = acc.data && acc.data.subscription;
+        if (qs && qs.endTime) { expTime = new Date(qs.endTime).toISOString(); txt = esc(new Date(expTime).toLocaleDateString('zh-CN')); }
       }
       if (!expTime) return '';
       var days = Math.ceil((new Date(expTime) - Date.now()) / 86400000);
@@ -1596,6 +1685,12 @@ body.dark .platform-telecomjs { background: #450a0a; color: #fca5a5; border-colo
           ? ((sub && sub.BizInfo) || usage.Status || '-')
           : (usage.PlanType || (sub && sub.BizInfo) || '-');
         return '<span class="level-badge">' + esc(badge) + '</span>';
+      }
+      if (platform === 'qwen') {
+        var qSub = (acc.data && acc.data.subscription) || null;
+        var b = '<span class="level-badge">' + esc(qwenSpecName(qSub && qSub.specCode)) + '</span>';
+        if (qSub && qSub.remainingDays != null) b += '<span class="level-badge" style="background:#f6ffed;color:#389e0d;border-color:#b7eb8f">剩余 ' + qSub.remainingDays + '天</span>';
+        return b;
       }
       if (platform === 'telecomjs') {
         var td = acc.data || {};
@@ -1659,6 +1754,12 @@ body.dark .platform-telecomjs { background: #450a0a; color: #fca5a5; border-colo
       if (plat === 'volc') return acc.planType === 'coding'
         ? volcCMaxPct(acc.data && acc.data.usage)
         : volcMaxPct(acc.data && acc.data.usage);
+      if (plat === 'qwen') {
+        var qU = (acc.data && acc.data.usage) || {};
+        var q5 = typeof qU.per5HourPercentage === 'number' ? qU.per5HourPercentage : 0;
+        var q7 = typeof qU.per1WeekPercentage === 'number' ? qU.per1WeekPercentage : 0;
+        return Math.max(q5, q7);
+      }
       if (plat === 'huoli') {
         var subs = acc.data || [];
         var sub = subs[0] || {};
@@ -1707,7 +1808,7 @@ body.dark .platform-telecomjs { background: #450a0a; color: #fca5a5; border-colo
     }
 
     // 按固定顺序展示用户实际拥有的站点，没添加的类型不显示
-    var PLATFORM_ORDER = ['glm', 'yescode', 'huoli', 'volc', 'telecomjs'];
+    var PLATFORM_ORDER = ['glm', 'yescode', 'huoli', 'volc', 'telecomjs', 'qwen'];
     function renderPlatformFilters(data) {
       var box = document.getElementById('platformFilters');
       if (!box) return;
@@ -2095,6 +2196,40 @@ body.dark .platform-telecomjs { background: #450a0a; color: #fca5a5; border-colo
       document.getElementById('modalBody').innerHTML = html;
     }
 
+    function renderQwenDetail(index, acc) {
+      var sub = (acc.data && acc.data.subscription) || null;
+
+      var html = '<div class="info-section"><div class="info-section-title">负责人信息</div><div class="info-grid">'
+        + '<span class="info-label">负责人</span><span class="info-value">' + esc(acc.responsiblePerson||'-') + '</span>'
+        + '<span class="info-label">电话</span><span class="info-value">' + esc(acc.phone||'-') + '</span>'
+        + '<span class="info-label">备注</span><span class="info-value">' + esc(acc.notes||'-') + '</span>'
+        + '</div></div>';
+
+      html += '<div class="info-section"><div class="info-section-title">订阅信息</div><div class="info-grid">'
+        + '<span class="info-label">套餐规格</span><span class="info-value">' + esc(qwenSpecName(sub && sub.specCode)) + '</span>'
+        + '<span class="info-label">状态</span><span class="info-value">' + esc(qwenStatusText(sub && sub.status)) + '</span>'
+        + '<span class="info-label">自动续费</span><span class="info-value">' + (sub ? (sub.autoRenewFlag ? '是' : '否') : '-') + '</span>'
+        + '<span class="info-label">剩余天数</span><span class="info-value">' + (sub && sub.remainingDays != null ? sub.remainingDays + ' 天' : '-') + '</span>'
+        + '<span class="info-label">开始时间</span><span class="info-value">' + esc(fmtYesCodeDate(sub && sub.startTime)) + '</span>'
+        + '<span class="info-label">到期时间</span><span class="info-value">' + esc(fmtYesCodeDate(sub && sub.endTime)) + '</span>'
+        + '<span class="info-label">实例编号</span><span class="info-value">' + esc((sub && sub.instanceCode) || '-') + '</span>'
+        + '<span class="info-label">官网</span><span class="info-value"><a href="https://platform.qianwenai.com/home/billing/subscription/token-plan-individual" target="_blank" rel="noopener" style="color:#667eea;text-decoration:none">千问控制台 ↗</a></span>'
+        + '</div></div>';
+
+      html += '<div class="info-section"><div class="info-section-title">用量曲线</div>'
+        + '<div class="chart-controls">'
+        + '<button class="period-btn active" id="period-today-' + index + '" onclick="loadUsageChart(' + index + ',\'today\')">当日</button>'
+        + '<button class="period-btn" id="period-7d-' + index + '" onclick="loadUsageChart(' + index + ',\'7d\')">近7天</button>'
+        + '<button class="period-btn" id="period-30d-' + index + '" onclick="loadUsageChart(' + index + ',\'30d\')">近30天</button>'
+        + '<div class="chart-summary" id="chartSummary-' + index + '"></div>'
+        + '</div>'
+        + '<div class="chart-wrap"><div id="chartContainer-' + index + '" style="width:100%;height:320px"></div>'
+        + '<div class="chart-loading" id="chartLoading-' + index + '"></div></div>'
+        + '</div>';
+
+      document.getElementById('modalBody').innerHTML = html;
+    }
+
     function showDetail(index) {
       // Dispose existing chart if any
       if (_usageCharts[_detailIndex]) { _usageCharts[_detailIndex].dispose(); delete _usageCharts[_detailIndex]; }
@@ -2125,6 +2260,13 @@ body.dark .platform-telecomjs { background: #450a0a; color: #fca5a5; border-colo
       if ((acc.platform || 'glm') === 'telecomjs') {
         renderTelecomDetail(index, acc);
         document.getElementById('modalOverlay').classList.add('active');
+        return;
+      }
+
+      if ((acc.platform || 'glm') === 'qwen') {
+        renderQwenDetail(index, acc);
+        document.getElementById('modalOverlay').classList.add('active');
+        loadUsageChart(index, 'today');
         return;
       }
 
@@ -2299,11 +2441,12 @@ body.dark .platform-telecomjs { background: #450a0a; color: #fca5a5; border-colo
       if (!el) return;
       var tu = (data && data.totalUsage) || {};
       var totalTokens = tu.totalTokensUsage || 0;
-      var totalCalls = tu.totalModelCallCount || 0;
-      el.innerHTML = '<span>总用量</span>'
-        + '<span class="sum-total">' + (totalTokens / 1000000).toFixed(2) + ' M</span>'
-        + '<span class="sum-divider">·</span>'
-        + '<span>调用 ' + totalCalls.toLocaleString() + '</span>';
+      var html = '<span>总用量</span>'
+        + '<span class="sum-total">' + (totalTokens / 1000000).toFixed(2) + ' M</span>';
+      if (tu.totalModelCallCount != null) {
+        html += '<span class="sum-divider">·</span><span>调用 ' + tu.totalModelCallCount.toLocaleString() + '</span>';
+      }
+      el.innerHTML = html;
     }
 
     function renderKeysTable(idx, keys, admin) {
@@ -2599,9 +2742,10 @@ body.dark .platform-telecomjs { background: #450a0a; color: #fca5a5; border-colo
       var huoliDisp = platform === 'huoli' ? '' : 'none';
       var volcDisp = platform === 'volc' ? '' : 'none';
       var telecomDisp = platform === 'telecomjs' ? '' : 'none';
+      var qwenDisp = platform === 'qwen' ? '' : 'none';
       document.getElementById('mgmtBody').innerHTML = ''
         + '<div class="import-section"><div class="import-toggle" onclick="this.nextElementSibling.classList.toggle(\'open\')">&#9660; 快速导入（粘贴 fetch 命令）</div>'
-        + '<div class="import-body"><textarea class="form-input" id="f_fetch" placeholder="粘贴 fetch / cURL 命令，自动识别智谱 / YesCode / 火狸 / 火山 / 智云"></textarea>'
+        + '<div class="import-body"><textarea class="form-input" id="f_fetch" placeholder="粘贴 fetch / cURL 命令，自动识别智谱 / YesCode / 火狸 / 火山 / 智云 / 千问"></textarea>'
         + '<div class="import-actions"><button class="btn-primary" style="padding:5px 16px;font-size:12px" onclick="parseFetch()">解析并填充</button></div></div></div>'
         + '<div class="form-row">'
         + '<div class="form-group"><label class="form-label">站点</label><select class="form-input" id="f_platform" onchange="onPlatformChange()">'
@@ -2610,6 +2754,7 @@ body.dark .platform-telecomjs { background: #450a0a; color: #fca5a5; border-colo
         + '<option value="huoli"' + (platform==='huoli'?' selected':'') + '>火狸</option>'
         + '<option value="volc"' + (platform==='volc'?' selected':'') + '>火山</option>'
         + '<option value="telecomjs"' + (platform==='telecomjs'?' selected':'') + '>智云</option>'
+        + '<option value="qwen"' + (platform==='qwen'?' selected':'') + '>千问</option>'
         + '</select></div>'
         + '<div class="form-group"><label class="form-label">账号名称</label><input class="form-input" id="f_name" value="' + esc(a.name||'') + '"></div>'
         + '</div>'
@@ -2641,6 +2786,11 @@ body.dark .platform-telecomjs { background: #450a0a; color: #fca5a5; border-colo
         + '<div id="f_telecom_fields" style="display:' + telecomDisp + '">'
         + '<div class="form-group"><label class="form-label">Satoken</label><textarea class="form-input" id="f_satoken" placeholder="智云页面请求头中的 Satoken">' + esc(a.satoken||'') + '</textarea></div>'
         + '</div>'
+        + '<div id="f_qwen_fields" style="display:' + qwenDisp + '">'
+        + '<div class="form-group"><label class="form-label">Cookie</label><textarea class="form-input" id="f_qwen_cookie" placeholder="完整 Cookie，用于访问 platform.qianwenai.com（建议 Copy as cURL 带出登录态）">' + esc(a.cookie||'') + '</textarea></div>'
+        + '<div class="form-row"><div class="form-group"><label class="form-label">Sec Token</label><input class="form-input" id="f_qwen_sec_token" placeholder="请求 body 中的 sec_token" value="' + esc(a.sec_token||'') + '"></div>'
+        + '<div class="form-group"><label class="form-label">Nbid（可选）</label><input class="form-input" id="f_qwen_nbid" placeholder="请求 body params 中的 Nbid" value="' + esc(a.nbid||'') + '"></div></div>'
+        + '</div>'
         + '<div class="form-row"><div class="form-group"><label class="form-label">负责人</label><input class="form-input" id="f_person" value="' + esc(a.responsiblePerson||'') + '"></div>'
         + '<div class="form-group"><label class="form-label">电话</label><input class="form-input" id="f_phone" value="' + esc(a.phone||'') + '"></div></div>'
         + '<div class="form-group"><label class="form-label">备注</label><input class="form-input" id="f_notes" value="' + esc(a.notes||'') + '"></div>'
@@ -2655,6 +2805,7 @@ body.dark .platform-telecomjs { background: #450a0a; color: #fca5a5; border-colo
       document.getElementById('f_huoli_fields').style.display = p === 'huoli' ? '' : 'none';
       document.getElementById('f_volc_fields').style.display = p === 'volc' ? '' : 'none';
       document.getElementById('f_telecom_fields').style.display = p === 'telecomjs' ? '' : 'none';
+      document.getElementById('f_qwen_fields').style.display = p === 'qwen' ? '' : 'none';
     }
 
     // 从 fetch / Node fetch / cURL 文本中提取指定 header 值
@@ -2688,6 +2839,7 @@ body.dark .platform-telecomjs { background: #450a0a; color: #fca5a5; border-colo
       var isVolc = /volcengine\.com|console\.volcengine/i.test(t);
       var isTelecom = /token\.telecomjs\.com|card-with-time-range|satoken/i.test(t);
       var isGlm = /bigmodel\.cn|bigmodel-organization|bigmodel-project/i.test(t);
+      var isQwen = /qianwenai\.com|sfm_tokenplansolo|tokenplan\/personal/i.test(t);
 
       if (isTelecom && !isGlm) {
         document.getElementById('f_platform').value = 'telecomjs';
@@ -2740,6 +2892,23 @@ body.dark .platform-telecomjs { background: #450a0a; color: #fca5a5; border-colo
         return;
       }
 
+      if (isQwen) {
+        document.getElementById('f_platform').value = 'qwen';
+        onPlatformChange();
+        var qCookie = extractCookie(t);
+        if (qCookie) { document.getElementById('f_qwen_cookie').value = qCookie; }
+        var secMatch = t.match(/sec_token=([A-Za-z0-9_-]+)/);
+        if (secMatch) { document.getElementById('f_qwen_sec_token').value = secMatch[1]; }
+        var nbidMatch = t.match(/%22Nbid%22%3A%22([0-9a-zA-Z_-]+)/) || t.match(/"Nbid"\s*:\s*"([^"]+)"/);
+        if (nbidMatch) { document.getElementById('f_qwen_nbid').value = nbidMatch[1]; }
+        if (!qCookie) {
+          alert('未能解析出 Cookie。\n\n「Copy as fetch」不会包含 Cookie 头（它靠 credentials:include 由浏览器自动带），\n请改用：右键请求 -> Copy -> Copy as cURL (bash)，\ncURL 复制会带出完整 Cookie（含登录态），再粘贴到这里解析。');
+        } else if (!secMatch) {
+          alert('已解析出 Cookie，但未解析出 sec_token，请确认复制的是 tokenplan usage 或 subscription 请求。');
+        }
+        return;
+      }
+
       document.getElementById('f_platform').value = 'glm';
       onPlatformChange();
       var n = 0;
@@ -2779,6 +2948,11 @@ body.dark .platform-telecomjs { background: #450a0a; color: #fca5a5; border-colo
       } else if (platform === 'telecomjs') {
         body.satoken = document.getElementById('f_satoken').value.trim();
         if (!body.name || !body.satoken) { alert('账号名称和 Satoken 不能为空'); return; }
+      } else if (platform === 'qwen') {
+        body.cookie = document.getElementById('f_qwen_cookie').value.trim();
+        body.sec_token = document.getElementById('f_qwen_sec_token').value.trim();
+        body.nbid = document.getElementById('f_qwen_nbid').value.trim();
+        if (!body.name || !body.cookie || !body.sec_token) { alert('账号名称、Cookie 和 Sec Token 不能为空'); return; }
       } else {
         body.authorization = document.getElementById('f_auth').value.trim();
         body.organization = document.getElementById('f_org').value.trim();
