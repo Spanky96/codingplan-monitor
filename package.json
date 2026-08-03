@@ -1,7 +1,7 @@
 {
   "name": "codingplan-monitor",
   "version": "1.0.0",
-  "description": "智谱 GLM / YesCode / 火狸 / 火山 / 智云多账号用量监控面板",
+  "description": "智谱 GLM / YesCode / 火狸 / 火山 / 智云 / 千问 / MiniMax 多账号用量监控面板",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

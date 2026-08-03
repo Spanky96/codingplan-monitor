@@ -16,7 +16,7 @@
     .header-btn:active { transform: scale(0.97); }
     .last-updated { font-size: 12px; opacity: 0.7; }
 
-    .container { max-width: 1920px; margin: 24px auto; padding: 0 24px; }
+    .container { margin: 24px auto; padding: 0 24px; }
     .toolbar { display: flex; flex-wrap: wrap; gap: 18px; align-items: center; padding: 10px 14px; background: #fff; border-radius: 10px; box-shadow: 0 1px 4px rgba(0,0,0,0.04); margin-bottom: 16px; }
     .toolbar-group { display: flex; align-items: center; gap: 6px; }
     .toolbar-label { font-size: 12px; color: #8c8c8c; margin-right: 2px; }
@@ -25,7 +25,7 @@
     .toolbar-btn.active { background: #667eea; border-color: #667eea; color: #fff; }
     .sort-arrow { font-size: 9px; line-height: 1; opacity: 0.85; }
     .toolbar-count { margin-left: auto; font-size: 12px; color: #8c8c8c; }
-    .card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+    .card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }
 
     .card { background: #fff; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); overflow: hidden; transition: transform 0.2s, box-shadow 0.2s; display: flex; flex-direction: column; }
     .card:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,0,0,0.1); }
@@ -42,6 +42,7 @@
 .platform-volcc { background: #f9f0ff; color: #531dab; border: 1px solid #d3adf7; }
 .platform-telecomjs { background: #fff1f0; color: #cf1322; border: 1px solid #ffa39e; }
 .platform-qwen { background: #fff0f6; color: #c41d7f; border: 1px solid #ffadd2; }
+.platform-minimax { background: #fffbe6; color: #ad6800; border: 1px solid #ffd666; }
     .card-status { font-size: 12px; padding: 2px 10px; border-radius: 10px; font-weight: 500; }
     .status-ok { background: #f6ffed; color: #52c41a; border: 1px solid #b7eb8f; }
     .status-warn { background: #fffbe6; color: #d48806; border: 1px solid #ffe58f; }
@@ -87,8 +88,8 @@
     .weight-badge.w-high { background: #f6ffed; color: #389e0d; border-color: #b7eb8f; }
     .risk-badge { padding: 1px 7px; border-radius: 10px; font-size: 11px; font-weight: 700; background: #fff1f0; color: #cf1322; border: 1px solid #ffa39e; cursor: help; white-space: nowrap; flex-shrink: 0; }
     .reset-badge { padding: 1px 7px; border-radius: 10px; font-size: 11px; font-weight: 700; background: #fff7e6; color: #ad4e00; border: 1px solid #ffbb96; cursor: help; white-space: nowrap; flex-shrink: 0; }
-    .peak-badge { padding: 1px 7px; border-radius: 10px; font-size: 11px; font-weight: 700; background: #fff1f0; color: #cf1322; border: 1px solid #ffa39e; cursor: help; white-space: nowrap; flex-shrink: 0; }
     .plan-badge { padding: 1px 7px; border-radius: 10px; font-size: 11px; font-weight: 700; background: #f9f0ff; color: #531dab; border: 1px solid #d3adf7; cursor: help; white-space: nowrap; flex-shrink: 0; }
+    .plan-badge-peak { background: #fff7e6; color: #d46b08; border: 1px solid #ffd591; }
     .card.reset-needed { box-shadow: inset 0 3px 0 #fa8c16, 0 2px 8px rgba(0,0,0,0.06); }
     .list-row.reset-needed { box-shadow: inset 0 3px 0 #fa8c16, 0 1px 4px rgba(0,0,0,0.05); }
     .risk-banner { display: flex; gap: 8px; align-items: flex-start; margin: 0 0 12px; padding: 10px 14px; border-radius: 6px; background: #fff1f0; border: 1px solid #ffa39e; color: #a8071a; font-size: 13px; line-height: 1.5; }
@@ -317,6 +318,7 @@ body.dark .platform-volc { background: #042f2e; color: #5eead4; border-color: #0
 body.dark .platform-volcc { background: #22113d; color: #b37feb; border-color: #531dab; }
 body.dark .platform-telecomjs { background: #450a0a; color: #fca5a5; border-color: #991b1b; }
 body.dark .platform-qwen { background: #520339; color: #ff85c0; border-color: #9e1068; }
+body.dark .platform-minimax { background: #614700; color: #ffc53d; border-color: #876800; }
     body.dark .status-ok { background: #14532d; color: #4ade80; border-color: #166534; }
     body.dark .status-warn { background: #422006; color: #fbbf24; border-color: #854d0e; }
     body.dark .status-danger { background: #450a0a; color: #fca5a5; border-color: #991b1b; }
@@ -340,8 +342,8 @@ body.dark .platform-qwen { background: #520339; color: #ff85c0; border-color: #9
     body.dark .level-badge { background: #1e1b4b; color: #a5b4fc; border-color: #3730a3; }
     body.dark .risk-badge { background: #3a1212; color: #ff7875; border-color: #5c2020; }
     body.dark .reset-badge { background: #3b2507; color: #ffc069; border-color: #874d00; }
-    body.dark .peak-badge { background: #450a0a; color: #fca5a5; border-color: #991b1b; }
     body.dark .plan-badge { background: #22113d; color: #b37feb; border-color: #531dab; }
+    body.dark .plan-badge-peak { background: #422006; color: #fbbf24; border-color: #854d0e; }
     body.dark .card.reset-needed, body.dark .list-row.reset-needed { box-shadow: inset 0 3px 0 #d46b08, 0 2px 8px rgba(0,0,0,0.3); }
     body.dark .risk-banner { background: #2a1414; border-color: #5c2020; color: #ffa39e; }
     body.dark .cache-time { color: #555; }
@@ -809,6 +811,7 @@ body.dark .platform-qwen { background: #520339; color: #ff85c0; border-color: #9
       if (platform === 'volc') return '火山';
       if (platform === 'telecomjs') return '智云';
       if (platform === 'qwen') return '千问';
+      if (platform === 'minimax') return 'MiniMax';
       return '智谱';
     }
     // 团队版 level 翻译：pro→团队标准版, max→团队高级版; 非团队版原样返回
@@ -916,7 +919,7 @@ body.dark .platform-qwen { background: #520339; color: #ff85c0; border-color: #9
       return dow >= 1 && dow <= 5 && d.getHours() >= GLM_PEAK_START_HOUR && d.getHours() < GLM_PEAK_END_HOUR;
     }
 
-    // GLM 套餐版本:含 CREDIT_LIMIT → 积分制新版;否则 TOKENS_LIMIT 老版(v2)
+    // GLM 套餐版本:含 CREDIT_LIMIT → 积分制新版(V3);否则 TOKENS_LIMIT 老版(v2)
     function glmPlanKind(limits) {
       return (limits || []).some(function(l) { return l && l.type === 'CREDIT_LIMIT'; }) ? 'credit' : 'token';
     }
@@ -952,17 +955,16 @@ body.dark .platform-qwen { background: #520339; color: #ff85c0; border-color: #9
       return Math.max(0, Math.min(100, (doneWork / totalWork) * 100));
     }
 
-    // GLM 页脚徽标:高峰徽章(仅高峰时段显示)+ 套餐版本徽章(积分制 / v2)
+    // GLM 页脚徽标:套餐版本(V3=积分制 / v2)与高峰合并为单个徽标,高峰时段用橙色
     function glmFooterBadges(acc) {
-      var html = '';
-      if (isGlmPeakNow(new Date())) {
-        html += '<span class="peak-badge" title="" data-tooltip="' + esc('高峰时段:周一至周五 14:00–18:00') + '" aria-label="高峰期" tabindex="0">高峰期</span>';
-      }
       var kind = glmPlanKind((acc && acc.data && acc.data.limits) || []);
-      var planTip = kind === 'credit' ? '积分制套餐:高峰按 100% 消耗积分,低峰按 50% 消耗' : 'v2 套餐:高峰时段按 3 倍消耗';
-      var planLabel = kind === 'credit' ? '积分制' : 'v2';
-      html += '<span class="plan-badge" title="" data-tooltip="' + esc(planTip) + '" aria-label="' + planLabel + '" tabindex="0">' + planLabel + '</span>';
-      return html;
+      var planTip = kind === 'credit' ? 'V3 积分制套餐:高峰按 100% 消耗积分,低峰按 50% 消耗' : 'v2 套餐:高峰时段按 3 倍消耗';
+      var planLabel = kind === 'credit' ? 'V3' : 'v2';
+      if (isGlmPeakNow(new Date())) {
+        var tip = '高峰时段:周一至周五 14:00–18:00;' + planTip;
+        return '<span class="plan-badge plan-badge-peak" title="" data-tooltip="' + esc(tip) + '" aria-label="' + planLabel + ' 高峰" tabindex="0">' + planLabel + '·高峰</span>';
+      }
+      return '<span class="plan-badge" title="" data-tooltip="' + esc(planTip) + '" aria-label="' + planLabel + '" tabindex="0">' + planLabel + '</span>';
     }
 
     // ============ 卡片渲染 ============
@@ -1033,6 +1035,7 @@ body.dark .platform-qwen { background: #520339; color: #ff85c0; border-color: #9
         : '<span class="platform-tag platform-volc">火山A</span>';
       if (platform === 'telecomjs') return '<span class="platform-tag platform-telecomjs">智云</span>';
       if (platform === 'qwen') return '<span class="platform-tag platform-qwen">千问</span>';
+      if (platform === 'minimax') return '<span class="platform-tag platform-minimax">MiniMax</span>';
       return '<span class="platform-tag platform-glm">智谱</span>';
     }
 
@@ -1326,6 +1329,31 @@ body.dark .platform-qwen { background: #520339; color: #ff85c0; border-color: #9
       return html;
     }
 
+    // MiniMax 用量窗口行:后端归一化为 usage.windows = [{label, usedPct 或 used+quota, resetMs, periodMs, segments?}]
+    // 百分比窗口复用 qwenRow;计数窗口(如视频赠送 0/3)按 used/quota 折算百分比,数值显示原始计数
+    function minimaxWindowRow(w) {
+      if (typeof w.usedPct === 'number') {
+        return qwenRow(w.label, w.usedPct, w.resetMs, w.periodMs, w.segments || 0);
+      }
+      var pct = w.quota > 0 ? Math.min(100, ((w.used || 0) / w.quota) * 100) : 0;
+      var html = '<div class="limit-row"><div class="limit-label"><span class="limit-name">' + esc(w.label || '') + '</span><span class="limit-value">' + (w.used || 0) + '/' + w.quota + '已用</span></div>';
+      html += '<div class="limit-bar-wrap"><div class="limit-bar"><div class="limit-fill ' + getColorClass(pct) + '" style="width:' + pct + '%"></div></div></div>';
+      if (w.resetMs) html += '<div style="font-size:11px;color:#bfbfbf;margin-top:2px">重置 ' + formatTime(w.resetMs) + '</div>';
+      html += '</div>';
+      return html;
+    }
+    function minimaxUsageRows(usage) {
+      var ws = (usage && Array.isArray(usage.windows)) ? usage.windows : [];
+      return ws.map(minimaxWindowRow).join('');
+    }
+    function minimaxMaxPct(usage) {
+      var ws = (usage && Array.isArray(usage.windows)) ? usage.windows : [];
+      if (!ws.length) return 0;
+      return Math.max.apply(null, ws.map(function(w) {
+        return typeof w.usedPct === 'number' ? w.usedPct : (w.quota > 0 ? Math.min(100, ((w.used || 0) / w.quota) * 100) : 0);
+      }));
+    }
+
     function renderCardHTML(i, acc) {
       var platform = acc.platform || 'glm';
       var btn = isAdmin() ? '<button class="card-refresh" id="refresh-' + i + '" onclick="refreshCard(' + i + ')" title="刷新">&#x21bb;</button>' : '';
@@ -1491,6 +1519,33 @@ body.dark .platform-qwen { background: #520339; color: #ff85c0; border-color: #9
           + '<div class="card-header-right">' + btn + '<span class="card-status ' + getStatusClass(mpQ) + '">' + getStatusText(mpQ) + '</span></div></div>'
           + '<div class="card-body">' + qBody + '</div>' + qExpHtml
           + '<div class="card-footer"><div class="card-footer-left">' + qPlanBadge + qDaysBadge + cache + '</div>'
+          + '<button class="detail-btn" onclick="showDetail(' + i + ')">详情</button></div></div>';
+      }
+
+      if (platform === 'minimax') {
+        var mU = (acc.data && acc.data.usage) || null;
+        var mS = (acc.data && acc.data.subscription) || null;
+        // 用量接口接入前仅展示套餐信息占位;接入后 usage.windows 自动渲染为进度行
+        var mBody = mU
+          ? minimaxUsageRows(mU)
+          : '<div class="limit-row"><div class="limit-label"><span class="limit-name">用量</span><span class="limit-value" style="color:#bfbfbf">待接入</span></div>'
+            + '<div style="font-size:11px;color:#bfbfbf;margin-top:2px">用量接口对接中,当前仅展示套餐与到期信息</div></div>';
+        var mpM = mU ? minimaxMaxPct(mU) : 0;
+        var mStatusCls = getStatusClass(mpM), mStatusTxt = getStatusText(mpM);
+        if (!mU) { mStatusCls = 'status-ok'; mStatusTxt = '正常'; }
+        if (mS && mS.expireMs && mS.expireMs < Date.now()) { mStatusCls = 'status-danger'; mStatusTxt = '已过期'; }
+        var mExpHtml = '';
+        if (mS && mS.expireDate) {
+          var mDaysLeft = Math.ceil((mS.expireMs - Date.now()) / 86400000);
+          var mExpCls = mDaysLeft <= 10 ? 'expire-danger' : '';
+          var mExpHint = mDaysLeft <= 0 ? '已过期' : mDaysLeft + '天后到期';
+          mExpHtml = '<div class="expire-row" title="订阅到期"><span class="expire-label">订阅到期</span><span class="expire-value ' + mExpCls + '">' + esc(mS.expireDate) + '<span class="expire-hint">' + mExpHint + '</span></span></div>';
+        }
+        var mPlanBadge = '<span class="level-badge">' + esc((mS && mS.planName) || '无套餐记录') + '</span>';
+        return '<div class="card" id="card-' + i + '"><div class="card-header">' + headerLeft
+          + '<div class="card-header-right">' + btn + '<span class="card-status ' + mStatusCls + '">' + mStatusTxt + '</span></div></div>'
+          + '<div class="card-body">' + mBody + '</div>' + mExpHtml
+          + '<div class="card-footer"><div class="card-footer-left">' + mPlanBadge + cache + '</div>'
           + '<button class="detail-btn" onclick="showDetail(' + i + ')">详情</button></div></div>';
       }
 
@@ -1674,6 +1729,17 @@ body.dark .platform-qwen { background: #520339; color: #ff85c0; border-color: #9
         return rings;
       }
 
+      if (plat === 'minimax') {
+        var mws = (acc.data && acc.data.usage && acc.data.usage.windows) || [];
+        mws.forEach(function(w) {
+          var pct = typeof w.usedPct === 'number' ? w.usedPct : (w.quota > 0 ? ((w.used || 0) / w.quota) * 100 : 0);
+          var val = typeof w.usedPct === 'number' ? pct.toFixed(1) + '%' : ((w.used || 0) + '/' + w.quota);
+          var resetIso = w.resetMs ? new Date(w.resetMs).toISOString() : null;
+          push(w.label || '额度', pct, val, { segments: w.segments || 0, theoPct: w.periodMs ? theoPctFromEnd(resetIso, w.periodMs) : -1, title: (w.label || '额度') + ' ' + val });
+        });
+        return rings;
+      }
+
       if (plat === 'telecomjs') return rings;
 
       // GLM：与卡片一致的顺序（MCP额度 → 每5小时 → 每周 → 其他）
@@ -1717,6 +1783,9 @@ body.dark .platform-qwen { background: #520339; color: #ff85c0; border-color: #9
       } else if (platform === 'qwen') {
         var qs = acc.data && acc.data.subscription;
         if (qs && qs.endTime) { expTime = new Date(qs.endTime).toISOString(); txt = esc(new Date(expTime).toLocaleDateString('zh-CN')); }
+      } else if (platform === 'minimax') {
+        var mSub = acc.data && acc.data.subscription;
+        if (mSub && mSub.expireDate) { expTime = mSub.expireDate + 'T23:59:59'; txt = esc(mSub.expireDate); }
       }
       if (!expTime) return '';
       var days = Math.ceil((new Date(expTime) - Date.now()) / 86400000);
@@ -1750,6 +1819,10 @@ body.dark .platform-qwen { background: #520339; color: #ff85c0; border-color: #9
         var b = '<span class="level-badge">' + esc(qwenSpecName(qSub && qSub.specCode)) + '</span>';
         if (qSub && qSub.remainingDays != null) b += '<span class="level-badge" style="background:#f6ffed;color:#389e0d;border-color:#b7eb8f">剩余 ' + qSub.remainingDays + '天</span>';
         return b;
+      }
+      if (platform === 'minimax') {
+        var mSub2 = (acc.data && acc.data.subscription) || null;
+        return '<span class="level-badge">' + esc((mSub2 && mSub2.planName) || '无套餐记录') + '</span>';
       }
       if (platform === 'telecomjs') {
         var td = acc.data || {};
@@ -1820,6 +1893,9 @@ body.dark .platform-qwen { background: #520339; color: #ff85c0; border-color: #9
         var q7 = typeof qU.per1WeekPercentage === 'number' ? qU.per1WeekPercentage : 0;
         return Math.max(q5, q7);
       }
+      if (plat === 'minimax') {
+        return minimaxMaxPct(acc.data && acc.data.usage);
+      }
       if (plat === 'huoli') {
         var subs = acc.data || [];
         var sub = subs[0] || {};
@@ -1868,7 +1944,7 @@ body.dark .platform-qwen { background: #520339; color: #ff85c0; border-color: #9
     }
 
     // 按固定顺序展示用户实际拥有的站点，没添加的类型不显示
-    var PLATFORM_ORDER = ['glm', 'yescode', 'huoli', 'volc', 'telecomjs', 'qwen'];
+    var PLATFORM_ORDER = ['glm', 'yescode', 'huoli', 'volc', 'telecomjs', 'qwen', 'minimax'];
     function renderPlatformFilters(data) {
       var box = document.getElementById('platformFilters');
       if (!box) return;
@@ -2290,6 +2366,38 @@ body.dark .platform-qwen { background: #520339; color: #ff85c0; border-color: #9
       document.getElementById('modalBody').innerHTML = html;
     }
 
+    function renderMiniMaxDetail(index, acc) {
+      var sub = (acc.data && acc.data.subscription) || null;
+      var usage = (acc.data && acc.data.usage) || null;
+
+      var html = '<div class="info-section"><div class="info-section-title">负责人信息</div><div class="info-grid">'
+        + '<span class="info-label">负责人</span><span class="info-value">' + esc(acc.responsiblePerson||'-') + '</span>'
+        + '<span class="info-label">电话</span><span class="info-value">' + esc(acc.phone||'-') + '</span>'
+        + '<span class="info-label">备注</span><span class="info-value">' + esc(acc.notes||'-') + '</span>'
+        + '</div></div>';
+
+      var daysLeftTxt = '-';
+      if (sub && sub.expireMs) {
+        var dl = Math.ceil((sub.expireMs - Date.now()) / 86400000);
+        daysLeftTxt = dl <= 0 ? '已过期' : dl + ' 天';
+      }
+      html += '<div class="info-section"><div class="info-section-title">订阅信息</div><div class="info-grid">'
+        + '<span class="info-label">套餐</span><span class="info-value">' + esc((sub && sub.planName) || '无套餐记录') + '</span>'
+        + '<span class="info-label">到期时间</span><span class="info-value">' + esc((sub && sub.expireDate) || '-') + '</span>'
+        + '<span class="info-label">剩余天数</span><span class="info-value">' + daysLeftTxt + '</span>'
+        + '<span class="info-label">权益发放时间</span><span class="info-value">' + esc(fmtYesCodeDate(sub && sub.notifiedAt)) + '</span>'
+        + '<span class="info-label">官网</span><span class="info-value"><a href="https://platform.minimaxi.com/console/plan" target="_blank" rel="noopener" style="color:#667eea;text-decoration:none">MiniMax 控制台 ↗</a></span>'
+        + '</div></div>';
+
+      // 用量接口接入后 usage.windows 自动渲染;接入前显示占位说明
+      var usageHtml = usage
+        ? minimaxUsageRows(usage)
+        : '<p style="font-size:13px;color:#8c8c8c">用量接口对接中（5h 限额 / 周限额 / 视频赠送），当前仅展示套餐与到期信息。</p>';
+      html += '<div class="info-section"><div class="info-section-title">额度使用情况</div>' + usageHtml + '</div>';
+
+      document.getElementById('modalBody').innerHTML = html;
+    }
+
     function showDetail(index) {
       // Dispose existing chart if any
       if (_usageCharts[_detailIndex]) { _usageCharts[_detailIndex].dispose(); delete _usageCharts[_detailIndex]; }
@@ -2327,6 +2435,12 @@ body.dark .platform-qwen { background: #520339; color: #ff85c0; border-color: #9
         renderQwenDetail(index, acc);
         document.getElementById('modalOverlay').classList.add('active');
         loadUsageChart(index, 'today');
+        return;
+      }
+
+      if ((acc.platform || 'glm') === 'minimax') {
+        renderMiniMaxDetail(index, acc);
+        document.getElementById('modalOverlay').classList.add('active');
         return;
       }
 
@@ -2803,9 +2917,10 @@ body.dark .platform-qwen { background: #520339; color: #ff85c0; border-color: #9
       var volcDisp = platform === 'volc' ? '' : 'none';
       var telecomDisp = platform === 'telecomjs' ? '' : 'none';
       var qwenDisp = platform === 'qwen' ? '' : 'none';
+      var minimaxDisp = platform === 'minimax' ? '' : 'none';
       document.getElementById('mgmtBody').innerHTML = ''
         + '<div class="import-section"><div class="import-toggle" onclick="this.nextElementSibling.classList.toggle(\'open\')">&#9660; 快速导入（粘贴 fetch 命令）</div>'
-        + '<div class="import-body"><textarea class="form-input" id="f_fetch" placeholder="粘贴 fetch / cURL 命令，自动识别智谱 / YesCode / 火狸 / 火山 / 智云 / 千问"></textarea>'
+        + '<div class="import-body"><textarea class="form-input" id="f_fetch" placeholder="粘贴 fetch / cURL 命令，自动识别智谱 / YesCode / 火狸 / 火山 / 智云 / 千问 / MiniMax"></textarea>'
         + '<div class="import-actions"><button class="btn-primary" style="padding:5px 16px;font-size:12px" onclick="parseFetch()">解析并填充</button></div></div></div>'
         + '<div class="form-row">'
         + '<div class="form-group"><label class="form-label">站点</label><select class="form-input" id="f_platform" onchange="onPlatformChange()">'
@@ -2815,6 +2930,7 @@ body.dark .platform-qwen { background: #520339; color: #ff85c0; border-color: #9
         + '<option value="volc"' + (platform==='volc'?' selected':'') + '>火山</option>'
         + '<option value="telecomjs"' + (platform==='telecomjs'?' selected':'') + '>智云</option>'
         + '<option value="qwen"' + (platform==='qwen'?' selected':'') + '>千问</option>'
+        + '<option value="minimax"' + (platform==='minimax'?' selected':'') + '>MiniMax</option>'
         + '</select></div>'
         + '<div class="form-group"><label class="form-label">账号名称</label><input class="form-input" id="f_name" value="' + esc(a.name||'') + '"></div>'
         + '</div>'
@@ -2851,6 +2967,10 @@ body.dark .platform-qwen { background: #520339; color: #ff85c0; border-color: #9
         + '<div class="form-row"><div class="form-group"><label class="form-label">Sec Token</label><input class="form-input" id="f_qwen_sec_token" placeholder="请求 body 中的 sec_token" value="' + esc(a.sec_token||'') + '"></div>'
         + '<div class="form-group"><label class="form-label">Nbid（可选）</label><input class="form-input" id="f_qwen_nbid" placeholder="请求 body params 中的 Nbid" value="' + esc(a.nbid||'') + '"></div></div>'
         + '</div>'
+        + '<div id="f_minimax_fields" style="display:' + minimaxDisp + '">'
+        + '<div class="form-group"><label class="form-label">Cookie</label><textarea class="form-input" id="f_minimax_cookie" placeholder="完整 Cookie，用于访问 www.minimaxi.com（建议从 platform.minimaxi.com 请求 Copy as cURL 带出登录态）">' + esc(a.cookie||'') + '</textarea></div>'
+        + '<div class="form-group"><label class="form-label">Group ID（可选）</label><input class="form-input" id="f_minimax_group_id" placeholder="请求头 x-group-id；留空时自动取 Cookie 中的 minimax_group_id_v2" value="' + esc(a.group_id||'') + '"></div>'
+        + '</div>'
         + '<div class="form-row"><div class="form-group"><label class="form-label">负责人</label><input class="form-input" id="f_person" value="' + esc(a.responsiblePerson||'') + '"></div>'
         + '<div class="form-group"><label class="form-label">电话</label><input class="form-input" id="f_phone" value="' + esc(a.phone||'') + '"></div></div>'
         + '<div class="form-group"><label class="form-label">备注</label><input class="form-input" id="f_notes" value="' + esc(a.notes||'') + '"></div>'
@@ -2866,6 +2986,7 @@ body.dark .platform-qwen { background: #520339; color: #ff85c0; border-color: #9
       document.getElementById('f_volc_fields').style.display = p === 'volc' ? '' : 'none';
       document.getElementById('f_telecom_fields').style.display = p === 'telecomjs' ? '' : 'none';
       document.getElementById('f_qwen_fields').style.display = p === 'qwen' ? '' : 'none';
+      document.getElementById('f_minimax_fields').style.display = p === 'minimax' ? '' : 'none';
     }
 
     // 从 fetch / Node fetch / cURL 文本中提取指定 header 值
@@ -2900,6 +3021,7 @@ body.dark .platform-qwen { background: #520339; color: #ff85c0; border-color: #9
       var isTelecom = /token\.telecomjs\.com|card-with-time-range|satoken/i.test(t);
       var isGlm = /bigmodel\.cn|bigmodel-organization|bigmodel-project/i.test(t);
       var isQwen = /qianwenai\.com|sfm_tokenplansolo|tokenplan\/personal/i.test(t);
+      var isMinimax = /minimaxi\.com|minimax_group_id/i.test(t);
 
       if (isTelecom && !isGlm) {
         document.getElementById('f_platform').value = 'telecomjs';
@@ -2969,6 +3091,23 @@ body.dark .platform-qwen { background: #520339; color: #ff85c0; border-color: #9
         return;
       }
 
+      if (isMinimax) {
+        document.getElementById('f_platform').value = 'minimax';
+        onPlatformChange();
+        var mmCookie = extractCookie(t);
+        if (mmCookie) { document.getElementById('f_minimax_cookie').value = mmCookie; }
+        var groupId = extractHeader(t, 'x-group-id');
+        if (!groupId && mmCookie) {
+          var gm = mmCookie.match(/minimax_group_id_v2=(\d+)/);
+          if (gm) groupId = gm[1];
+        }
+        if (groupId) { document.getElementById('f_minimax_group_id').value = groupId; }
+        if (!mmCookie) {
+          alert('未能解析出 Cookie。\n\n「Copy as fetch」不会包含 Cookie 头（它靠 credentials:include 由浏览器自动带），\n请改用：右键请求 -> Copy -> Copy as cURL (bash)，\ncURL 复制会带出完整 Cookie（含登录态），再粘贴到这里解析。');
+        }
+        return;
+      }
+
       document.getElementById('f_platform').value = 'glm';
       onPlatformChange();
       var n = 0;
@@ -3013,6 +3152,10 @@ body.dark .platform-qwen { background: #520339; color: #ff85c0; border-color: #9
         body.sec_token = document.getElementById('f_qwen_sec_token').value.trim();
         body.nbid = document.getElementById('f_qwen_nbid').value.trim();
         if (!body.name || !body.cookie || !body.sec_token) { alert('账号名称、Cookie 和 Sec Token 不能为空'); return; }
+      } else if (platform === 'minimax') {
+        body.cookie = document.getElementById('f_minimax_cookie').value.trim();
+        body.group_id = document.getElementById('f_minimax_group_id').value.trim();
+        if (!body.name || !body.cookie) { alert('账号名称和 Cookie 不能为空'); return; }
       } else {
         body.authorization = document.getElementById('f_auth').value.trim();
         body.organization = document.getElementById('f_org').value.trim();

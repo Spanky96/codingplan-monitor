@@ -297,6 +297,26 @@ function qwenWindows(data) {
     ];
 }
 
+// MiniMax token plan:data.usage.windows = [{ label, usedPct 或 used+quota, resetMs, periodMs }]
+// (由 api.js fetchMiniMaxUsage 归一化;5h限额/周限额为百分比窗口,视频赠送为 used/quota 计数窗口)。
+// 用量接口尚未接入时 usage=null → 返回空窗口 → 聚合为 null → 走默认权重兜底。
+function minimaxWindows(data) {
+    var windows = (data && data.usage && Array.isArray(data.usage.windows)) ? data.usage.windows : [];
+    var ws = [];
+    for (var i = 0; i < windows.length; i++) {
+        var w = windows[i];
+        if (!w) continue;
+        var pct = typeof w.usedPct === 'number'
+            ? w.usedPct
+            : (w.quota > 0 ? ((w.used || 0) / w.quota) * 100 : null);
+        if (pct === null) continue;
+        var resetIso = w.resetMs ? new Date(w.resetMs).toISOString() : null;
+        var theo = w.periodMs ? theoPctFromEnd(resetIso, w.periodMs) : -1;
+        ws.push(makeWindow(w.label || ('w' + i), pct, theo));
+    }
+    return ws;
+}
+
 // ============ 多窗口取瓶颈 ============
 
 // 任一窗口耗尽 → 整体 0;否则取所有有效窗口 score 的 min(最紧张=瓶颈);无有效窗口 → null
@@ -345,6 +365,7 @@ function scoreAccount(cachedResult) {
     else if (platform === 'huoli') windows = huoliWindows(cachedResult.data);
     else if (platform === 'volc') windows = volcWindows(cachedResult.data, cachedResult.planType);
     else if (platform === 'qwen') windows = qwenWindows(cachedResult.data);
+    else if (platform === 'minimax') windows = minimaxWindows(cachedResult.data);
     else return null;
 
     var agg = aggregate(windows);
