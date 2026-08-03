@@ -409,12 +409,45 @@ async function fetchGLMUsage(account, index) {
     }
 }
 
+// 从订阅对象中提取「当前周期到期时间」。
+// valid 形如 "2026-10-28 10:00:00-2027-01-28 10:00:00"，起始即当前周期结束（= nextRenewTime）。
+function glmSubscriptionExpireTime(sub) {
+    if (!sub) return null;
+    if (typeof sub.valid === 'string') {
+        var m = sub.valid.match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}:\d{2})/);
+        if (m) return m[1] + ' ' + m[2];
+    }
+    if (sub.nextRenewTime) return String(sub.nextRenewTime);
+    return null;
+}
+
+// 积分制(新版)套餐无体验卡，到期时间改从订阅列表接口获取；软失败返回 null。
+async function glmSubscriptionExpire(account, index) {
+    try {
+        var json = await withGlmAuthRetry(account, index, async function(acc) {
+            return httpsGet('https://bigmodel.cn/api/biz/subscription/list', makeHeaders(acc));
+        });
+        var list = (json && json.data) || [];
+        if (!Array.isArray(list) || !list.length) return null;
+        var active = list.find(function(s) { return s && s.status === 'VALID'; }) || list[0];
+        return glmSubscriptionExpireTime(active);
+    } catch (err) {
+        return null;
+    }
+}
+
 async function fetchGLMExpire(account, index) {
     try {
         var json = await withGlmAuthRetry(account, index, async function(acc) {
             return httpsGet('https://bigmodel.cn/api/biz/trial-cards/current-user', makeHeaders(acc));
         });
-        var result = { expireTime: json.data && json.data.expireTime, inviteCode: json.data && json.data.inviteCode, success: true, cachedAt: Date.now() };
+        var expireTime = json.data && json.data.expireTime;
+        var inviteCode = json.data && json.data.inviteCode;
+        // 体验卡接口对积分制套餐返回「暂不支持体验卡」→ 回退到订阅列表取到期时间
+        if (!expireTime) {
+            expireTime = await glmSubscriptionExpire(account, index);
+        }
+        var result = { expireTime: expireTime, inviteCode: inviteCode, success: true, cachedAt: Date.now() };
         setExpireCache(index, result);
         return result;
     } catch (err) {

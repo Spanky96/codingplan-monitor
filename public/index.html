@@ -16,7 +16,7 @@
     .header-btn:active { transform: scale(0.97); }
     .last-updated { font-size: 12px; opacity: 0.7; }
 
-    .container { max-width: 1600px; margin: 24px auto; padding: 0 24px; }
+    .container { max-width: 1920px; margin: 24px auto; padding: 0 24px; }
     .toolbar { display: flex; flex-wrap: wrap; gap: 18px; align-items: center; padding: 10px 14px; background: #fff; border-radius: 10px; box-shadow: 0 1px 4px rgba(0,0,0,0.04); margin-bottom: 16px; }
     .toolbar-group { display: flex; align-items: center; gap: 6px; }
     .toolbar-label { font-size: 12px; color: #8c8c8c; margin-right: 2px; }
@@ -25,7 +25,7 @@
     .toolbar-btn.active { background: #667eea; border-color: #667eea; color: #fff; }
     .sort-arrow { font-size: 9px; line-height: 1; opacity: 0.85; }
     .toolbar-count { margin-left: auto; font-size: 12px; color: #8c8c8c; }
-    .card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
+    .card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
 
     .card { background: #fff; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); overflow: hidden; transition: transform 0.2s, box-shadow 0.2s; display: flex; flex-direction: column; }
     .card:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,0,0,0.1); }
@@ -87,6 +87,8 @@
     .weight-badge.w-high { background: #f6ffed; color: #389e0d; border-color: #b7eb8f; }
     .risk-badge { padding: 1px 7px; border-radius: 10px; font-size: 11px; font-weight: 700; background: #fff1f0; color: #cf1322; border: 1px solid #ffa39e; cursor: help; white-space: nowrap; flex-shrink: 0; }
     .reset-badge { padding: 1px 7px; border-radius: 10px; font-size: 11px; font-weight: 700; background: #fff7e6; color: #ad4e00; border: 1px solid #ffbb96; cursor: help; white-space: nowrap; flex-shrink: 0; }
+    .peak-badge { padding: 1px 7px; border-radius: 10px; font-size: 11px; font-weight: 700; background: #fff1f0; color: #cf1322; border: 1px solid #ffa39e; cursor: help; white-space: nowrap; flex-shrink: 0; }
+    .plan-badge { padding: 1px 7px; border-radius: 10px; font-size: 11px; font-weight: 700; background: #f9f0ff; color: #531dab; border: 1px solid #d3adf7; cursor: help; white-space: nowrap; flex-shrink: 0; }
     .card.reset-needed { box-shadow: inset 0 3px 0 #fa8c16, 0 2px 8px rgba(0,0,0,0.06); }
     .list-row.reset-needed { box-shadow: inset 0 3px 0 #fa8c16, 0 1px 4px rgba(0,0,0,0.05); }
     .risk-banner { display: flex; gap: 8px; align-items: flex-start; margin: 0 0 12px; padding: 10px 14px; border-radius: 6px; background: #fff1f0; border: 1px solid #ffa39e; color: #a8071a; font-size: 13px; line-height: 1.5; }
@@ -258,7 +260,7 @@
     .ring-fill.ring-orange { stroke: #d48806; }
     .ring-fill.ring-red { stroke: #cf1322; }
     .ring-fill.ring-exhausted { stroke: #a020c0; }
-    /* 分段刻度（5h=5段 / 周=7段的内部边界），用底色形成「断开」感 */
+    /* 分段刻度（5h=5段 / 周=5段的内部边界），用底色形成「断开」感 */
     .ring-seg-tick { stroke: #ffffff; stroke-width: 1.4; }
     /* 理论用量线（理论进度位置） */
     .ring-theo { stroke: #667eea; stroke-width: 1.8; stroke-linecap: round; }
@@ -289,15 +291,6 @@
       .list-row { flex-direction: column; align-items: stretch; gap: 10px; padding: 12px 14px; }
       .list-row-left { width: auto; min-width: 0; }
       .list-row-right { align-items: flex-start; }
-    }
-    @media (min-width: 769px) and (max-width: 1024px) {
-      .card-grid { grid-template-columns: repeat(2, 1fr); }
-    }
-    @media (min-width: 1025px) and (max-width: 1280px) {
-      .card-grid { grid-template-columns: repeat(3, 1fr); }
-    }
-    @media (min-width: 1281px) {
-      .card-grid { grid-template-columns: repeat(4, 1fr); }
     }
 
     /* ============ Dark Mode ============ */
@@ -347,6 +340,8 @@ body.dark .platform-qwen { background: #520339; color: #ff85c0; border-color: #9
     body.dark .level-badge { background: #1e1b4b; color: #a5b4fc; border-color: #3730a3; }
     body.dark .risk-badge { background: #3a1212; color: #ff7875; border-color: #5c2020; }
     body.dark .reset-badge { background: #3b2507; color: #ffc069; border-color: #874d00; }
+    body.dark .peak-badge { background: #450a0a; color: #fca5a5; border-color: #991b1b; }
+    body.dark .plan-badge { background: #22113d; color: #b37feb; border-color: #531dab; }
     body.dark .card.reset-needed, body.dark .list-row.reset-needed { box-shadow: inset 0 3px 0 #d46b08, 0 2px 8px rgba(0,0,0,0.3); }
     body.dark .risk-banner { background: #2a1414; border-color: #5c2020; color: #ffa39e; }
     body.dark .cache-time { color: #555; }
@@ -858,7 +853,11 @@ body.dark .platform-qwen { background: #520339; color: #ff85c0; border-color: #9
       }
       return platformLabel(platform) + seq;
     }
-    function getLimitLabel(l) { return l.type === 'TIME_LIMIT' ? 'MCP 调用额度' : 'Token (' + (UNIT_LABELS[l.unit] || '周期' + l.unit) + ')'; }
+    function getLimitLabel(l) {
+      if (l.type === 'TIME_LIMIT') return 'MCP 调用额度';
+      var kind = l.type === 'CREDIT_LIMIT' ? '积分' : 'Token';
+      return kind + ' (' + (UNIT_LABELS[l.unit] || '周期' + l.unit) + ')';
+    }
     // 实际已耗尽判定阈值：官方数据常停在 99.9x%，但额度实际已不可用，统一按 ≥99.9% 视为耗尽
     var EXHAUSTED_PCT = 99.9;
     function getColorClass(p) { return p >= EXHAUSTED_PCT ? 'fill-exhausted' : p < 50 ? 'fill-green' : p < 80 ? 'fill-orange' : 'fill-red'; }
@@ -900,6 +899,72 @@ body.dark .platform-qwen { background: #520339; color: #ff85c0; border-color: #9
       return Promise.resolve();
     }
 
+    // ============ GLM 高峰/工时模型 ============
+    var GLM_PERIOD_5H_MS = 5 * 3600000;      // 5小时窗口长度
+    var GLM_PERIOD_WEEK_MS = 7 * 86400000;   // 每周窗口长度(滚动7天)
+    var GLM_BAR_SEGMENTS = 5;                // 5小时=5段;每周=5×5小时 → 也是5段
+    var GLM_PEAK_START_HOUR = 14;            // 高峰:周一至周五 14:00–18:00
+    var GLM_PEAK_END_HOUR = 18;
+    var GLM_WORK_START_HOUR = 8;             // 水位线仅在 周一至周五 08:00–18:00 推进
+    var GLM_WORK_END_HOUR = 18;
+    var GLM_WORK_SCAN_DAYS = 10;             // 窗口≤7天,逐日扫描上限(含首尾余量)
+
+    // 当前是否处于 GLM 高峰时段(周一~周五 14:00–18:00,本地时间)
+    function isGlmPeakNow(now) {
+      var d = now || new Date();
+      var dow = d.getDay(); // 0=周日 ... 6=周六
+      return dow >= 1 && dow <= 5 && d.getHours() >= GLM_PEAK_START_HOUR && d.getHours() < GLM_PEAK_END_HOUR;
+    }
+
+    // GLM 套餐版本:含 CREDIT_LIMIT → 积分制新版;否则 TOKENS_LIMIT 老版(v2)
+    function glmPlanKind(limits) {
+      return (limits || []).some(function(l) { return l && l.type === 'CREDIT_LIMIT'; }) ? 'credit' : 'token';
+    }
+
+    // [startMs,endMs] 内落在「周一~周五 08:00–18:00」(本地时间)的毫秒数
+    function glmWorkMsBetween(startMs, endMs) {
+      if (!(endMs > startMs)) return 0;
+      var d0 = new Date(startMs);
+      var total = 0;
+      for (var i = 0; i < GLM_WORK_SCAN_DAYS; i++) {
+        var midnight = new Date(d0.getFullYear(), d0.getMonth(), d0.getDate() + i).getTime(); // DST 安全的次日零点
+        if (midnight > endMs) break;
+        var dow = new Date(midnight).getDay();
+        if (dow < 1 || dow > 5) continue; // 周末不推进
+        var wStart = midnight + GLM_WORK_START_HOUR * 3600000;
+        var wEnd = midnight + GLM_WORK_END_HOUR * 3600000;
+        total += Math.max(0, Math.min(endMs, wEnd) - Math.max(startMs, wStart));
+      }
+      return total;
+    }
+
+    // GLM 理论水位:仅在工作时段内均匀推进(不按高峰加权);按重置时刻倒推窗口
+    function glmTheoPct(resetTimeMs, periodMs) {
+      if (!resetTimeMs) return -1;
+      var resetMs = new Date(resetTimeMs).getTime(); // 兼容 epoch 数字与 ISO 字符串
+      if (isNaN(resetMs)) return -1;
+      var startMs = resetMs - periodMs;
+      var now = Date.now();
+      if (now <= startMs) return -1; // 与现有行为一致:未到窗口不画水位线
+      var totalWork = glmWorkMsBetween(startMs, resetMs);
+      if (totalWork <= 0) return Math.min(100, ((Math.min(now, resetMs) - startMs) / periodMs) * 100); // 窗口整段不在工作时段 → 退回线性
+      var doneWork = glmWorkMsBetween(startMs, Math.min(now, resetMs));
+      return Math.max(0, Math.min(100, (doneWork / totalWork) * 100));
+    }
+
+    // GLM 页脚徽标:高峰徽章(仅高峰时段显示)+ 套餐版本徽章(积分制 / v2)
+    function glmFooterBadges(acc) {
+      var html = '';
+      if (isGlmPeakNow(new Date())) {
+        html += '<span class="peak-badge" title="" data-tooltip="' + esc('高峰时段:周一至周五 14:00–18:00') + '" aria-label="高峰期" tabindex="0">高峰期</span>';
+      }
+      var kind = glmPlanKind((acc && acc.data && acc.data.limits) || []);
+      var planTip = kind === 'credit' ? '积分制套餐:高峰按 100% 消耗积分,低峰按 50% 消耗' : 'v2 套餐:高峰时段按 3 倍消耗';
+      var planLabel = kind === 'credit' ? '积分制' : 'v2';
+      html += '<span class="plan-badge" title="" data-tooltip="' + esc(planTip) + '" aria-label="' + planLabel + '" tabindex="0">' + planLabel + '</span>';
+      return html;
+    }
+
     // ============ 卡片渲染 ============
 
     function renderLimitRow(limit) {
@@ -909,13 +974,12 @@ body.dark .platform-qwen { background: #520339; color: #ff85c0; border-color: #9
       var pct = limit.percentage || 0;
       var label = getLimitLabel(limit);
       var value = '已用 ' + pct + '%';
-      if (limit.type === 'TIME_LIMIT' && limit.usage != null) value = (limit.currentValue||0) + '/' + limit.usage + ' (' + pct + '%)';
+      if ((limit.type === 'TIME_LIMIT' || limit.type === 'CREDIT_LIMIT') && limit.usage != null) value = (limit.currentValue||0) + '/' + limit.usage + ' (' + pct + '%)';
       var reset = limit.nextResetTime ? '重置 ' + formatTime(limit.nextResetTime) : '';
 
-      // Segmented bar for 5-hour (unit=3 → 5 segments) and weekly (unit=6 → 7 segments)
+      // Segmented bar for 5-hour (unit=3) and weekly (unit=6): both 5 segments (weekly limit = 5×5-hour limit)
       var segments = 0;
-      if (limit.unit === 3) segments = 5;
-      else if (limit.unit === 6) segments = 7;
+      if (limit.unit === 3 || limit.unit === 6) segments = GLM_BAR_SEGMENTS;
 
       if (segments > 0) {
         var segPct = 100 / segments;
@@ -929,16 +993,11 @@ body.dark .platform-qwen { background: #520339; color: #ff85c0; border-color: #9
           segHtml += '<div class="seg"><div class="seg-fill ' + getColorClass(pct) + '" style="width:' + fillW + '%"></div></div>';
         }
 
-        // Theoretical usage based on nextResetTime
+        // Theoretical usage: based on nextResetTime; advances only inside work hours (Mon–Fri 08:00–18:00)
         var theoPct = -1;
         if (limit.nextResetTime) {
-          var now = Date.now();
-          var resetMs = new Date(limit.nextResetTime).getTime();
-          if (!isNaN(resetMs)) {
-            var periodMs = segments === 5 ? 5 * 3600000 : 7 * 86400000;
-            var elapsed = now - (resetMs - periodMs);
-            if (elapsed > 0) theoPct = Math.min(100, (elapsed / periodMs) * 100);
-          }
+          var periodMs = limit.unit === 3 ? GLM_PERIOD_5H_MS : GLM_PERIOD_WEEK_MS;
+          theoPct = glmTheoPct(limit.nextResetTime, periodMs);
         }
 
         var barHtml = '<div class="limit-bar-wrap"><div class="limit-bar-seg">' + segHtml + '</div>';
@@ -1462,7 +1521,7 @@ body.dark .platform-qwen { background: #520339; color: #ff85c0; border-color: #9
       return '<div class="card' + resetClass + '" id="card-' + i + '"><div class="card-header">' + headerLeft
         + '<div class="card-header-right">' + btn + '<span class="card-status ' + getStatusClass(mp) + '">' + getStatusText(mp) + '</span></div></div>'
         + '<div class="card-body">' + limits.map(renderLimitRow).join('') + '</div>' + expHtml
-        + '<div class="card-footer"><div class="card-footer-left"><span class="level-badge">' + level + '</span>' + keyBadge + resetBadge + rBadge + cache + '</div>'
+        + '<div class="card-footer"><div class="card-footer-left"><span class="level-badge">' + level + '</span>' + glmFooterBadges(acc) + keyBadge + resetBadge + rBadge + cache + '</div>'
         + '<button class="detail-btn" onclick="showDetail(' + i + ')">详情</button></div></div>';
     }
 
@@ -1631,11 +1690,11 @@ body.dark .platform-qwen { background: #520339; color: #ff85c0; border-color: #9
         var label = getLimitShort(l);
         if (l._unlimited) { push(label, 0, '无限', { unlimited: true, title: getLimitLabel(l) + '（无限额度）' }); return; }
         var pct = l.percentage || 0;
-        var segs = l.unit === 3 ? 5 : l.unit === 6 ? 7 : 0;
-        var periodMs = l.unit === 3 ? 5 * 3600000 : 7 * 86400000;
-        var theo = segs > 0 ? theoPctFromEnd(l.nextResetTime, periodMs) : -1;
-        // MCP 额度有原始用量(current/usage)；其余 Token 限额只有百分比，与 pct 重复故不传 value
-        var value = (l.type === 'TIME_LIMIT' && l.usage != null) ? ((l.currentValue || 0) + '/' + l.usage) : null;
+        var segs = (l.unit === 3 || l.unit === 6) ? GLM_BAR_SEGMENTS : 0;
+        var periodMs = l.unit === 3 ? GLM_PERIOD_5H_MS : GLM_PERIOD_WEEK_MS;
+        var theo = segs > 0 ? glmTheoPct(l.nextResetTime, periodMs) : -1;
+        // MCP 额度与积分额度有原始用量(current/usage)；其余 Token 限额只有百分比，与 pct 重复故不传 value
+        var value = ((l.type === 'TIME_LIMIT' || l.type === 'CREDIT_LIMIT') && l.usage != null) ? ((l.currentValue || 0) + '/' + l.usage) : null;
         push(label, pct, value, { segments: segs, theoPct: theo, title: getLimitLabel(l) + ' ' + (value || pct + '%') });
       });
       return rings;
@@ -1700,6 +1759,7 @@ body.dark .platform-qwen { background: #520339; color: #ff85c0; border-color: #9
       }
       var level = levelLabel(acc);
       var b = '<span class="level-badge">' + level + '</span>';
+      b += glmFooterBadges(acc);
       if (acc.keyCount != null) b += '<span class="level-badge" style="background:#f6ffed;color:#389e0d;border-color:#b7eb8f">Key: ' + acc.keyCount + '个</span>';
       b += resetBadgeHTML(acc);
       b += riskBadgeHTML(acc);
