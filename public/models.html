@@ -4,135 +4,44 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>MiniMax 模型调用</title>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif; background: #f0f2f5; color: #333; min-height: 100vh; }
-
-    .header { background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%); color: #fff; padding: 16px 28px; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 8px rgba(79,70,229,0.3); }
-    .header h1 { font-size: 20px; font-weight: 600; letter-spacing: 0.5px; }
-    .header-right { display: flex; align-items: center; gap: 10px; }
-    .header-btn { background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.3); color: #fff; padding: 7px 16px; border-radius: 6px; cursor: pointer; font-size: 13px; transition: background 0.2s; text-decoration: none; display: inline-block; }
-    .header-btn:hover { background: rgba(255,255,255,0.3); }
-
-    .container { padding: 18px 24px 60px; max-width: 1400px; margin: 0 auto; }
-
-    .config-bar { background: #fff; border-radius: 10px; box-shadow: 0 1px 4px rgba(0,0,0,0.04); padding: 14px 18px; margin-bottom: 14px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
-    .config-bar label { font-size: 12px; color: #595959; display: flex; flex-direction: column; gap: 4px; flex: 1 1 280px; min-width: 260px; }
-    .config-bar input { padding: 7px 10px; border: 1px solid #d9d9d9; border-radius: 6px; font-size: 13px; font-family: inherit; background: #fafafa; }
-    .config-bar input:focus { outline: none; border-color: #4f46e5; background: #fff; }
-    .config-save { padding: 7px 16px; background: #4f46e5; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; }
-    .config-save:hover { background: #4338ca; }
-    .config-status { font-size: 12px; color: #52c41a; margin-left: 4px; }
-    .config-status.error { color: #ff4d4f; }
-    .config-hint { font-size: 11px; color: #8c8c8c; margin-left: 4px; }
-
-    .card { background: #fff; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); padding: 18px 22px; margin-bottom: 14px; }
-    .card-title { font-size: 14px; font-weight: 600; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
-    .card-title .badge { font-size: 10px; padding: 2px 8px; border-radius: 3px; background: #f0f5ff; color: #2f54eb; border: 1px solid #adc6ff; font-weight: 500; }
-    .card-title .badge-warn { background: #fff7e6; color: #d46b08; border-color: #ffd591; }
-
-    .model-row { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
-    .field { display: flex; flex-direction: column; gap: 4px; flex: 1 1 220px; min-width: 220px; }
-    .field label { font-size: 12px; color: #595959; }
-    .field-row { display: flex; gap: 8px; align-items: center; }
-    .field input[type="text"], .field input[type="number"], .field select, .field textarea {
-      padding: 8px 10px; border: 1px solid #d9d9d9; border-radius: 6px; font-size: 13px; font-family: inherit; background: #fff;
-    }
-    .field textarea { resize: vertical; min-height: 80px; }
-    .field input:focus, .field select:focus, .field textarea:focus { outline: none; border-color: #4f46e5; box-shadow: 0 0 0 2px rgba(79,70,229,0.1); }
-    .field-hint { font-size: 11px; color: #8c8c8c; }
-    .field-hint a { color: #4f46e5; text-decoration: none; }
-
-    .actions { display: flex; gap: 10px; align-items: center; margin-top: 12px; }
-    .btn-primary { padding: 9px 22px; background: #4f46e5; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 500; }
-    .btn-primary:hover:not(:disabled) { background: #4338ca; }
-    .btn-primary:disabled { background: #d9d9d9; cursor: not-allowed; }
-    .btn-secondary { padding: 9px 18px; background: #fff; color: #4f46e5; border: 1px solid #4f46e5; border-radius: 6px; cursor: pointer; font-size: 13px; }
-    .btn-secondary:hover { background: #f0f0ff; }
-
-    .result { background: #fafafa; border-radius: 8px; padding: 14px 16px; min-height: 80px; }
-    .result-empty { color: #bfbfbf; font-size: 13px; text-align: center; padding: 30px 0; }
-    .result-loading { color: #4f46e5; font-size: 13px; display: flex; align-items: center; gap: 8px; }
-    .result-loading .spin { width: 14px; height: 14px; border: 2px solid #4f46e5; border-top-color: transparent; border-radius: 50%; animation: spin 0.8s linear infinite; }
-    @keyframes spin { to { transform: rotate(360deg); } }
-    .result-error { background: #fff2f0; color: #a8071a; padding: 12px 14px; border-radius: 6px; border: 1px solid #ffccc7; font-size: 13px; line-height: 1.55; word-break: break-all; }
-    .result-success-text { font-size: 14px; line-height: 1.7; white-space: pre-wrap; word-break: break-word; }
-    .image-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
-    .image-grid img { width: 100%; border-radius: 6px; border: 1px solid #f0f0f0; cursor: pointer; }
-    .image-grid img:hover { transform: scale(1.02); transition: transform 0.2s; }
-    .result-meta { font-size: 11px; color: #8c8c8c; margin-top: 8px; }
-    .result-meta code { background: #f0f0f0; padding: 1px 6px; border-radius: 3px; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 11px; }
-    .video-wrap { max-width: 480px; }
-    .video-wrap video { width: 100%; border-radius: 6px; }
-    .audio-wrap { display: flex; flex-direction: column; gap: 8px; }
-    .audio-wrap audio { width: 100%; }
-    .audio-download { font-size: 12px; color: #4f46e5; text-decoration: none; }
-    .audio-download:hover { text-decoration: underline; }
-
-    .pill { display: inline-block; font-size: 10px; padding: 1px 7px; border-radius: 10px; font-weight: 500; background: #f0f5ff; color: #2f54eb; border: 1px solid #adc6ff; margin-left: 4px; }
-
-    /* 调用记录 */
-    .history-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
-    .history-clear { font-size: 12px; color: #8c8c8c; background: transparent; border: 1px solid #d9d9d9; padding: 5px 14px; border-radius: 4px; cursor: pointer; }
-    .history-clear:hover { color: #ff4d4f; border-color: #ff4d4f; }
-    .history-list { display: flex; flex-direction: column; gap: 6px; }
-    .hist-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: #fff; border: 1px solid #f0f0f0; border-radius: 6px; cursor: pointer; transition: all 0.15s; }
-    .hist-row:hover { background: #f8f9ff; border-color: #4f46e5; }
-    .hist-row.failed { border-left: 3px solid #ff4d4f; }
-    .hist-meta { font-size: 11px; color: #8c8c8c; display: flex; gap: 8px; align-items: center; min-width: 180px; }
-    .hist-meta .badge { font-size: 10px; padding: 1px 7px; border-radius: 3px; background: #f0f5ff; color: #2f54eb; border: 1px solid #adc6ff; font-weight: 500; }
-    .hist-meta .badge-fail { background: #fff1f0; color: #cf1322; border-color: #ffa39e; }
-    .hist-meta .ts { font-variant-numeric: tabular-nums; }
-    .hist-preview { flex: 1; font-size: 13px; color: #333; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
-    .hist-preview .arrow { color: #8c8c8c; margin: 0 6px; }
-    .hist-del { flex-shrink: 0; width: 22px; height: 22px; border: none; background: transparent; color: #bfbfbf; cursor: pointer; border-radius: 4px; font-size: 18px; line-height: 1; padding: 0; }
-    .hist-del:hover { background: #fff1f0; color: #ff4d4f; }
-
-    /* 隐藏不需要的字段(由 model 切换) */
-    .hidden { display: none !important; }
-
-    /* 参考图上传(视频模型) */
-    .upload-row { display: flex; gap: 10px; align-items: center; margin-top: 6px; }
-    .upload-row input[type="file"] { font-size: 12px; padding: 4px; flex: 1; min-width: 0; }
-    .upload-status { font-size: 11px; color: #595959; white-space: nowrap; }
-    .upload-status.success { color: #52c41a; }
-    .upload-status.error { color: #ff4d4f; }
-    .upload-preview { display: block; margin-top: 8px; max-width: 200px; max-height: 120px; border-radius: 6px; border: 1px solid #f0f0f0; object-fit: contain; background: #fafafa; }
-  </style>
+  <link rel="stylesheet" href="models.css">
 </head>
 <body>
 
-<div class="header">
-  <h1>MiniMax 模型调用</h1>
+<header class="header">
+  <div class="header-left">
+    <h1>MiniMax 模型调用</h1>
+    <span class="header-sub">对话 · 文生图 · 视频 · 语音合成</span>
+  </div>
   <div class="header-right">
     <a class="header-btn" href="./">← 用量监控</a>
   </div>
-</div>
+</header>
 
 <div class="container">
 
-  <!-- 配置栏:API URL + Key,本地缓存 -->
-  <div class="config-bar">
-    <label>
-      API URL
-      <input id="api_url" type="text" placeholder="https://api.minimaxi.com/v1" autocomplete="off" spellcheck="false">
-    </label>
-    <label>
-      API Key (本地浏览器保存,不上传服务器)
+  <!-- 配置栏:API URL + Key,仅保存在浏览器本地 -->
+  <div class="card config-bar">
+    <div class="field grow">
+      <label for="api_url">API URL</label>
+      <input id="api_url" type="text" placeholder="/minimax/v1(内置反代,默认;也可填完整 minimax URL)" autocomplete="off" spellcheck="false">
+    </div>
+    <div class="field grow">
+      <label for="api_key">API Key(仅保存在浏览器本地,不上传服务器)</label>
       <input id="api_key" type="password" placeholder="sk-cp-..." autocomplete="off" spellcheck="false">
-    </label>
-    <button class="config-save" id="btn_save_config">保存到浏览器</button>
-    <span id="config_status" class="config-hint"></span>
+    </div>
+    <div class="config-actions">
+      <button class="btn-primary btn-sm" id="btn_save_config">保存配置</button>
+      <span id="config_status" class="config-hint"></span>
+    </div>
   </div>
 
-  <!-- 模型选择 + 表单 -->
+  <!-- 模型选择 -->
   <div class="card">
-    <div class="card-title">
-      模型 <span class="badge" id="model_category_badge">对话</span>
-    </div>
+    <div class="card-title">模型 <span class="badge" id="model_category_badge">对话</span></div>
     <div class="model-row">
       <div class="field">
-        <label for="model_name">模型名称(选择或自定义)</label>
+        <label for="model_name">模型名称</label>
         <select id="model_name">
           <optgroup label="对话">
             <option value="MiniMax-Text-01">MiniMax-Text-01(对话,旗舰文本)</option>
@@ -144,7 +53,7 @@
             <option value="image-01">image-01(文生图,旗舰)</option>
           </optgroup>
           <optgroup label="视频">
-            <option value="MiniMax-Hailuo-02">MiniMax-Hailuo-02(视频 V1,通用)</option>
+            <option value="MiniMax-Hailuo-02">MiniMax-Hailuo-02(视频 V1,图生视频)</option>
             <option value="MiniMax-H3">MiniMax-H3(视频 V2,需高级套餐)</option>
           </optgroup>
           <optgroup label="语音合成">
@@ -154,18 +63,12 @@
         </select>
       </div>
       <div class="field hidden" id="duration_field">
-        <label for="duration">视频时长(秒,V1 接口仅支持 6 / 10)</label>
-        <select id="duration">
-          <option value="6">6</option>
-          <option value="10">10</option>
-        </select>
+        <label for="duration">视频时长(秒)</label>
+        <select id="duration"></select>
       </div>
       <div class="field hidden" id="resolution_field">
         <label for="resolution">分辨率</label>
-        <select id="resolution">
-          <option value="768P">768P</option>
-          <option value="1080P">1080P</option>
-        </select>
+        <select id="resolution"></select>
       </div>
     </div>
   </div>
@@ -174,25 +77,26 @@
   <div class="card">
     <div class="card-title">输入 <span class="badge" id="input_category_badge">对话</span></div>
 
-    <!-- 对话 / 文生视频 / 图生视频 -->
+    <!-- 对话 / 视频提示词 -->
     <div class="field" id="prompt_field">
       <label for="prompt" id="prompt_label">提示词</label>
       <textarea id="prompt" placeholder="输入提示词..."></textarea>
     </div>
 
-    <!-- 图生视频 / 多模态参考生视频:首帧图 -->
+    <!-- 视频参考图(由图片池勾选生成,无需手填 URL) -->
     <div class="field hidden" id="image_field">
-      <label for="image_url">参考图 URL 或本地文件(上传后自动填 file_id;V2 首帧 V1 通用)</label>
-      <input id="image_url" type="text" placeholder="https://... 或留空使用纯文本">
-      <div class="upload-row">
-        <input type="file" id="image_file" accept="image/*">
-        <span class="upload-status" id="upload_status"></span>
+      <div class="ref-head">
+        <span class="seg hidden" id="video_mode_seg">
+          <button type="button" class="seg-btn" data-mode="first_frame">首帧图 · ≤1 张</button>
+          <button type="button" class="seg-btn" data-mode="reference">参考图 · ≤9 张</button>
+        </span>
       </div>
-      <img class="upload-preview" id="upload_preview" alt="" hidden>
-      <input type="hidden" id="image_file_id">
+      <label for="ref_display">参考图引用(由下方图片池勾选自动生成)</label>
+      <input id="ref_display" type="text" readonly placeholder="尚未勾选图片 — 请在下方图片池中勾选">
+      <div class="field-hint" id="video_mode_hint"></div>
     </div>
 
-    <!-- 文生图 -->
+    <!-- 文生图参数 -->
     <div class="model-row hidden" id="image_row">
       <div class="field">
         <label for="aspect_ratio">画幅比例</label>
@@ -210,7 +114,7 @@
       </div>
     </div>
 
-    <!-- 语音合成 -->
+    <!-- 语音合成参数 -->
     <div class="model-row hidden" id="tts_row">
       <div class="field">
         <label for="voice_id">音色</label>
@@ -241,7 +145,7 @@
       </div>
     </div>
 
-    <!-- 对话:max_tokens + temperature -->
+    <!-- 对话参数 -->
     <div class="model-row hidden" id="chat_row">
       <div class="field">
         <label for="max_tokens">max_tokens</label>
@@ -258,6 +162,24 @@
       <button class="btn-secondary hidden" id="btn_cancel">取消轮询</button>
       <span class="field-hint" id="status_hint"></span>
     </div>
+  </div>
+
+  <!-- 图片池:上传/生成的图片本地缓存,勾选后作为视频参考图 -->
+  <div class="card hidden" id="pool_card">
+    <div class="card-title pool-title">
+      图片池 <span class="badge" id="pool_count_badge">0 张 · 已选 0</span>
+      <span class="pool-title-actions">
+        <label class="btn-upload" for="pool_file_input">＋ 上传图片</label>
+        <input type="file" id="pool_file_input" accept=".jpg,.jpeg,.png,.webp,.heic,.heif,image/*" multiple hidden>
+        <button class="btn-ghost" id="btn_clear_pool" type="button">清空</button>
+      </span>
+    </div>
+    <div class="pool-drop" id="pool_drop">
+      拖拽图片到此处,或点击「上传图片」· 支持 JPG / PNG / WEBP / HEIC,单张 ≤ 30MB<br>
+      已上传图片本地缓存 file_id,7 天内不重复上传;文生图结果会自动进入图片池
+    </div>
+    <div class="pool-grid" id="pool_grid"></div>
+    <div class="pool-empty" id="pool_empty">图片池为空 — 上传本地图片,或用「文生图」生成后自动进入这里</div>
   </div>
 
   <!-- 结果 -->
@@ -281,693 +203,8 @@
 
 </div>
 
-<script>
-'use strict';
+<div class="toast" id="toast"></div>
 
-// ===== 配置(localStorage 缓存) =====
-var LS_URL = 'minimax_api_url_v1';
-var LS_KEY = 'minimax_api_key_v1';
-
-function loadConfig() {
-  document.getElementById('api_url').value = localStorage.getItem(LS_URL) || 'https://api.minimaxi.com/v1';
-  document.getElementById('api_key').value = localStorage.getItem(LS_KEY) || '';
-}
-
-function saveConfig() {
-  var url = document.getElementById('api_url').value.trim().replace(/\/+$/, '');
-  var key = document.getElementById('api_key').value.trim();
-  if (!url || !/^https?:\/\//.test(url)) return showConfigStatus('API URL 格式不正确', true);
-  if (!key) return showConfigStatus('请填写 API Key', true);
-  localStorage.setItem(LS_URL, url);
-  localStorage.setItem(LS_KEY, key);
-  showConfigStatus('已保存到浏览器');
-}
-
-function showConfigStatus(msg, isError) {
-  var el = document.getElementById('config_status');
-  el.textContent = msg;
-  el.className = isError ? 'config-status error' : 'config-status';
-}
-
-document.getElementById('btn_save_config').onclick = saveConfig;
-loadConfig();
-
-// ===== 模型 → 表单切换 =====
-function modelCategory(model) {
-  if (/^image-/.test(model)) return 'image';
-  if (/^MiniMax-Hailuo|^MiniMax-H3|^video-/.test(model)) return 'video';
-  if (/^speech-/.test(model)) return 'tts';
-  return 'chat';
-}
-
-// V1 / V2 视频区分
-function videoApiVersion(model) {
-  return /^MiniMax-H3/.test(model) ? 'v2' : 'v1';
-}
-
-function refreshForm() {
-  var model = document.getElementById('model_name').value;
-  var cat = modelCategory(model);
-  var badge = document.getElementById('model_category_badge');
-  var inBadge = document.getElementById('input_category_badge');
-  var labels = { chat: '对话', image: '文生图', video: '视频', tts: '语音合成' };
-  badge.textContent = labels[cat];
-  badge.className = cat === 'video' ? 'badge badge-warn' : 'badge';
-  inBadge.textContent = labels[cat];
-
-  // 显隐各字段
-  document.getElementById('prompt_field').classList.toggle('hidden', cat === 'tts' || cat === 'image');
-  document.getElementById('prompt_label').textContent = (cat === 'video' && /^MiniMax-H3/.test(model)) ? '提示词(可选,用于补充画面描述)' : '提示词';
-  document.getElementById('chat_row').classList.toggle('hidden', cat !== 'chat');
-  document.getElementById('image_row').classList.toggle('hidden', cat !== 'image');
-  document.getElementById('tts_row').classList.toggle('hidden', cat !== 'tts');
-  document.getElementById('image_field').classList.toggle('hidden', cat !== 'video');
-  document.getElementById('duration_field').classList.toggle('hidden', cat !== 'video' || videoApiVersion(model) === 'v2');
-  document.getElementById('resolution_field').classList.toggle('hidden', cat !== 'video');
-}
-
-document.getElementById('model_name').onchange = refreshForm;
-refreshForm();
-
-// ===== 参考图自动上传(视频模型) =====
-// 选择本地图片 → POST /v1/files/upload(purpose=assistants) 拿 file_id,直接给视频接口用
-$('image_file').addEventListener('change', function () {
-  var file = this.files && this.files[0];
-  if (!file) return;
-  var statusEl = $('upload_status');
-  var previewEl = $('upload_preview');
-  $('image_file_id').value = '';
-  $('image_url').value = '';
-  statusEl.className = 'upload-status';
-  statusEl.textContent = '上传中... ' + file.name + ' (' + Math.round(file.size / 1024) + ' KB)';
-  // 本地预览
-  var reader = new FileReader();
-  reader.onload = function (e) { previewEl.src = e.target.result; previewEl.hidden = false; };
-  reader.readAsDataURL(file);
-
-  var fd = new FormData();
-  fd.append('file', file);
-  fd.append('purpose', 'assistants');
-  fetch(apiBase() + '/files/upload', {
-    method: 'POST',
-    headers: { 'Authorization': 'Bearer ' + apiKey() },
-    body: fd
-  }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, json: j }; }); })
-    .then(function (resp) {
-      if (!resp.ok || !resp.json.base_resp || resp.json.base_resp.status_code !== 0 || !resp.json.file) {
-        var msg = (resp.json && resp.json.base_resp && resp.json.base_resp.status_msg) || ('HTTP ' + resp.status);
-        statusEl.className = 'upload-status error';
-        statusEl.textContent = '✗ 上传失败:' + msg;
-        return;
-      }
-      var fid = resp.json.file.file_id;
-      $('image_file_id').value = fid;
-      statusEl.className = 'upload-status success';
-      statusEl.textContent = '✓ 已上传 file_id=' + fid + ',将随视频请求一起发送';
-    })
-    .catch(function (e) {
-      statusEl.className = 'upload-status error';
-      statusEl.textContent = '✗ 上传失败:' + e.message;
-    });
-});
-
-// 手动改 URL 时清掉已上传的 file_id(避免冲突)
-$('image_url').addEventListener('input', function () {
-  if (this.value.trim() && $('image_file_id').value) {
-    $('image_file_id').value = '';
-    $('upload_status').textContent = '';
-    $('upload_preview').hidden = true;
-    $('upload_preview').src = '';
-  }
-});
-
-// ===== 工具 =====
-function $(id) { return document.getElementById(id); }
-
-function apiBase() {
-  var url = $('api_url').value.trim().replace(/\/+$/, '');
-  if (!url) { showError('请先填写 API URL'); throw new Error('no url'); }
-  return url;
-}
-function apiKey() {
-  var k = $('api_key').value.trim();
-  if (!k) { showError('请先填写 API Key'); throw new Error('no key'); }
-  return k;
-}
-
-function setBusy(busy) {
-  $('btn_generate').disabled = busy;
-  $('btn_generate').textContent = busy ? '生成中...' : '生成';
-  $('btn_cancel').classList.toggle('hidden', !busy);
-}
-
-function showResult(html) {
-  $('result').innerHTML = html;
-}
-function showError(msg) {
-  showResult('<div class="result-error">' + escHtml(String(msg)) + '</div>');
-}
-function showLoading(text) {
-  showResult('<div class="result-loading"><div class="spin"></div>' + escHtml(text) + '</div>');
-}
-function escHtml(s) { return (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
-
-// ===== 轮询控制器 =====
-var currentPoll = null;
-$('btn_cancel').onclick = function () { if (currentPoll) { currentPoll.cancelled = true; } };
-
-function pollUntil(fn, intervalMs, maxAttempts, label) {
-  if (currentPoll) currentPoll.cancelled = true;
-  var p = { cancelled: false };
-  currentPoll = p;
-  var attempt = 0;
-  return new Promise(function (resolve, reject) {
-    function step() {
-      if (p.cancelled) return reject(new Error('用户取消'));
-      attempt++;
-      showLoading((label || '轮询中') + ' · 第 ' + attempt + ' 次...');
-      fn().then(function (r) {
-        if (r.done) { resolve(r.value); return; }
-        if (attempt >= maxAttempts) return reject(new Error('轮询超时(' + maxAttempts + ' 次仍未完成)'));
-        setTimeout(step, intervalMs);
-      }).catch(reject);
-    }
-    step();
-  });
-}
-
-// ===== 调度 =====
-$('btn_generate').onclick = function () {
-  var model = $('model_name').value;
-  var cat = modelCategory(model);
-  if (cat === 'chat') return runChat(model);
-  if (cat === 'image') return runImage(model);
-  if (cat === 'video') return runVideo(model);
-  if (cat === 'tts') return runTts(model);
-};
-
-// ===== 对话 =====
-function runChat(model) {
-  var prompt = $('prompt').value.trim();
-  if (!prompt) return showError('请输入提示词');
-  var maxTokens = parseInt($('max_tokens').value) || 1024;
-  var temperature = parseFloat($('temperature').value) || 0.7;
-  var body = {
-    model: model,
-    messages: [{ role: 'user', content: prompt }],
-    max_tokens: maxTokens,
-    temperature: temperature
-  };
-  setBusy(true);
-  showLoading('对话中...');
-  fetch(apiBase() + '/text/chatcompletion_v2', {
-    method: 'POST',
-    headers: { 'Authorization': 'Bearer ' + apiKey(), 'Content-Type': 'application/json' },
-    body: JSON.stringify(body)
-  }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, json: j }; }); })
-    .then(function (resp) {
-      setBusy(false);
-      if (!resp.ok) {
-        var msg = 'HTTP ' + resp.status + ' · ' + JSON.stringify(resp.json);
-        addHistory({ id: histId(), ts: Date.now(), model: model, category: 'chat', input: { prompt: prompt, max_tokens: maxTokens, temperature: temperature }, error: { message: msg } });
-        return showError(msg);
-      }
-      if (resp.json.base_resp && resp.json.base_resp.status_code !== 0) {
-        var msg2 = 'MiniMax 错误 ' + resp.json.base_resp.status_code + ': ' + resp.json.base_resp.status_msg;
-        addHistory({ id: histId(), ts: Date.now(), model: model, category: 'chat', input: { prompt: prompt, max_tokens: maxTokens, temperature: temperature }, error: { message: msg2 } });
-        return showError(msg2);
-      }
-      var text = (resp.json.choices && resp.json.choices[0] && resp.json.choices[0].message && resp.json.choices[0].message.content) || '(空响应)';
-      var usage = resp.json.usage || {};
-      showResult('<div class="result-success-text">' + escHtml(text) + '</div>'
-        + '<div class="result-meta">model: <code>' + escHtml(model) + '</code> · tokens: <code>' + (usage.total_tokens || '-') + '</code> (in ' + (usage.prompt_tokens || 0) + ' / out ' + (usage.completion_tokens || 0) + ')</div>');
-      addHistory({
-        id: histId(), ts: Date.now(), model: model, category: 'chat',
-        input: { prompt: prompt, max_tokens: maxTokens, temperature: temperature },
-        result: { text: text, meta: { tokens: usage.total_tokens, prompt_tokens: usage.prompt_tokens, completion_tokens: usage.completion_tokens } }
-      });
-    })
-    .catch(function (e) {
-      setBusy(false);
-      addHistory({ id: histId(), ts: Date.now(), model: model, category: 'chat', input: { prompt: prompt, max_tokens: maxTokens, temperature: temperature }, error: { message: e.message } });
-      showError(e.message);
-    });
-}
-
-// ===== 文生图 =====
-function runImage(model) {
-  var prompt = $('prompt').value.trim();
-  if (!prompt) return showError('请输入提示词');
-  var ratio = $('aspect_ratio').value;
-  var parts = ratio.split(':');
-  var n = parseInt($('image_count').value) || 1;
-  var body = {
-    model: model,
-    prompt: prompt,
-    width: parseInt(parts[0]) * 512,
-    height: parseInt(parts[1]) * 512,
-    n: n,
-    response_format: 'url'
-  };
-  setBusy(true);
-  showLoading('生成图片中...');
-  fetch(apiBase() + '/image_generation', {
-    method: 'POST',
-    headers: { 'Authorization': 'Bearer ' + apiKey(), 'Content-Type': 'application/json' },
-    body: JSON.stringify(body)
-  }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, json: j }; }); })
-    .then(function (resp) {
-      setBusy(false);
-      if (!resp.ok) {
-        var msg = 'HTTP ' + resp.status + ' · ' + JSON.stringify(resp.json);
-        addHistory({ id: histId(), ts: Date.now(), model: model, category: 'image', input: { prompt: prompt, ratio: ratio, n: n }, error: { message: msg } });
-        return showError(msg);
-      }
-      if (resp.json.base_resp && resp.json.base_resp.status_code !== 0) {
-        var msg2 = 'MiniMax 错误 ' + resp.json.base_resp.status_code + ': ' + resp.json.base_resp.status_msg;
-        addHistory({ id: histId(), ts: Date.now(), model: model, category: 'image', input: { prompt: prompt, ratio: ratio, n: n }, error: { message: msg2 } });
-        return showError(msg2);
-      }
-      var urls = ((resp.json.data || {}).image_urls || []);
-      if (!urls.length) {
-        var msg3 = '未返回图片 URL: ' + JSON.stringify(resp.json);
-        addHistory({ id: histId(), ts: Date.now(), model: model, category: 'image', input: { prompt: prompt, ratio: ratio, n: n }, error: { message: msg3 } });
-        return showError(msg3);
-      }
-      var grid = '<div class="image-grid">' + urls.map(function (u) {
-        return '<a href="' + escHtml(u) + '" target="_blank" rel="noopener"><img src="' + escHtml(u) + '" loading="lazy"></a>';
-      }).join('') + '</div>';
-      var meta = '<div class="result-meta">model: <code>' + escHtml(model) + '</code> · count: <code>' + urls.length + '</code> · ratio: <code>' + ratio + '</code></div>';
-      showResult(grid + meta);
-      addHistory({
-        id: histId(), ts: Date.now(), model: model, category: 'image',
-        input: { prompt: prompt, ratio: ratio, n: n },
-        result: { imageUrls: urls }
-      });
-    })
-    .catch(function (e) {
-      setBusy(false);
-      addHistory({ id: histId(), ts: Date.now(), model: model, category: 'image', input: { prompt: prompt, ratio: ratio, n: n }, error: { message: e.message } });
-      showError(e.message);
-    });
-}
-
-// ===== 视频(V1 / V2 自动分支) =====
-function runVideo(model) {
-  var prompt = $('prompt').value.trim();
-  var imageUrl = $('image_url').value.trim();
-  var fileId = $('image_file_id').value.trim();
-  // 本地上传优先(file_id),没有则用 URL
-  var imageRef = fileId ? ('file://' + fileId) : imageUrl;
-  var ver = videoApiVersion(model);
-  var duration = parseInt($('duration').value) || 6;
-  var resolution = $('resolution').value;
-  setBusy(true);
-
-  var url, body;
-  if (ver === 'v1') {
-    url = apiBase() + '/video_generation';
-    body = {
-      model: model,
-      prompt: prompt || (imageRef ? 'animate this image' : ''),
-      resolution: resolution,
-      duration: duration
-    };
-    if (imageRef) body.image = imageRef;
-  } else {
-    // V2 用 content 数组:file_id 时用 file:// 形式(实测可被 V2 接受)
-    url = apiBase() + '/v2/video_generation';
-    var content = [];
-    if (prompt) content.push({ type: 'text', text: prompt });
-    if (fileId) {
-      content.push({ type: 'image_url', image_url: { url: 'file://' + fileId }, role: 'first_frame' });
-    } else if (imageUrl) {
-      content.push({ type: 'image_url', image_url: { url: imageUrl }, role: 'first_frame' });
-    }
-    if (!content.length) { setBusy(false); return showError('V2 模型至少需要提示词或参考图'); }
-    body = { model: model, content: content };
-    if (resolution === '1080P' || resolution === '2K') body.resolution = resolution;
-    if ($('duration').value) body.duration = duration;
-  }
-
-  var histInput = { prompt: prompt, image: fileId ? ('file://' + fileId) : imageUrl, duration: duration, resolution: resolution };
-  // 提交/轮询错误提前用 earlyError 标记,避免在链式 .then 中途 return undefined 导致外层 result.error 抛 TypeError
-  var earlyError = null;
-  var taskId = null;
-
-  showLoading('提交视频生成任务...');
-  fetch(url, {
-    method: 'POST',
-    headers: { 'Authorization': 'Bearer ' + apiKey(), 'Content-Type': 'application/json' },
-    body: JSON.stringify(body)
-  }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, json: j }; }); })
-    .then(function (resp) {
-      if (!resp.ok) {
-        earlyError = 'HTTP ' + resp.status + ' · ' + JSON.stringify(resp.json);
-        return null;
-      }
-      taskId = resp.json.task_id || (resp.json.task && resp.json.task.id);
-      var baseResp = resp.json.base_resp || (resp.json.task && resp.json.task.base_resp);
-      if (!taskId) {
-        earlyError = '未返回 task_id: ' + JSON.stringify(resp.json);
-        return null;
-      }
-      if (baseResp && baseResp.status_code !== 0) {
-        earlyError = 'MiniMax 错误 ' + baseResp.status_code + ': ' + baseResp.status_msg;
-        return null;
-      }
-      showLoading('视频生成中 · task_id=' + taskId + ' · 轮询中(每 5 秒)...');
-      var queryUrl = apiBase() + (ver === 'v2' ? '/v2/query/video_generation' : '/v1/query/video_generation');
-      return pollUntil(function () {
-        return fetch(queryUrl + '?task_id=' + taskId, { headers: { 'Authorization': 'Bearer ' + apiKey() } })
-          .then(function (r) { return r.json(); })
-          .then(function (j) {
-            var status = (j.status || (j.task && j.task.status) || '').toLowerCase();
-            if (status === 'success' || status === 'succeeded') {
-              return { done: true, value: { videoUrl: extractVideoUrl(j), status: status, raw: j } };
-            }
-            if (status === 'fail' || status === 'failed') {
-              return { done: true, value: { error: j.base_resp ? j.base_resp.status_msg : 'failed', raw: j } };
-            }
-            return { done: false };
-          });
-      }, 5000, 60, '视频生成中');
-    })
-    .then(function (result) {
-      setBusy(false);
-      if (earlyError) {
-        addHistory({ id: histId(), ts: Date.now(), model: model, category: 'video', input: histInput, error: { message: earlyError } });
-        return showError(earlyError);
-      }
-      if (result.error) {
-        var msg = '生成失败: ' + result.error;
-        addHistory({ id: histId(), ts: Date.now(), model: model, category: 'video', input: histInput, error: { message: msg } });
-        return showError(msg);
-      }
-      if (!result.videoUrl) {
-        var msg2 = '已完成但未返回视频 URL: ' + JSON.stringify(result.raw);
-        addHistory({ id: histId(), ts: Date.now(), model: model, category: 'video', input: histInput, error: { message: msg2 } });
-        return showError(msg2);
-      }
-      showResult(
-        '<div class="video-wrap"><video src="' + escHtml(result.videoUrl) + '" controls autoplay loop></video></div>'
-        + '<div class="result-meta">model: <code>' + escHtml(model) + '</code> · task: <code>' + taskId + '</code> · status: <code>' + escHtml(result.status) + '</code></div>'
-      );
-      addHistory({
-        id: histId(), ts: Date.now(), model: model, category: 'video',
-        input: histInput,
-        result: { videoUrl: result.videoUrl, taskId: taskId, status: result.status }
-      });
-    })
-    .catch(function (e) {
-      setBusy(false);
-      addHistory({ id: histId(), ts: Date.now(), model: model, category: 'video', input: histInput, error: { message: e.message } });
-      showError(e.message);
-    });
-}
-
-function extractVideoUrl(j) {
-  // V1: j.video_url / j.file_id
-  // V2: j.task.content.url / j.task.video_url
-  return j.video_url
-      || j.file_id
-      || (j.task && (j.task.content && j.task.content.url))
-      || (j.task && j.task.video_url);
-}
-
-// ===== 语音合成(TTS) =====
-function runTts(model) {
-  var text = $('prompt').value.trim();
-  if (!text) return showError('请输入要合成的文本(在「输入」区)');
-  var voice_id = $('voice_id').value;
-  var speed = parseFloat($('tts_speed').value) || 1.0;
-  var pitch = parseInt($('tts_pitch').value) || 0;
-  var format = $('tts_format').value;
-  var body = {
-    model: model,
-    text: text,
-    stream: false,
-    voice_setting: { voice_id: voice_id, speed: speed, vol: 1.0, pitch: pitch },
-    audio_setting: { sample_rate: 32000, bitrate: 128000, format: format }
-  };
-  setBusy(true);
-  showLoading('合成语音中...');
-  fetch(apiBase() + '/t2a_v2', {
-    method: 'POST',
-    headers: { 'Authorization': 'Bearer ' + apiKey(), 'Content-Type': 'application/json' },
-    body: JSON.stringify(body)
-  }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, json: j }; }); })
-    .then(function (resp) {
-      setBusy(false);
-      if (!resp.ok) {
-        var msg = 'HTTP ' + resp.status + ' · ' + JSON.stringify(resp.json);
-        addHistory({ id: histId(), ts: Date.now(), model: model, category: 'tts', input: { text: text, voice_id: voice_id, speed: speed, pitch: pitch, format: format }, error: { message: msg } });
-        return showError(msg);
-      }
-      if (resp.json.base_resp && resp.json.base_resp.status_code !== 0) {
-        var msg2 = 'MiniMax 错误 ' + resp.json.base_resp.status_code + ': ' + resp.json.base_resp.status_msg;
-        addHistory({ id: histId(), ts: Date.now(), model: model, category: 'tts', input: { text: text, voice_id: voice_id, speed: speed, pitch: pitch, format: format }, error: { message: msg2 } });
-        return showError(msg2);
-      }
-      var hexAudio = (resp.json.data || {}).audio;
-      if (!hexAudio) {
-        var msg3 = '未返回 audio: ' + JSON.stringify(resp.json);
-        addHistory({ id: histId(), ts: Date.now(), model: model, category: 'tts', input: { text: text, voice_id: voice_id, speed: speed, pitch: pitch, format: format }, error: { message: msg3 } });
-        return showError(msg3);
-      }
-      var bytes = hexToBytes(hexAudio);
-      var mime = format === 'wav' ? 'audio/wav' : 'audio/mpeg';
-      var blob = new Blob([bytes], { type: mime });
-      var url = URL.createObjectURL(blob);
-      var filename = 'minimax-tts-' + Date.now() + '.' + (format || 'mp3');
-      showResult(
-        '<div class="audio-wrap">'
-        + '<audio src="' + url + '" controls autoplay></audio>'
-        + '<a class="audio-download" href="' + url + '" download="' + filename + '">⬇ 下载 ' + filename + ' (' + Math.round(bytes.length / 1024) + ' KB)</a>'
-        + '</div>'
-        + '<div class="result-meta">model: <code>' + escHtml(model) + '</code> · voice: <code>' + escHtml(voice_id) + '</code> · ' + bytes.length + ' bytes</div>'
-      );
-      addHistory({
-        id: histId(), ts: Date.now(), model: model, category: 'tts',
-        input: { text: text, voice_id: voice_id, speed: speed, pitch: pitch, format: format },
-        result: { audio: hexAudio, format: format, bytes: bytes.length }
-      });
-    })
-    .catch(function (e) {
-      setBusy(false);
-      addHistory({ id: histId(), ts: Date.now(), model: model, category: 'tts', input: { text: text, voice_id: voice_id, speed: speed, pitch: pitch, format: format }, error: { message: e.message } });
-      showError(e.message);
-    });
-}
-
-// MiniMax TTS 异步返回的 audio 是 hex 字符串:把 hex 转成 Uint8Array
-function hexToBytes(hex) {
-  var len = hex.length / 2;
-  var out = new Uint8Array(len);
-  for (var i = 0; i < len; i++) {
-    out[i] = parseInt(hex.substr(i * 2, 2), 16);
-  }
-  return out;
-}
-
-// ===== 调用记录(localStorage 持久化,最多 50 条) =====
-var LS_HISTORY = 'minimax_history_v1';
-var HISTORY_MAX = 50;
-var _histSeq = 0;
-function histId() { return Date.now().toString(36) + '-' + (++_histSeq); }
-
-function getHistory() {
-  try { var arr = JSON.parse(localStorage.getItem(LS_HISTORY) || '[]'); return Array.isArray(arr) ? arr : []; }
-  catch (e) { return []; }
-}
-function saveHistory(arr) {
-  try {
-    localStorage.setItem(LS_HISTORY, JSON.stringify(arr.slice(0, HISTORY_MAX)));
-  } catch (e) {
-    // 配额超限或序列化失败时,只保留最近的 1/3
-    try { localStorage.setItem(LS_HISTORY, JSON.stringify(arr.slice(0, Math.max(1, Math.floor(HISTORY_MAX / 3))))); }
-    catch (e2) { /* ignore */ }
-  }
-}
-function addHistory(record) {
-  var arr = getHistory();
-  arr.unshift(record);
-  saveHistory(arr);
-  renderHistory();
-}
-function deleteHistoryRecord(id) {
-  var arr = getHistory().filter(function (r) { return r.id !== id; });
-  saveHistory(arr);
-  renderHistory();
-}
-function clearHistory() {
-  if (!confirm('确认清空所有调用记录?')) return;
-  localStorage.removeItem(LS_HISTORY);
-  renderHistory();
-}
-
-function categoryLabel(c) {
-  return ({ chat: '对话', image: '文生图', video: '视频', tts: '语音合成' })[c] || c;
-}
-function formatTime(ts) {
-  var d = new Date(ts);
-  var diff = Date.now() - ts;
-  if (diff < 60000) return '刚刚';
-  if (diff < 3600000) return Math.floor(diff / 60000) + '分钟前';
-  var today = new Date(); today.setHours(0, 0, 0, 0);
-  var day = new Date(ts); day.setHours(0, 0, 0, 0);
-  if (today - day < 86400000) {
-    var hh = d.getHours().toString().padStart(2, '0');
-    var mm = d.getMinutes().toString().padStart(2, '0');
-    return '今天 ' + hh + ':' + mm;
-  }
-  if (today - day < 2 * 86400000) {
-    return '昨天 ' + d.getHours().toString().padStart(2, '0') + ':' + d.getMinutes().toString().padStart(2, '0');
-  }
-  return (d.getMonth() + 1) + '月' + d.getDate() + '日 ' + d.getHours().toString().padStart(2, '0') + ':' + d.getMinutes().toString().padStart(2, '0');
-}
-
-// 历史记录的简短预览(用于卡片列表)
-function histPreview(r) {
-  if (r.error) return '<span style="color:#cf1322">✗ ' + escHtml(r.error.message) + '</span>';
-  var prompt = r.input.prompt || r.input.text || r.input.image || '';
-  var promptShort = prompt.length > 60 ? prompt.slice(0, 60) + '…' : prompt;
-  if (r.category === 'chat') {
-    return escHtml(promptShort) + ' <span class="arrow">→</span> <span style="color:#595959">' + escHtml(((r.result.text || '').slice(0, 60))) + '</span>';
-  }
-  if (r.category === 'image') {
-    return escHtml(promptShort) + ' <span class="arrow">→</span> <span style="color:#595959">' + r.result.imageUrls.length + ' 张图</span>';
-  }
-  if (r.category === 'video') {
-    return escHtml(promptShort) + ' <span class="arrow">→</span> <span style="color:#595959">' + (r.result.videoUrl ? '视频已就绪' : '生成失败') + '</span>';
-  }
-  if (r.category === 'tts') {
-    return escHtml(promptShort) + ' <span class="arrow">→</span> <span style="color:#595959">' + (r.result.format || 'mp3').toUpperCase() + ' ' + Math.round((r.result.bytes || 0) / 1024) + ' KB</span>';
-  }
-  return '';
-}
-
-function renderHistory() {
-  var arr = getHistory();
-  document.getElementById('hist_count_badge').textContent = arr.length;
-  var el = document.getElementById('history');
-  if (!arr.length) {
-    el.innerHTML = '<div class="history-empty">暂无调用记录(完成一次生成会自动记录在此)</div>';
-    return;
-  }
-  el.innerHTML = arr.map(function (r) {
-    var isFail = !!r.error;
-    return '<div class="hist-row' + (isFail ? ' failed' : '') + '" data-id="' + r.id + '">'
-      + '<div class="hist-meta"><span class="ts">' + escHtml(formatTime(r.ts)) + '</span>'
-      + escHtml(r.model)
-      + '<span class="badge' + (isFail ? ' badge-fail' : '') + '">' + escHtml(categoryLabel(r.category)) + '</span>'
-      + '</div>'
-      + '<div class="hist-preview">' + histPreview(r) + '</div>'
-      + '<button class="hist-del" data-del="' + r.id + '" title="删除该记录">×</button>'
-      + '</div>';
-  }).join('');
-  el.querySelectorAll('.hist-row').forEach(function (row) {
-    row.onclick = function (e) {
-      if (e.target.dataset && e.target.dataset.del) return;
-      var r = getHistory().find(function (x) { return x.id === row.dataset.id; });
-      if (r) loadRecord(r);
-    };
-  });
-  el.querySelectorAll('.hist-del').forEach(function (btn) {
-    btn.onclick = function (e) {
-      e.stopPropagation();
-      deleteHistoryRecord(btn.dataset.del);
-    };
-  });
-}
-
-// 点击历史记录:恢复输入参数并重新渲染结果
-function loadRecord(r) {
-  // 切换到对应的模型(会自动触发 refreshForm 切换字段)
-  document.getElementById('model_name').value = r.model;
-  document.getElementById('model_name').dispatchEvent(new Event('change'));
-  // 恢复输入
-  var input = r.input || {};
-  if ('prompt' in input) document.getElementById('prompt').value = input.prompt || '';
-  if ('image' in input) document.getElementById('image_url').value = input.image || '';
-  if (r.category === 'chat') {
-    if (input.max_tokens) document.getElementById('max_tokens').value = input.max_tokens;
-    if (input.temperature != null) document.getElementById('temperature').value = input.temperature;
-  }
-  if (r.category === 'image') {
-    if (input.ratio) document.getElementById('aspect_ratio').value = input.ratio;
-    if (input.n) document.getElementById('image_count').value = input.n;
-  }
-  if (r.category === 'video') {
-    if (input.duration) document.getElementById('duration').value = input.duration;
-    if (input.resolution) document.getElementById('resolution').value = input.resolution;
-  }
-  if (r.category === 'tts') {
-    if (input.voice_id) document.getElementById('voice_id').value = input.voice_id;
-    if (input.speed != null) document.getElementById('tts_speed').value = input.speed;
-    if (input.pitch != null) document.getElementById('tts_pitch').value = input.pitch;
-    if (input.format) document.getElementById('tts_format').value = input.format;
-  }
-  // 渲染历史结果
-  if (r.error) {
-    showError('失败: ' + r.error.message);
-  } else {
-    showResult(buildResultHTML(r));
-  }
-  // 滚到顶部
-  window.scrollTo({ top: 0, behavior: 'smooth' });
-}
-
-function buildResultHTML(r) {
-  if (r.category === 'chat') {
-    var m = r.result.meta || {};
-    return '<div class="result-success-text">' + escHtml(r.result.text || '') + '</div>'
-      + '<div class="result-meta">'
-      + 'model: <code>' + escHtml(r.model) + '</code>'
-      + (m.tokens ? ' · tokens: <code>' + m.tokens + '</code> (in ' + (m.prompt_tokens || 0) + ' / out ' + (m.completion_tokens || 0) + ')' : '')
-      + ' · <span style="color:#52c41a">来自历史记录</span></div>';
-  }
-  if (r.category === 'image') {
-    var urls = r.result.imageUrls || [];
-    var grid = '<div class="image-grid">' + urls.map(function (u) {
-      return '<a href="' + escHtml(u) + '" target="_blank" rel="noopener"><img src="' + escHtml(u) + '" loading="lazy" onerror="this.style.opacity=.4;this.title=\'链接已失效\'"></a>';
-    }).join('') + '</div>';
-    var meta = '<div class="result-meta">model: <code>' + escHtml(r.model) + '</code> · count: <code>' + urls.length + '</code>'
-      + (r.input.ratio ? ' · ratio: <code>' + escHtml(r.input.ratio) + '</code>' : '')
-      + ' · <span style="color:#52c41a">来自历史记录</span></div>';
-    return grid + meta;
-  }
-  if (r.category === 'video') {
-    if (!r.result.videoUrl) return '<div class="result-error">视频 URL 已失效</div>';
-    return '<div class="video-wrap"><video src="' + escHtml(r.result.videoUrl) + '" controls loop></video></div>'
-      + '<div class="result-meta">model: <code>' + escHtml(r.model) + '</code>'
-      + (r.result.taskId ? ' · task: <code>' + r.result.taskId + '</code>' : '')
-      + ' · <span style="color:#52c41a">来自历史记录</span></div>';
-  }
-  if (r.category === 'tts') {
-    if (!r.result.audio) return '<div class="result-error">音频数据丢失</div>';
-    var bytes2 = hexToBytes(r.result.audio);
-    var mime2 = r.result.format === 'wav' ? 'audio/wav' : 'audio/mpeg';
-    var blob2 = new Blob([bytes2], { type: mime2 });
-    var url2 = URL.createObjectURL(blob2);
-    var filename2 = 'minimax-tts-' + r.id + '.' + (r.result.format || 'mp3');
-    return '<div class="audio-wrap">'
-      + '<audio src="' + url2 + '" controls></audio>'
-      + '<a class="audio-download" href="' + url2 + '" download="' + filename2 + '">⬇ 下载 ' + filename2 + ' (' + Math.round(bytes2.length / 1024) + ' KB)</a>'
-      + '</div>'
-      + '<div class="result-meta">model: <code>' + escHtml(r.model) + '</code>'
-      + ' · voice: <code>' + escHtml(r.input.voice_id || '-') + '</code>'
-      + ' · ' + bytes2.length + ' bytes'
-      + ' · <span style="color:#52c41a">来自历史记录</span></div>';
-  }
-  return '<div class="result-error">未知记录类型</div>';
-}
-
-// 初始化:渲染历史 + 清空按钮
-renderHistory();
-document.getElementById('btn_clear_history').onclick = clearHistory;
-
-</script>
-
+<script src="models.js"></script>
 </body>
 </html>
