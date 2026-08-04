@@ -999,6 +999,52 @@ function parseMinimaxUsage(json) {
     return windows;
 }
 
+// 解析 MiniMax 用量曲线接口(token_plan/usage_summary):
+// 官方按天返回 date_model_usage(含每日逐模型 token 明细),无参时覆盖较长历史,这里截取最近 N 天(7/30)。
+// 归一化为前端通用图表契约(与智谱/千问一致):{ x_time, modelDataList:[{modelName,tokensUsage}], totalUsage }。
+// 不同日期出现的模型取并集(保留首次出现顺序),缺失日补 0;base_resp.status_code != 0 或无数据返回 null。
+// 逐模型取 input_token + output_token(净消耗);模型 total_token 含 cache_read 会重复计数,
+// 各模型 input+output 之和恰等于当日 total_token,与官方 total_token_consumed 口径一致。
+function parseMinimaxModelUsage(json, period) {
+    if (!json || !json.base_resp || json.base_resp.status_code !== 0) return null;
+    var days = period === '30d' ? 30 : 7;
+    var all = Array.isArray(json.date_model_usage) ? json.date_model_usage : [];
+    if (!all.length) return null;
+    var win = all.slice(-days);
+    var x_time = win.map(function(d) { return d && d.date ? d.date : ''; });
+    var modelMap = {};
+    var order = [];
+    win.forEach(function(d, idx) {
+        var models = (d && Array.isArray(d.models)) ? d.models : [];
+        models.forEach(function(m) {
+            if (!m || !m.model) return;
+            if (!Object.prototype.hasOwnProperty.call(modelMap, m.model)) {
+                modelMap[m.model] = new Array(win.length).fill(0);
+                order.push(m.model);
+            }
+            modelMap[m.model][idx] = (Number(m.input_token) || 0) + (Number(m.output_token) || 0);
+        });
+    });
+    var modelDataList = order.map(function(name) {
+        return { modelName: name, tokensUsage: modelMap[name] };
+    });
+    var totalTokens = win.reduce(function(a, d) { return a + (Number(d && d.total_token) || 0); }, 0);
+    return {
+        x_time: x_time,
+        modelDataList: modelDataList,
+        totalUsage: { totalTokensUsage: totalTokens }
+    };
+}
+
+// MiniMax 用量曲线抓取:调 usage_summary(官方支持 7/30 天口径,无参返回较长历史,由解析层截取)。
+// 复用 /api/model-usage 契约;Cookie 失效或无数据时抛错交由前端提示。
+async function fetchMiniMaxModelUsage(account, period) {
+    var json = await httpsGet('https://www.minimaxi.com/backend/account/token_plan/usage_summary', minimaxHeaders(account));
+    var chart = parseMinimaxModelUsage(json, period);
+    if (!chart) throw new Error('未获取到用量曲线数据（Cookie 可能已失效）');
+    return chart;
+}
+
 // MiniMax 抓取:并行调套餐消息盒子 + 用量接口(remains_percent)。
 // 用量契约: data.usage.windows = [{ label, usedPct 或 used+quota, resetMs, periodMs, segments? }]
 // 用量接口软失败(返回 null)→ data.usage = null → 前端显示「待接入」占位;消息盒子失败则整体抛错(凭据失效)
@@ -1547,6 +1593,10 @@ module.exports = function(app) {
                 var qwenChart = await fetchQwenModelUsage(account, req.query.period || '7d');
                 return res.json({ data: qwenChart });
             }
+            if ((account.platform || 'glm') === 'minimax') {
+                var mmChart = await fetchMiniMaxModelUsage(account, req.query.period || '7d');
+                return res.json({ data: mmChart });
+            }
             if ((account.platform || 'glm') !== 'glm') {
                 var platName = account.platform === 'huoli' ? '火狸' : (account.platform === 'volc' ? '火山' : (account.platform === 'telecomjs' ? '智云' : (account.platform === 'qwen' ? '千问' : (account.platform === 'minimax' ? 'MiniMax' : 'YesCode'))));
                 return res.json({ error: platName + ' 暂不支持用量曲线' });
@@ -1612,4 +1662,5 @@ module.exports._fetchGLMUsage = fetchGLMUsage;
 module.exports._withGlmAuthRetry = withGlmAuthRetry;
 module.exports._parseMinimaxSubscription = parseMinimaxSubscription;
 module.exports._parseMinimaxUsage = parseMinimaxUsage;
+module.exports._parseMinimaxModelUsage = parseMinimaxModelUsage;
 module.exports._minimaxGroupId = minimaxGroupId;

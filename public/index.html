@@ -2382,7 +2382,6 @@ body.dark .platform-minimax { background: #614700; color: #ffc53d; border-color:
 
     function renderMiniMaxDetail(index, acc) {
       var sub = (acc.data && acc.data.subscription) || null;
-      var usage = (acc.data && acc.data.usage) || null;
 
       var html = '<div class="info-section"><div class="info-section-title">负责人信息</div><div class="info-grid">'
         + '<span class="info-label">负责人</span><span class="info-value">' + esc(acc.responsiblePerson||'-') + '</span>'
@@ -2403,11 +2402,16 @@ body.dark .platform-minimax { background: #614700; color: #ffc53d; border-color:
         + '<span class="info-label">官网</span><span class="info-value"><a href="https://platform.minimaxi.com/console/plan" target="_blank" rel="noopener" style="color:#667eea;text-decoration:none">MiniMax 控制台 ↗</a></span>'
         + '</div></div>';
 
-      // 用量接口接入后 usage.windows 自动渲染;接入前显示占位说明
-      var usageHtml = usage
-        ? minimaxUsageRows(usage)
-        : '<p style="font-size:13px;color:#8c8c8c">用量接口对接中（5h 限额 / 周限额 / 视频赠送），当前仅展示套餐与到期信息。</p>';
-      html += '<div class="info-section"><div class="info-section-title">额度使用情况</div>' + usageHtml + '</div>';
+      // 用量曲线:官方 usage_summary 仅支持 7/30 天口径,与智谱/千问共用图表渲染
+      html += '<div class="info-section"><div class="info-section-title">用量曲线</div>'
+        + '<div class="chart-controls">'
+        + '<button class="period-btn active" id="period-7d-' + index + '" onclick="loadUsageChart(' + index + ',\'7d\')">近7天</button>'
+        + '<button class="period-btn" id="period-30d-' + index + '" onclick="loadUsageChart(' + index + ',\'30d\')">近30天</button>'
+        + '<div class="chart-summary" id="chartSummary-' + index + '"></div>'
+        + '</div>'
+        + '<div class="chart-wrap"><div id="chartContainer-' + index + '" style="width:100%;height:320px"></div>'
+        + '<div class="chart-loading" id="chartLoading-' + index + '"></div></div>'
+        + '</div>';
 
       document.getElementById('modalBody').innerHTML = html;
     }
@@ -2455,6 +2459,7 @@ body.dark .platform-minimax { background: #614700; color: #ffc53d; border-color:
       if ((acc.platform || 'glm') === 'minimax') {
         renderMiniMaxDetail(index, acc);
         document.getElementById('modalOverlay').classList.add('active');
+        loadUsageChart(index, '7d');
         return;
       }
 
