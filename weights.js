@@ -297,8 +297,9 @@ function qwenWindows(data) {
     ];
 }
 
-// MiniMax token plan:data.usage.windows = [{ label, usedPct 或 used+quota, resetMs, periodMs }]
+// MiniMax token plan:data.usage.windows = [{ label, usedPct 或 used+quota, resetMs, periodMs, weightExcluded? }]
 // (由 api.js fetchMiniMaxUsage 归一化;5h限额/周限额为百分比窗口,视频赠送为 used/quota 计数窗口)。
+// video 每日赠送带 weightExcluded=true,仅作展示用,不计入权重/紧张度(耗尽也不拖垮账号权重)。
 // 用量接口尚未接入时 usage=null → 返回空窗口 → 聚合为 null → 走默认权重兜底。
 function minimaxWindows(data) {
     var windows = (data && data.usage && Array.isArray(data.usage.windows)) ? data.usage.windows : [];
@@ -306,6 +307,7 @@ function minimaxWindows(data) {
     for (var i = 0; i < windows.length; i++) {
         var w = windows[i];
         if (!w) continue;
+        if (w.weightExcluded) continue; // 赠送额度(如视频赠送)不参与权重/紧张度
         var pct = typeof w.usedPct === 'number'
             ? w.usedPct
             : (w.quota > 0 ? ((w.used || 0) / w.quota) * 100 : null);

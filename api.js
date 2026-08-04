@@ -971,6 +971,7 @@ function minimaxMakeWindow(modelName, kind, usedCount, totalCount, usedPct, star
 // 解析 MiniMax 用量接口(remains_percent):
 // 返回 windows 数组(可能为空);base_resp.status_code != 0 或 model_remains 缺失时返回 null。
 // 只对外暴露 general(5h 限额 + 周限额,5 等分)与 video(每日赠送,计数);video 周窗不再展示。
+// video 每日赠送打 weightExcluded=true:仅展示,不参与权重/紧张度(耗尽也不影响账号可用性)。
 function parseMinimaxUsage(json) {
     if (!json || !json.base_resp || json.base_resp.status_code !== 0) return null;
     var models = Array.isArray(json.model_remains) ? json.model_remains : [];
@@ -978,12 +979,12 @@ function parseMinimaxUsage(json) {
     for (var i = 0; i < models.length; i++) {
         var m = models[i] || {};
         if (!m.model_name) continue;
-        // video 仅暴露每日赠送(0/3),周窗不展示
+        // video 仅暴露每日赠送(0/3),周窗不展示;赠送额度不参与权重/紧张度
         if (m.model_name === 'video') {
             var dailyW = minimaxMakeWindow('video', 'interval',
                 m.current_interval_used_count, m.current_interval_total_count, m.current_interval_used_percent,
                 m.start_time, m.end_time);
-            if (dailyW) windows.push(dailyW);
+            if (dailyW) windows.push(Object.assign({}, dailyW, { weightExcluded: true }));
             continue;
         }
         var intervalW = minimaxMakeWindow(m.model_name, 'interval',

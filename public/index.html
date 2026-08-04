@@ -527,6 +527,7 @@ body.dark .platform-minimax { background: #614700; color: #ffc53d; border-color:
         <svg id="eyeOffIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
       </button>
       <span class="last-updated" id="lastUpdated"></span>
+      <a class="header-btn" href="./models.html">模型调用</a>
       <button class="header-btn" id="mgmtBtn">管理账号</button>
       <button class="header-btn" id="refreshBtn" style="display: none;">全部刷新</button>
     </div>
@@ -1330,14 +1331,26 @@ body.dark .platform-minimax { background: #614700; color: #ffc53d; border-color:
     }
 
     // MiniMax 用量窗口行:后端归一化为 usage.windows = [{label, usedPct 或 used+quota, resetMs, periodMs, segments?}]
-    // 百分比窗口复用 qwenRow;计数窗口(如视频赠送 0/3)按 used/quota 折算百分比,数值显示原始计数
+    // 百分比窗口复用 qwenRow;计数窗口(如视频赠送 0/3)按 quota 等分(每段=1 次),颜色按整体用量百分比
     function minimaxWindowRow(w) {
       if (typeof w.usedPct === 'number') {
         return qwenRow(w.label, w.usedPct, w.resetMs, w.periodMs, w.segments || 0);
       }
-      var pct = w.quota > 0 ? Math.min(100, ((w.used || 0) / w.quota) * 100) : 0;
-      var html = '<div class="limit-row"><div class="limit-label"><span class="limit-name">' + esc(w.label || '') + '</span><span class="limit-value">' + (w.used || 0) + '/' + w.quota + '已用</span></div>';
-      html += '<div class="limit-bar-wrap"><div class="limit-bar"><div class="limit-fill ' + getColorClass(pct) + '" style="width:' + pct + '%"></div></div></div>';
+      var used = w.used || 0, quota = w.quota || 0;
+      var pct = quota > 0 ? Math.min(100, (used / quota) * 100) : 0;
+      var html = '<div class="limit-row"><div class="limit-label"><span class="limit-name">' + esc(w.label || '') + '</span><span class="limit-value">' + used + '/' + quota + '已用</span></div>';
+      if (quota > 0) {
+        // 计数窗口按 quota 等分(视频赠送 quota=3 → 3 段),前 used 段填满
+        var colorClass = getColorClass(pct);
+        var segHtml = '';
+        for (var i = 0; i < quota; i++) {
+          var fillW = i < used ? 100 : 0;
+          segHtml += '<div class="seg"><div class="seg-fill ' + colorClass + '" style="width:' + fillW + '%"></div></div>';
+        }
+        html += '<div class="limit-bar-wrap"><div class="limit-bar-seg">' + segHtml + '</div></div>';
+      } else {
+        html += '<div class="limit-bar-wrap"><div class="limit-bar"><div class="limit-fill ' + getColorClass(pct) + '" style="width:' + pct + '%"></div></div></div>';
+      }
       if (w.resetMs) html += '<div style="font-size:11px;color:#bfbfbf;margin-top:2px">重置 ' + formatTime(w.resetMs) + '</div>';
       html += '</div>';
       return html;
@@ -1350,6 +1363,7 @@ body.dark .platform-minimax { background: #614700; color: #ffc53d; border-color:
       var ws = (usage && Array.isArray(usage.windows)) ? usage.windows : [];
       if (!ws.length) return 0;
       return Math.max.apply(null, ws.map(function(w) {
+        if (w.weightExcluded) return 0; // 视频赠送等赠送额度不参与紧张度
         return typeof w.usedPct === 'number' ? w.usedPct : (w.quota > 0 ? Math.min(100, ((w.used || 0) / w.quota) * 100) : 0);
       }));
     }
