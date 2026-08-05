@@ -800,8 +800,57 @@ var QWEN_USAGE_TYPE_LABELS = {
     total_tokens: '总Token',
     input_tokens: '输入Token',
     output_tokens: '输出Token',
-    cached_tokens: '缓存Token'
+    cached_tokens: '缓存Token',
+    web_search_count: '联网搜索'
 };
+
+// 解析千问用量曲线网关响应。两种「无数据」场景区分:
+//   1) 登录失效:j.data.success=false(errorCode=BailianGateway.Login.NotLogined)、无 DataV2 → 抛错提示 Cookie
+//   2) 时段内无调用:DataV2 结构正常但 originData 为空数组 → 返回空数据集,由前端展示友好空态
+// 同时过滤 cumsum 聚合序列(points 长度与 x 轴不一致):它会让图例出现重复的「总Token」,
+// 且其单点值会被总用量二次累加导致汇总翻倍。
+function parseQwenModelUsageJson(j) {
+    var dataV2 = j && j.data && j.data.DataV2;
+    var dataWrap = dataV2 && dataV2.data;
+    if (!dataWrap || dataWrap.success === false) {
+        throw new Error('未获取到用量曲线数据（Cookie / sec_token 可能已失效）');
+    }
+    var originData = dataWrap.data && dataWrap.data.originData;
+    if (!Array.isArray(originData) || !originData.length) {
+        return { x_time: [], modelDataList: [], totalUsage: { totalTokensUsage: 0 } };
+    }
+
+    function pad(n) { return n < 10 ? '0' + n : '' + n; }
+    function fmtTs(ts) {
+        var dd = new Date(ts);
+        return dd.getFullYear() + '-' + pad(dd.getMonth() + 1) + '-' + pad(dd.getDate()) + ' ' + pad(dd.getHours()) + ':' + pad(dd.getMinutes());
+    }
+
+    var x_time = (originData[0].points || []).map(function(p) { return fmtTs(p.timestamp); });
+    var modelDataList = originData
+        .filter(function(series) { return (series.points || []).length === x_time.length; })
+        .map(function(series) {
+            var ut = series.labels && series.labels.usage_type;
+            return {
+                modelName: QWEN_USAGE_TYPE_LABELS[ut] || ut || 'unknown',
+                tokensUsage: (series.points || []).map(function(p) { return p.value || 0; })
+            };
+        });
+
+    // totalUsage:取 total_tokens 系列求和(千问无调用次数,totalModelCallCount 留空由前端隐藏)
+    var totalTokens = 0;
+    modelDataList.forEach(function(m) {
+        if (m.modelName === '总Token') {
+            totalTokens = (m.tokensUsage || []).reduce(function(a, b) { return a + (b || 0); }, 0);
+        }
+    });
+
+    return {
+        x_time: x_time,
+        modelDataList: modelDataList,
+        totalUsage: { totalTokensUsage: totalTokens }
+    };
+}
 
 // 千问用量曲线：按 period 取当日(每小时)/近7天/近30天(每日)的 model_usage,
 // 转换为与智谱一致的图表格式 {x_time, modelDataList, totalUsage} 供前端 renderUsageChart 复用
@@ -850,37 +899,7 @@ async function fetchQwenModelUsage(account, period) {
     });
     var url = 'https://cs-data.qianwenai.com/data/api.json?product=sfm_bailian&action=BroadScopeAspnGateway&api=zeldaEasy.bailian-telemetry.platform-model.getModelMonitorDataWithOss';
     var j = await httpsPostForm(url, headers, form);
-    var originData = j && j.data && j.data.DataV2 && j.data.DataV2.data && j.data.DataV2.data.data && j.data.DataV2.data.data.originData;
-    if (!Array.isArray(originData) || !originData.length) throw new Error('未获取到用量曲线数据（Cookie / sec_token 可能已失效）');
-
-    function pad(n) { return n < 10 ? '0' + n : '' + n; }
-    function fmtTs(ts) {
-        var dd = new Date(ts);
-        return dd.getFullYear() + '-' + pad(dd.getMonth() + 1) + '-' + pad(dd.getDate()) + ' ' + pad(dd.getHours()) + ':' + pad(dd.getMinutes());
-    }
-
-    var x_time = (originData[0].points || []).map(function(p) { return fmtTs(p.timestamp); });
-    var modelDataList = originData.map(function(series) {
-        var ut = series.labels && series.labels.usage_type;
-        return {
-            modelName: QWEN_USAGE_TYPE_LABELS[ut] || ut || 'unknown',
-            tokensUsage: (series.points || []).map(function(p) { return p.value || 0; })
-        };
-    });
-
-    // totalUsage:取 total_tokens 系列求和(千问无调用次数,totalModelCallCount 留空由前端隐藏)
-    var totalTokens = 0;
-    modelDataList.forEach(function(m) {
-        if (m.modelName === '总Token') {
-            totalTokens = (m.tokensUsage || []).reduce(function(a, b) { return a + (b || 0); }, 0);
-        }
-    });
-
-    return {
-        x_time: x_time,
-        modelDataList: modelDataList,
-        totalUsage: { totalTokensUsage: totalTokens }
-    };
+    return parseQwenModelUsageJson(j);
 }
 
 // ============ MiniMax Token Plan 账号（platform.minimaxi.com）============
@@ -1657,6 +1676,8 @@ module.exports = function(app) {
 // 供单测覆盖 GLM 自动重登路径（不走 HTTP 路由）
 module.exports._isGlmAuthError = isGlmAuthError;
 module.exports._hasGlmLoginCredentials = hasGlmLoginCredentials;
+// 供单测覆盖千问用量曲线响应解析（不走 HTTP 路由）
+module.exports._parseQwenModelUsageJson = parseQwenModelUsageJson;
 module.exports._loginGlm = loginGlm;
 module.exports._fetchGLMUsage = fetchGLMUsage;
 module.exports._withGlmAuthRetry = withGlmAuthRetry;

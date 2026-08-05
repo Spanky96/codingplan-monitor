@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CodingPlan 用量监控</title>
   <style>
-    /* ============ 玻璃拟态仪表盘 · Glassmorphism Dashboard ============ */
+    /* ============ 玻璃拟态仪表盘 · Glassmorphism Dashboard（三主题:亮色 / 暗色 / Claude）============ */
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
     :root {
@@ -13,100 +13,179 @@
       --accent-2: #0ea5e9;
       --accent-3: #6366f1;
       --accent-grad: linear-gradient(120deg, #0ea5e9 0%, #6366f1 50%, #8b5cf6 100%);
+      --accent-soft: rgba(124,58,237,.12);
+      --accent-soft-bd: rgba(124,58,237,.3);
+      --accent-glow: rgba(124,58,237,.32);
 
-      --glass: rgba(255,255,255,.55);
-      --glass-strong: rgba(255,255,255,.82);
-      --glass-soft: rgba(255,255,255,.4);
-      --glass-border: rgba(255,255,255,.6);
-      --glass-border-soft: rgba(255,255,255,.35);
-      --glass-shadow: 0 8px 32px rgba(31,38,135,.12);
-      --glass-shadow-hover: 0 16px 44px rgba(79,70,229,.22);
-      --blur: 16px;
+      --glass: rgba(255,255,255,.82);
+      --glass-strong: rgba(255,255,255,.95);
+      --glass-soft: rgba(255,255,255,.55);
+      --glass-border: rgba(255,255,255,.72);
+      --glass-border-soft: rgba(255,255,255,.42);
+      --glass-shadow: 0 1px 2px rgba(15,23,42,.05), 0 10px 30px rgba(15,23,42,.09);
+      --glass-shadow-hover: 0 4px 14px rgba(79,70,229,.12), 0 18px 44px rgba(79,70,229,.18);
+      --blur: 12px;
 
       --text: #1e293b;
       --text-soft: #475569;
       --text-mute: #94a3b8;
-      --text-faint: #b8c2d6;
+      --text-faint: #b0bccf;
 
-      --line: rgba(148,163,184,.22);
-      --track: rgba(148,163,184,.22);
+      --line: rgba(148,163,184,.24);
+      --track: rgba(148,163,184,.24);
+      --dot: rgba(100,116,139,.08);
 
       --ok: #16a34a;      --ok-bg: rgba(22,163,74,.14);    --ok-bd: rgba(22,163,74,.3);
       --warn: #d97706;    --warn-bg: rgba(217,119,6,.14);   --warn-bd: rgba(217,119,6,.3);
       --danger: #e11d48;  --danger-bg: rgba(225,29,72,.13);  --danger-bd: rgba(225,29,72,.3);
       --exh: #c026d3;     --exh-bg: rgba(192,38,211,.15);   --exh-bd: rgba(192,38,211,.32);
 
+      --header-bg: linear-gradient(120deg, rgba(2,132,199,.92), rgba(99,102,241,.9) 50%, rgba(124,58,237,.92));
+      --header-text: #fff;
+      --header-border: rgba(255,255,255,.25);
+      --header-shadow: 0 6px 30px rgba(99,102,241,.28);
+      --header-ctl-bg: rgba(255,255,255,.16);
+      --header-ctl-border: rgba(255,255,255,.28);
+      --header-ctl-text: rgba(255,255,255,.9);
+      --header-ctl-hover: rgba(255,255,255,.3);
+      --header-ctl-active-bg: rgba(255,255,255,.95);
+      --header-ctl-active-text: var(--accent);
+      --header-dot: linear-gradient(135deg, #67e8f9, #ddd6fe);
+      --header-dot-glow: rgba(167,139,250,.9);
+
       --radius: 18px;
       --radius-sm: 12px;
     }
 
     :root.dark {
-      --glass: rgba(255,255,255,.06);
-      --glass-strong: rgba(255,255,255,.1);
-      --glass-soft: rgba(255,255,255,.04);
-      --glass-border: rgba(255,255,255,.14);
-      --glass-border-soft: rgba(255,255,255,.08);
-      --glass-shadow: 0 8px 32px rgba(0,0,0,.5);
-      --glass-shadow-hover: 0 16px 48px rgba(124,58,237,.42);
+      --accent: #a78bfa;
+      --accent-2: #38bdf8;
+      --accent-3: #818cf8;
+      --accent-soft: rgba(167,139,250,.15);
+      --accent-soft-bd: rgba(167,139,250,.34);
+      --accent-glow: rgba(124,58,237,.4);
+
+      --glass: rgba(255,255,255,.07);
+      --glass-strong: rgba(255,255,255,.11);
+      --glass-soft: rgba(255,255,255,.05);
+      --glass-border: rgba(255,255,255,.15);
+      --glass-border-soft: rgba(255,255,255,.09);
+      --glass-shadow: 0 1px 2px rgba(0,0,0,.4), 0 10px 32px rgba(0,0,0,.45);
+      --glass-shadow-hover: 0 4px 14px rgba(124,58,237,.24), 0 18px 48px rgba(124,58,237,.34);
 
       --text: #e2e8f0;
       --text-soft: #cbd5e1;
       --text-mute: #7c89a3;
-      --text-faint: #4a5468;
+      --text-faint: #565f75;
 
       --line: rgba(148,163,184,.16);
       --track: rgba(148,163,184,.16);
-
-      --accent: #a78bfa;
-      --accent-2: #38bdf8;
-      --accent-3: #818cf8;
+      --dot: rgba(148,163,184,.07);
 
       --ok: #4ade80;   --ok-bg: rgba(74,222,128,.14);  --ok-bd: rgba(74,222,128,.28);
       --warn: #fbbf24; --warn-bg: rgba(251,191,36,.14); --warn-bd: rgba(251,191,36,.3);
       --danger: #fb7185; --danger-bg: rgba(251,113,133,.14); --danger-bd: rgba(251,113,133,.3);
       --exh: #e879f9;  --exh-bg: rgba(232,121,249,.16); --exh-bd: rgba(232,121,249,.32);
+
+      --header-bg: linear-gradient(120deg, rgba(8,47,73,.92), rgba(49,46,129,.92) 50%, rgba(76,29,149,.92));
+      --header-shadow: 0 6px 30px rgba(0,0,0,.5);
+    }
+
+    /* Claude 主题:暖羊皮纸底 + 陶土橙点缀 */
+    :root.claude {
+      --accent: #c15f3c;
+      --accent-2: #8a6d3b;
+      --accent-3: #9a5b33;
+      --accent-grad: linear-gradient(120deg, #d97748 0%, #c05b36 55%, #a84e2e 100%);
+      --accent-soft: rgba(193,95,60,.12);
+      --accent-soft-bd: rgba(193,95,60,.32);
+      --accent-glow: rgba(193,95,60,.28);
+
+      --glass: rgba(252,250,243,.9);
+      --glass-strong: rgba(253,251,246,.97);
+      --glass-soft: rgba(255,255,255,.6);
+      --glass-border: rgba(216,201,172,.55);
+      --glass-border-soft: rgba(148,128,94,.22);
+      --glass-shadow: 0 1px 2px rgba(92,74,46,.05), 0 10px 30px rgba(92,74,46,.1);
+      --glass-shadow-hover: 0 4px 14px rgba(163,92,52,.14), 0 18px 44px rgba(163,92,52,.2);
+
+      --text: #2c2a25;
+      --text-soft: #57534a;
+      --text-mute: #8a8474;
+      --text-faint: #b3ab99;
+
+      --line: rgba(122,106,75,.18);
+      --track: rgba(122,106,75,.2);
+      --dot: rgba(120,100,70,.09);
+
+      --ok: #3f7a4e;   --ok-bg: rgba(76,140,90,.13);   --ok-bd: rgba(76,140,90,.32);
+      --warn: #a16207; --warn-bg: rgba(180,120,20,.13); --warn-bd: rgba(180,120,20,.32);
+      --danger: #b3372f; --danger-bg: rgba(190,60,50,.11); --danger-bd: rgba(190,60,50,.3);
+      --exh: #8a4a9e;  --exh-bg: rgba(150,80,170,.12);  --exh-bd: rgba(150,80,170,.3);
+
+      --header-bg: linear-gradient(120deg, rgba(240,235,222,.94), rgba(234,226,207,.94) 50%, rgba(238,230,212,.94));
+      --header-text: #2c2a25;
+      --header-border: rgba(122,106,75,.18);
+      --header-shadow: 0 6px 24px rgba(122,94,60,.14);
+      --header-ctl-bg: rgba(44,42,37,.05);
+      --header-ctl-border: rgba(44,42,37,.16);
+      --header-ctl-text: #3d3929;
+      --header-ctl-hover: rgba(44,42,37,.1);
+      --header-ctl-active-bg: #fffdf8;
+      --header-ctl-active-text: #c15f3c;
+      --header-dot: linear-gradient(135deg, #e5986d, #c15f3c);
+      --header-dot-glow: rgba(193,95,60,.7);
     }
 
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif;
       color: var(--text);
       min-height: 100vh;
-      background-color: #e9efff;
+      background-color: #eef2fa;
       background-image:
-        radial-gradient(900px 620px at 8% -6%, rgba(14,165,233,.26), transparent 60%),
-        radial-gradient(1000px 700px at 96% 4%, rgba(139,92,246,.28), transparent 60%),
-        radial-gradient(820px 820px at 60% 112%, rgba(236,72,153,.14), transparent 55%);
+        radial-gradient(var(--dot) 1px, transparent 1.4px),
+        radial-gradient(900px 620px at 8% -6%, rgba(14,165,233,.2), transparent 60%),
+        radial-gradient(1000px 700px at 96% 4%, rgba(139,92,246,.22), transparent 60%),
+        radial-gradient(820px 820px at 60% 112%, rgba(236,72,153,.1), transparent 55%);
+      background-size: 26px 26px, auto, auto, auto;
       background-attachment: fixed;
     }
     :root.dark body {
       background-color: #070b18;
       background-image:
-        radial-gradient(900px 620px at 8% -6%, rgba(14,165,233,.22), transparent 60%),
-        radial-gradient(1000px 700px at 96% 4%, rgba(139,92,246,.28), transparent 60%),
-        radial-gradient(820px 820px at 60% 112%, rgba(236,72,153,.16), transparent 55%);
+        radial-gradient(var(--dot) 1px, transparent 1.4px),
+        radial-gradient(900px 620px at 8% -6%, rgba(14,165,233,.2), transparent 60%),
+        radial-gradient(1000px 700px at 96% 4%, rgba(139,92,246,.26), transparent 60%),
+        radial-gradient(820px 820px at 60% 112%, rgba(236,72,153,.14), transparent 55%);
+      background-size: 26px 26px, auto, auto, auto;
+    }
+    :root.claude body {
+      background-color: #f0ede3;
+      background-image:
+        radial-gradient(var(--dot) 1px, transparent 1.4px),
+        radial-gradient(900px 620px at 8% -6%, rgba(193,95,60,.13), transparent 60%),
+        radial-gradient(1000px 700px at 96% 4%, rgba(138,109,59,.13), transparent 60%),
+        radial-gradient(820px 820px at 60% 112%, rgba(163,132,87,.11), transparent 55%);
+      background-size: 26px 26px, auto, auto, auto;
     }
 
-    /* ===== 顶栏：饱和渐变玻璃 ===== */
+    /* ===== 顶栏：主题渐变玻璃 ===== */
     .header {
-      background: linear-gradient(120deg, rgba(2,132,199,.92), rgba(99,102,241,.9) 50%, rgba(124,58,237,.92));
-      backdrop-filter: blur(20px) saturate(160%);
-      -webkit-backdrop-filter: blur(20px) saturate(160%);
-      color: #fff;
+      background: var(--header-bg);
+      backdrop-filter: blur(20px) saturate(150%);
+      -webkit-backdrop-filter: blur(20px) saturate(150%);
+      color: var(--header-text);
       padding: 16px 30px;
       display: flex; justify-content: space-between; align-items: center;
       position: sticky; top: 0; z-index: 100;
-      border-bottom: 1px solid rgba(255,255,255,.25);
-      box-shadow: 0 6px 30px rgba(99,102,241,.28);
-    }
-    :root.dark .header {
-      background: linear-gradient(120deg, rgba(8,47,73,.92), rgba(49,46,129,.92) 50%, rgba(76,29,149,.92));
-      box-shadow: 0 6px 30px rgba(0,0,0,.5);
+      border-bottom: 1px solid var(--header-border);
+      box-shadow: var(--header-shadow);
     }
     .header h1 { font-size: 20px; font-weight: 700; letter-spacing: .5px; display: flex; align-items: center; gap: 10px; }
-    .header h1::before { content: ''; width: 10px; height: 10px; border-radius: 50%; background: linear-gradient(135deg,#67e8f9,#ddd6fe); box-shadow: 0 0 12px rgba(167,139,250,.9); }
+    .header h1::before { content: ''; width: 10px; height: 10px; border-radius: 50%; background: var(--header-dot); box-shadow: 0 0 12px var(--header-dot-glow); }
     .header-right { display: flex; align-items: center; gap: 12px; }
-    .header-btn { background: rgba(255,255,255,.18); border: 1px solid rgba(255,255,255,.3); color: #fff; padding: 7px 18px; border-radius: 9px; cursor: pointer; font-size: 13px; transition: background .2s, transform .15s; text-decoration: none; }
-    .header-btn:hover { background: rgba(255,255,255,.32); }
+    .header-btn { background: var(--header-ctl-bg); border: 1px solid var(--header-ctl-border); color: var(--header-text); padding: 7px 18px; border-radius: 9px; cursor: pointer; font-size: 13px; transition: background .2s, transform .15s; text-decoration: none; }
+    .header-btn:hover { background: var(--header-ctl-hover); }
     .header-btn:active { transform: scale(.97); }
     .last-updated { font-size: 12px; opacity: .75; font-variant-numeric: tabular-nums; }
 
@@ -120,7 +199,7 @@
     .toolbar-label { font-size: 12px; color: var(--text-mute); margin-right: 2px; }
     .toolbar-btn { padding: 5px 15px; border: 1px solid var(--glass-border-soft); border-radius: 18px; background: var(--glass-soft); cursor: pointer; font-size: 12px; color: var(--text-soft); transition: all .15s; display: inline-flex; align-items: center; gap: 4px; }
     .toolbar-btn:hover { border-color: var(--accent); color: var(--accent); }
-    .toolbar-btn.active { background: var(--accent-grad); border-color: transparent; color: #fff; box-shadow: 0 4px 14px rgba(124,58,237,.35); }
+    .toolbar-btn.active { background: var(--accent-grad); border-color: transparent; color: #fff; box-shadow: 0 4px 14px var(--accent-glow); }
     .sort-arrow { font-size: 9px; line-height: 1; opacity: .85; }
     .toolbar-count { margin-left: auto; font-size: 12px; color: var(--text-mute); }
     .card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }
@@ -130,7 +209,7 @@
       border: 1px solid var(--glass-border); border-radius: var(--radius); box-shadow: var(--glass-shadow); overflow: hidden;
       transition: transform .2s, box-shadow .2s, border-color .2s; display: flex; flex-direction: column; }
     .card::before { content: ''; position: absolute; inset: 0 0 auto 0; height: 1px; background: linear-gradient(90deg, transparent, rgba(255,255,255,.75), transparent); pointer-events: none; }
-    .card:hover { transform: translateY(-3px); box-shadow: var(--glass-shadow-hover); border-color: rgba(124,58,237,.4); }
+    .card:hover { transform: translateY(-3px); box-shadow: var(--glass-shadow-hover); border-color: var(--accent-soft-bd); }
 
     .card-header { padding: 14px 20px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center; }
     .card-header-left { display: flex; align-items: center; gap: 8px; min-width: 0; }
@@ -160,7 +239,7 @@
     .status-danger { background: var(--danger-bg); color: var(--danger); border: 1px solid var(--danger-bd); }
     .status-exhausted { background: var(--exh-bg); color: var(--exh); border: 1px solid var(--exh-bd); }
     .status-error { background: var(--glass-soft); color: var(--text-mute); border: 1px solid var(--glass-border-soft); }
-    .status-loading { background: rgba(99,102,241,.14); color: var(--accent-3); }
+    .status-loading { background: var(--accent-soft); color: var(--accent-3); }
 
     .card-refresh { background: none; border: none; cursor: pointer; color: var(--text-mute); padding: 6px 8px; border-radius: 8px; font-size: 20px; transition: color .2s, background .2s; line-height: 1; }
     .card-refresh:hover { color: var(--accent); background: var(--glass-soft); }
@@ -192,23 +271,24 @@
     .limit-bar-seg { display: flex; gap: 3px; height: 8px; }
     .limit-bar-seg .seg { flex: 1; background: var(--track); border-radius: 3px; overflow: hidden; }
     .limit-bar-seg .seg-fill { height: 100%; border-radius: 3px; transition: width .6s ease; min-width: 0; }
-    .theo-marker { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--accent); border-radius: 1px; transform: translateX(-1px); pointer-events: none; box-shadow: 0 0 6px rgba(124,58,237,.6); }
+    .theo-marker { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--accent); border-radius: 1px; transform: translateX(-1px); pointer-events: none; box-shadow: 0 0 6px var(--accent-glow); }
     .tension-row { display: flex; justify-content: space-between; margin-top: 5px; font-size: 11px; }
 
-    .card-footer { padding: 9px 16px; border-top: 1px solid var(--line); display: flex; justify-content: space-between; align-items: flex-end; gap: 8px; font-size: 12px; background: rgba(255,255,255,.12); }
+    .card-footer { padding: 9px 16px; border-top: 1px solid var(--line); display: flex; justify-content: space-between; align-items: flex-end; gap: 8px; font-size: 12px; background: rgba(255,255,255,.14); }
     :root.dark .card-footer { background: rgba(255,255,255,.03); }
+    :root.claude .card-footer { background: rgba(199,177,138,.14); }
     .card-footer-left { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 6px; min-width: 0; }
-    .level-badge { padding: 1px 7px; border-radius: 5px; background: rgba(99,102,241,.14); color: var(--accent-3); border: 1px solid rgba(99,102,241,.3); white-space: nowrap; flex-shrink: 0; font-weight: 600; }
-    :root.dark .level-badge { background: rgba(129,140,248,.16); color: #a5b4fc; border-color: rgba(129,140,248,.3); }
+    .level-badge { padding: 1px 7px; border-radius: 5px; background: var(--accent-soft); color: var(--accent-3); border: 1px solid var(--accent-soft-bd); white-space: nowrap; flex-shrink: 0; font-weight: 600; }
+    .level-badge-ok { background: var(--ok-bg); color: var(--ok); border-color: var(--ok-bd); }
     .weight-badge { padding: 1px 10px; border-radius: 11px; font-size: 12px; font-weight: 700; cursor: pointer; border: 1px solid var(--glass-border-soft); background: var(--glass-soft); color: var(--text-soft); user-select: none; transition: transform .15s; }
     .weight-badge:hover { transform: scale(1.06); }
     .weight-badge.w-0 { background: var(--danger-bg); color: var(--danger); border-color: var(--danger-bd); }
     .weight-badge.w-low { background: var(--warn-bg); color: var(--warn); border-color: var(--warn-bd); }
-    .weight-badge.w-mid { background: rgba(99,102,241,.14); color: var(--accent-3); border-color: rgba(99,102,241,.3); }
+    .weight-badge.w-mid { background: var(--accent-soft); color: var(--accent-3); border-color: var(--accent-soft-bd); }
     .weight-badge.w-high { background: var(--ok-bg); color: var(--ok); border-color: var(--ok-bd); }
     .risk-badge { padding: 1px 8px; border-radius: 11px; font-size: 11px; font-weight: 700; background: var(--danger-bg); color: var(--danger); border: 1px solid var(--danger-bd); cursor: help; white-space: nowrap; flex-shrink: 0; }
     .reset-badge { padding: 1px 8px; border-radius: 11px; font-size: 11px; font-weight: 700; background: var(--warn-bg); color: var(--warn); border: 1px solid var(--warn-bd); cursor: help; white-space: nowrap; flex-shrink: 0; }
-    .plan-badge { padding: 1px 8px; border-radius: 11px; font-size: 11px; font-weight: 700; background: rgba(124,58,237,.15); color: var(--accent); border: 1px solid rgba(124,58,237,.32); cursor: help; white-space: nowrap; flex-shrink: 0; }
+    .plan-badge { padding: 1px 8px; border-radius: 11px; font-size: 11px; font-weight: 700; background: var(--accent-soft); color: var(--accent); border: 1px solid var(--accent-soft-bd); cursor: help; white-space: nowrap; flex-shrink: 0; }
     .plan-badge-peak { background: var(--warn-bg); color: var(--warn); border: 1px solid var(--warn-bd); }
     .card.reset-needed { box-shadow: inset 0 3px 0 var(--warn), var(--glass-shadow); border-color: rgba(217,119,6,.4); }
     .list-row.reset-needed { box-shadow: inset 0 3px 0 var(--warn), var(--glass-shadow); border-color: rgba(217,119,6,.4); }
@@ -222,7 +302,7 @@
     .badge-tooltip.visible { opacity: 1; visibility: visible; }
 
     .expire-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 20px; border-top: 1px solid var(--line); font-size: 13px; cursor: pointer; transition: background .15s; }
-    .expire-row:hover { background: rgba(124,58,237,.08); }
+    .expire-row:hover { background: var(--accent-soft); }
     .expire-label { color: var(--text-soft); }
     .expire-value { font-weight: 600; font-variant-numeric: tabular-nums; color: var(--text); }
     .expire-danger { color: var(--danger); font-weight: 650; }
@@ -261,7 +341,7 @@
     .keys-table { width: 100%; border-collapse: collapse; font-size: 13px; }
     .keys-table th { text-align: left; padding: 9px 12px; background: var(--glass-soft); color: var(--text-soft); font-weight: 600; border-bottom: 1px solid var(--line); }
     .keys-table td { padding: 9px 12px; border-bottom: 1px solid var(--line); color: var(--text); }
-    .keys-table tr:hover td { background: rgba(124,58,237,.07); }
+    .keys-table tr:hover td { background: var(--accent-soft); }
     .keys-table .mono { font-family: 'SF Mono', 'Fira Code', ui-monospace, monospace; font-size: 12px; color: var(--text-soft); word-break: break-all; }
     .keys-table .key-hidden td { opacity: .45; }
     .keys-table .key-hidden td:first-child::after { content: '(隐藏)'; font-size: 11px; color: var(--text-faint); margin-left: 4px; }
@@ -284,7 +364,7 @@
     .skel-line.w80 { width: 80%; }
     .skel-line.w100 { width: 100%; }
     .skel-line.h14 { height: 14px; }
-    .status-loading { background: rgba(99,102,241,.14); color: var(--accent-3); }
+    .status-loading { background: var(--accent-soft); color: var(--accent-3); }
     .list-row .list-row-loading { display: flex; flex-direction: column; gap: 8px; width: 100%; padding: 4px 0; }
     @keyframes skel { 0% { background-position: 100% 50%; } 100% { background-position: 0 50%; } }
 
@@ -292,7 +372,7 @@
     .error-text { color: var(--danger); font-size: 13px; line-height: 1.6; }
 
     .acct-item { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; background: var(--glass-soft); border: 1px solid var(--glass-border-soft); border-radius: 12px; margin-bottom: 8px; transition: background .15s, opacity .15s, transform .15s, border-color .15s; }
-    .acct-item:hover { background: rgba(124,58,237,.08); border-color: var(--glass-border); }
+    .acct-item:hover { background: var(--accent-soft); border-color: var(--glass-border); }
     .acct-item.dragging { opacity: .4; transform: scale(.98); }
     .acct-item.drag-over { border-top: 2px solid var(--accent); padding-top: 10px; }
     .drag-handle { cursor: grab; color: var(--text-faint); padding: 0 4px 0 0; display: flex; align-items: center; transition: color .15s; flex-shrink: 0; }
@@ -307,16 +387,16 @@
     .btn-sm:hover { border-color: var(--accent); color: var(--accent); }
     .btn-sm.danger:hover { border-color: var(--danger); color: var(--danger); }
     .btn-add { display: block; width: 100%; padding: 11px; border: 1px dashed var(--glass-border-soft); border-radius: 12px; background: none; cursor: pointer; font-size: 13px; color: var(--accent); transition: all .15s; }
-    .btn-add:hover { border-color: var(--accent); background: rgba(124,58,237,.08); }
+    .btn-add:hover { border-color: var(--accent); background: var(--accent-soft); }
 
     .form-group { margin-bottom: 14px; }
     .form-label { display: block; font-size: 13px; color: var(--text-soft); margin-bottom: 5px; font-weight: 600; }
     .form-input { width: 100%; padding: 9px 13px; border: 1px solid var(--glass-border-soft); border-radius: 10px; font-size: 13px; font-family: inherit; transition: border-color .2s, box-shadow .2s; outline: none; background: var(--glass-soft); color: var(--text); }
-    .form-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(124,58,237,.15); }
+    .form-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
     textarea.form-input { resize: vertical; min-height: 60px; }
     .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
     .form-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
-    .btn-primary { padding: 9px 26px; border-radius: 10px; border: none; background: var(--accent-grad); color: #fff; cursor: pointer; font-size: 13px; font-weight: 600; transition: filter .2s, transform .15s; box-shadow: 0 4px 14px rgba(124,58,237,.32); }
+    .btn-primary { padding: 9px 26px; border-radius: 10px; border: none; background: var(--accent-grad); color: #fff; cursor: pointer; font-size: 13px; font-weight: 600; transition: filter .2s, transform .15s; box-shadow: 0 4px 14px var(--accent-glow); }
     .btn-primary:hover { filter: brightness(1.08); transform: translateY(-1px); }
     .btn-default { padding: 9px 26px; border-radius: 10px; border: 1px solid var(--glass-border-soft); background: var(--glass-soft); cursor: pointer; font-size: 13px; color: var(--text-soft); }
     .btn-default:hover { border-color: var(--accent); color: var(--accent); }
@@ -347,25 +427,30 @@
     .chart-controls { display: flex; gap: 8px; margin-bottom: 14px; align-items: center; }
     .period-btn { padding: 5px 15px; border: 1px solid var(--glass-border-soft); border-radius: 20px; background: var(--glass-soft); cursor: pointer; font-size: 13px; color: var(--text-soft); transition: all .2s; }
     .period-btn:hover { border-color: var(--accent); color: var(--accent); }
-    .period-btn.active { background: var(--accent-grad); border-color: transparent; color: #fff; box-shadow: 0 4px 12px rgba(124,58,237,.3); }
+    .period-btn.active { background: var(--accent-grad); border-color: transparent; color: #fff; box-shadow: 0 4px 12px var(--accent-glow); }
     .chart-wrap { position: relative; min-height: 260px; }
     .chart-loading { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; font-size: 13px; color: var(--text-mute); background: var(--glass-soft); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); }
+    .chart-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 72px 20px; text-align: center; }
+    .chart-empty-icon { width: 52px; height: 52px; border-radius: 16px; background: var(--accent-soft); border: 1px solid var(--accent-soft-bd); display: flex; align-items: center; justify-content: center; margin-bottom: 6px; }
+    .chart-empty-icon svg { width: 26px; height: 26px; stroke: var(--accent); }
+    .chart-empty-title { font-size: 14px; font-weight: 650; color: var(--text); }
+    .chart-empty-sub { font-size: 12px; color: var(--text-mute); line-height: 1.6; }
     .chart-summary { margin-left: auto; display: flex; gap: 8px; align-items: baseline; font-size: 12px; color: var(--text-mute); flex-wrap: wrap; justify-content: flex-end; }
     .chart-summary .sum-total { font-size: 19px; font-weight: 700; color: var(--accent); background: var(--accent-grad); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; line-height: 1; }
     .chart-summary .sum-divider { color: var(--text-faint); }
 
     /* ===== View Toggle ===== */
-    .view-toggle { display: flex; background: rgba(255,255,255,.16); border: 1px solid rgba(255,255,255,.28); border-radius: 9px; padding: 2px; gap: 2px; }
-    .view-btn { background: transparent; border: none; cursor: pointer; color: rgba(255,255,255,.72); width: 34px; height: 28px; border-radius: 6px; display: flex; align-items: center; justify-content: center; transition: background .15s, color .15s; }
-    .view-btn:hover { color: #fff; }
+    .view-toggle { display: flex; background: var(--header-ctl-bg); border: 1px solid var(--header-ctl-border); border-radius: 9px; padding: 2px; gap: 2px; }
+    .view-btn { background: transparent; border: none; cursor: pointer; color: var(--header-ctl-text); width: 34px; height: 28px; border-radius: 6px; display: flex; align-items: center; justify-content: center; transition: background .15s, color .15s; }
+    .view-btn:hover { color: var(--header-text); }
     .view-btn:active { transform: scale(.95); }
-    .view-btn.active { background: rgba(255,255,255,.95); color: var(--accent); }
+    .view-btn.active { background: var(--header-ctl-active-bg); color: var(--header-ctl-active-text); }
     .view-btn svg { width: 16px; height: 16px; }
 
     /* ===== List View ===== */
     .list-grid { display: flex; flex-direction: column; gap: 10px; }
     .list-row { position: relative; background: var(--glass); backdrop-filter: blur(var(--blur)) saturate(150%); -webkit-backdrop-filter: blur(var(--blur)) saturate(150%); border: 1px solid var(--glass-border); border-radius: var(--radius); box-shadow: var(--glass-shadow); padding: 12px 18px; padding-right: 40px; display: flex; align-items: center; gap: 18px; transition: transform .2s, box-shadow .2s, border-color .2s; cursor: pointer; }
-    .list-row:hover { transform: translateY(-2px); box-shadow: var(--glass-shadow-hover); border-color: rgba(124,58,237,.4); }
+    .list-row:hover { transform: translateY(-2px); box-shadow: var(--glass-shadow-hover); border-color: var(--accent-soft-bd); }
     .list-row-refresh { position: absolute; top: 8px; right: 8px; z-index: 2; font-size: 16px; padding: 3px 6px; }
     .list-row-left { display: flex; flex-direction: column; gap: 5px; width: 170px; min-width: 170px; flex-shrink: 0; }
     .list-row-title { display: flex; align-items: center; gap: 7px; }
@@ -388,6 +473,7 @@
     :root.dark .ring-fill.ring-exhausted { stroke: #e879f9; }
     .ring-seg-tick { stroke: #fff; stroke-width: 1.4; }
     :root.dark .ring-seg-tick { stroke: #0b1020; }
+    :root.claude .ring-seg-tick { stroke: #f7f3e8; }
     .ring-theo { stroke: var(--accent); stroke-width: 1.8; stroke-linecap: round; }
     .ring-center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; line-height: 1.1; text-align: center; padding: 0 4px; }
     .ring-center .rc-label { font-size: 9px; font-weight: 600; color: var(--text-mute); white-space: nowrap; }
@@ -416,11 +502,23 @@
       .list-row-right { align-items: flex-start; }
     }
 
-    /* ===== Dark / privacy toggle ===== */
-    .dark-toggle { background: rgba(255,255,255,.16); border: 1px solid rgba(255,255,255,.28); cursor: pointer; color: rgba(255,255,255,.9); font-size: 18px; width: 34px; height: 34px; border-radius: 9px; display: flex; align-items: center; justify-content: center; transition: background .2s; }
-    .dark-toggle:hover { background: rgba(255,255,255,.3); }
+    /* ===== Privacy toggle / theme picker ===== */
+    .dark-toggle { background: var(--header-ctl-bg); border: 1px solid var(--header-ctl-border); cursor: pointer; color: var(--header-ctl-text); font-size: 18px; width: 34px; height: 34px; border-radius: 9px; display: flex; align-items: center; justify-content: center; transition: background .2s; }
+    .dark-toggle:hover { background: var(--header-ctl-hover); }
     .dark-toggle svg { width: 18px; height: 18px; }
-    .dark-toggle.active { background: rgba(255,255,255,.35); box-shadow: inset 0 0 0 1.5px rgba(255,255,255,.5); }
+    .dark-toggle.active { background: var(--header-ctl-hover); box-shadow: inset 0 0 0 1.5px var(--header-ctl-border); }
+
+    .theme-picker { position: relative; }
+    .theme-picker-btn { display: flex; align-items: center; gap: 6px; height: 34px; padding: 0 11px; border-radius: 9px; background: var(--header-ctl-bg); border: 1px solid var(--header-ctl-border); color: var(--header-ctl-text); cursor: pointer; font-size: 12.5px; font-family: inherit; transition: background .2s; }
+    .theme-picker-btn:hover { background: var(--header-ctl-hover); }
+    .theme-picker-btn svg { width: 16px; height: 16px; flex-shrink: 0; }
+    .theme-picker-btn .tp-caret { width: 12px; height: 12px; opacity: .7; }
+    .theme-menu { position: absolute; top: calc(100% + 8px); right: 0; min-width: 138px; padding: 5px; border-radius: 12px; background: var(--glass-strong); backdrop-filter: blur(20px) saturate(150%); -webkit-backdrop-filter: blur(20px) saturate(150%); border: 1px solid var(--glass-border); box-shadow: var(--glass-shadow-hover); opacity: 0; visibility: hidden; transform: translateY(-4px) scale(.98); transition: opacity .15s, transform .15s, visibility .15s; z-index: 200; }
+    .theme-menu.open { opacity: 1; visibility: visible; transform: none; }
+    .theme-menu button { display: flex; width: 100%; align-items: center; gap: 8px; padding: 8px 10px; border: none; background: none; border-radius: 8px; font-size: 13px; font-family: inherit; color: var(--text-soft); cursor: pointer; transition: background .12s, color .12s; }
+    .theme-menu button:hover { background: var(--glass-soft); color: var(--text); }
+    .theme-menu button.active { background: var(--accent-soft); color: var(--accent); font-weight: 650; }
+    .theme-menu button svg { width: 15px; height: 15px; flex-shrink: 0; }
 
     /* ===== Theme transition (View Transitions API) ===== */
     ::view-transition-old(root), ::view-transition-new(root) { animation-duration: 500ms; animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1); }
@@ -430,16 +528,19 @@
       from { clip-path: circle(0% at var(--theme-x) var(--theme-y)); }
       to   { clip-path: circle(150% at var(--theme-x) var(--theme-y)); }
     }
-    html.to-dark::view-transition-old(root) { animation: theme-shrink 500ms cubic-bezier(0.4, 0, 0.2, 1); z-index: 2; }
-    html.to-dark::view-transition-new(root) { animation: none; z-index: 1; }
-    @keyframes theme-shrink {
-      from { clip-path: circle(150% at var(--theme-x) var(--theme-y)); }
-      to   { clip-path: circle(0% at var(--theme-x) var(--theme-y)); }
-    }
     .theme-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 9999; pointer-events: none; }
   </style>
   <script src="/js/echart/echarts.min.js"></script>
-  <script>if(localStorage.getItem('usage_dark')==='true')document.documentElement.classList.add('dark');</script>
+  <script>
+    // 首帧前应用主题,避免闪烁;兼容旧键 usage_dark(true → dark)
+    (function(){
+      var t = localStorage.getItem('usage_theme');
+      if (t !== 'light' && t !== 'dark' && t !== 'claude') {
+        t = localStorage.getItem('usage_dark') === 'true' ? 'dark' : 'light';
+      }
+      if (t !== 'light') document.documentElement.classList.add(t);
+    })();
+  </script>
 </head>
 <body>
   <div class="header">
@@ -453,10 +554,14 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="3.5" cy="6" r="1"/><circle cx="3.5" cy="12" r="1"/><circle cx="3.5" cy="18" r="1"/></svg>
         </button>
       </div>
-      <button class="dark-toggle" id="darkToggle" title="切换深色模式">
-        <svg id="sunIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
-        <svg id="moonIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
-      </button>
+      <div class="theme-picker" id="themePicker">
+        <button class="theme-picker-btn" id="themePickerBtn" title="切换主题">
+          <span id="themePickerIcon"></span>
+          <span id="themePickerLabel">亮色</span>
+          <svg class="tp-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="theme-menu" id="themeMenu" role="menu"></div>
+      </div>
       <button class="dark-toggle" id="privacyToggle" title="切换隐私模式（隐藏账号名称）">
         <svg id="eyeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
         <svg id="eyeOffIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
@@ -576,6 +681,7 @@
     var UNIT_LABELS = { 3: '每5小时', 5: 'MCP月额度', 6: '每周' };
     var _pendingAuth = null;
     var _detailIndex = -1;
+    var _chartPeriod = {};      // idx → 当前图表口径(today/7d/30d),主题切换重绘用
     var _filterPlatform = 'all';
     var _sortMode = 'default';
     var _privacyMode = localStorage.getItem('usage_privacy') === 'true';
@@ -589,79 +695,122 @@
     var _telecomQrLoading = false;
     var _telecomLoginHandled = false;
 
-    // ============ Dark Mode ============
-    (function() {
-      var dark = localStorage.getItem('usage_dark') === 'true';
-      if (dark) document.documentElement.classList.add('dark');
-      document.body.classList.toggle('dark', dark);
-      document.getElementById('sunIcon').style.display = dark ? 'none' : '';
-      document.getElementById('moonIcon').style.display = dark ? '' : 'none';
+    // ============ 主题系统（亮色 / 暗色 / Claude 黄灰）============
+    var THEME_META = {
+      light: { label: '亮色', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>' },
+      dark: { label: '暗色', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>' },
+      claude: { label: 'Claude', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3v18M3 12h18M5.6 5.6l12.8 12.8M18.4 5.6L5.6 18.4"/></svg>' }
+    };
+    // 兜底揭示动画的遮罩底色 = 旧主题的基础背景色
+    var THEME_BASE_BG = { light: '#eef2fa', dark: '#070b18', claude: '#f0ede3' };
 
-      var overlay = document.getElementById('themeOverlay');
+    function currentTheme() {
+      var cl = document.documentElement.classList;
+      if (cl.contains('dark')) return 'dark';
+      if (cl.contains('claude')) return 'claude';
+      return 'light';
+    }
 
-      function applyTheme(goingDark) {
-        document.body.classList.toggle('dark', goingDark);
-        document.documentElement.classList.toggle('dark', goingDark);
-        localStorage.setItem('usage_dark', goingDark);
-        document.getElementById('sunIcon').style.display = goingDark ? 'none' : '';
-        document.getElementById('moonIcon').style.display = goingDark ? '' : 'none';
+    function applyTheme(theme) {
+      var cl = document.documentElement.classList;
+      cl.toggle('dark', theme === 'dark');
+      cl.toggle('claude', theme === 'claude');
+      document.body.classList.toggle('dark', theme === 'dark');
+      document.body.classList.toggle('claude', theme === 'claude');
+      localStorage.setItem('usage_theme', theme);
+      localStorage.setItem('usage_dark', String(theme === 'dark'));
+      syncThemePicker();
+      // 详情图表若已打开,按新主题配色重绘
+      var cont = _detailIndex >= 0 ? document.getElementById('chartContainer-' + _detailIndex) : null;
+      if (cont && cont._chartLoaded && _chartPeriod[_detailIndex]) loadUsageChart(_detailIndex, _chartPeriod[_detailIndex]);
+    }
+
+    function syncThemePicker() {
+      var meta = THEME_META[currentTheme()];
+      document.getElementById('themePickerIcon').innerHTML = meta.icon;
+      document.getElementById('themePickerLabel').textContent = meta.label;
+      document.querySelectorAll('#themeMenu [data-set-theme]').forEach(function(b) {
+        b.classList.toggle('active', b.getAttribute('data-set-theme') === currentTheme());
+      });
+    }
+
+    function toggleThemeMenu(open) {
+      document.getElementById('themeMenu').classList.toggle('open', open);
+    }
+
+    function setTheme(theme, originEl) {
+      toggleThemeMenu(false);
+      if (theme === currentTheme()) return;
+      var el = originEl || document.getElementById('themePickerBtn');
+      var rect = el.getBoundingClientRect();
+      var cx = rect.left + rect.width / 2;
+      var cy = rect.top + rect.height / 2;
+      var prevBg = THEME_BASE_BG[currentTheme()];
+      document.documentElement.style.setProperty('--theme-x', cx + 'px');
+      document.documentElement.style.setProperty('--theme-y', cy + 'px');
+
+      if (document.startViewTransition) {
+        document.startViewTransition(function() { applyTheme(theme); });
+        return;
       }
 
-      document.getElementById('darkToggle').addEventListener('click', function() {
-        if (this._animating) return;
-        var goingDark = !document.body.classList.contains('dark');
-        var rect = this.getBoundingClientRect();
-        var cx = rect.left + rect.width / 2;
-        var cy = rect.top + rect.height / 2;
+      // 兜底:遮罩圆形揭示(旧主题底色上挖洞,逐渐露出新主题)
+      var overlay = document.getElementById('themeOverlay');
+      var maxDist = Math.max(
+        Math.hypot(cx, cy),
+        Math.hypot(window.innerWidth - cx, cy),
+        Math.hypot(cx, window.innerHeight - cy),
+        Math.hypot(window.innerWidth - cx, window.innerHeight - cy)
+      );
+      var maxR = Math.ceil(maxDist) + 10;
+      var tpl = 'radial-gradient(circle {SIZE}px at {CX}px {CY}px, transparent {HOLE}px, black {EDGE}px)';
+      overlay.style.background = prevBg;
+      overlay.style.webkitMaskImage = tpl.replace('{SIZE}', maxR).replace('{CX}', cx).replace('{CY}', cy).replace('{HOLE}', '0').replace('{EDGE}', '0');
+      overlay.style.maskImage = overlay.style.webkitMaskImage;
 
-        if (document.startViewTransition) {
-          document.documentElement.style.setProperty('--theme-x', cx + 'px');
-          document.documentElement.style.setProperty('--theme-y', cy + 'px');
-          document.documentElement.classList.toggle('to-dark', goingDark);
-          document.startViewTransition(function() {
-            applyTheme(goingDark);
-          }).finished.then(function() {
-            document.documentElement.classList.remove('to-dark');
-          });
-          return;
+      applyTheme(theme);
+
+      var duration = 500;
+      var startTime = performance.now();
+      function frame(now) {
+        var t = Math.min(1, (now - startTime) / duration);
+        var eased = 1 - Math.pow(1 - t, 3);
+        var r = eased * maxR;
+        var m = tpl.replace('{SIZE}', maxR).replace('{CX}', cx).replace('{CY}', cy).replace('{HOLE}', r.toFixed(1)).replace('{EDGE}', (r + 2).toFixed(1));
+        overlay.style.webkitMaskImage = m;
+        overlay.style.maskImage = m;
+        if (t < 1) { requestAnimationFrame(frame); }
+        else {
+          overlay.style.webkitMaskImage = '';
+          overlay.style.maskImage = '';
+          overlay.style.background = '';
         }
+      }
+      requestAnimationFrame(frame);
+    }
 
-        this._animating = true;
-        var self = this;
-        var maxDist = Math.max(
-          Math.hypot(cx, cy),
-          Math.hypot(window.innerWidth - cx, cy),
-          Math.hypot(cx, window.innerHeight - cy),
-          Math.hypot(window.innerWidth - cx, window.innerHeight - cy)
-        );
-        var maxR = Math.ceil(maxDist) + 10;
-        var tpl = 'radial-gradient(circle {SIZE}px at {CX}px {CY}px, transparent {HOLE}px, black {EDGE}px)';
-        var initMask = tpl.replace('{SIZE}', maxR).replace('{CX}', cx).replace('{CY}', cy).replace('{HOLE}', '0').replace('{EDGE}', '0');
-
-        overlay.style.background = goingDark ? '#e9efff' : '#070b18';
-        overlay.style.webkitMaskImage = initMask;
-        overlay.style.maskImage = initMask;
-
-        applyTheme(goingDark);
-
-        var duration = 500;
-        var startTime = performance.now();
-        function frame(now) {
-          var t = Math.min(1, (now - startTime) / duration);
-          var eased = 1 - Math.pow(1 - t, 3);
-          var r = eased * maxR;
-          var m = tpl.replace('{SIZE}', maxR).replace('{CX}', cx).replace('{CY}', cy).replace('{HOLE}', r.toFixed(1)).replace('{EDGE}', (r + 2).toFixed(1));
-          overlay.style.webkitMaskImage = m;
-          overlay.style.maskImage = m;
-          if (t < 1) { requestAnimationFrame(frame); }
-          else {
-            overlay.style.webkitMaskImage = '';
-            overlay.style.maskImage = '';
-            overlay.style.background = '';
-            self._animating = false;
-          }
-        }
-        requestAnimationFrame(frame);
+    (function initThemePicker() {
+      var menu = document.getElementById('themeMenu');
+      var btn = document.getElementById('themePickerBtn');
+      menu.innerHTML = Object.keys(THEME_META).map(function(key) {
+        return '<button data-set-theme="' + key + '" role="menuitem">' + THEME_META[key].icon + '<span>' + THEME_META[key].label + '</span></button>';
+      }).join('');
+      syncThemePicker();
+      btn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        toggleThemeMenu(!menu.classList.contains('open'));
+      });
+      menu.addEventListener('click', function(e) {
+        var item = e.target.closest('[data-set-theme]');
+        if (!item) return;
+        e.stopPropagation();
+        setTheme(item.getAttribute('data-set-theme'), btn);
+      });
+      document.addEventListener('click', function(e) {
+        if (!e.target.closest('#themePicker')) toggleThemeMenu(false);
+      });
+      document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') toggleThemeMenu(false);
       });
     })();
 
@@ -805,10 +954,10 @@
     // 理论进度对照标签（实际用量 vs 理论进度）；耗尽判定优先于速率比，避免撑满进度条仍显示「偏快」
     function tensionInfo(pct, theoPct) {
       if (pct >= EXHAUSTED_PCT) return { text: '耗尽', color: '#c026d3' };
-      if (pct <= 0) return { text: '暂无用量', color: '#bfbfbf' };
+      if (pct <= 0) return { text: '暂无用量', color: 'var(--text-faint)' };
       var ratio = pct / theoPct;
       if (ratio <= 0.8) return { text: '充裕', color: '#52c41a' };
-      if (ratio <= 1.3) return { text: '正常', color: '#8c8c8c' };
+      if (ratio <= 1.3) return { text: '正常', color: 'var(--text-mute)' };
       if (ratio <= 2.0) return { text: '偏快', color: '#fa8c16' };
       return { text: '紧张', color: '#f5222d' };
     }
@@ -948,19 +1097,19 @@
         var tensionHtml = '';
         if (theoPct >= 0) {
           var ti = tensionInfo(pct, theoPct);
-          tensionHtml = '<div class="tension-row"><span style="color:' + ti.color + ';font-weight:500">' + ti.text + '</span><span style="color:#bfbfbf">理论 ' + theoPct.toFixed(0) + '%</span></div>';
+          tensionHtml = '<div class="tension-row"><span style="color:' + ti.color + ';font-weight:500">' + ti.text + '</span><span style="color:var(--text-faint)">理论 ' + theoPct.toFixed(0) + '%</span></div>';
         }
 
         return '<div class="limit-row"><div class="limit-label"><span class="limit-name">' + label + '</span><span class="limit-value">' + value + '</span></div>'
           + barHtml + tensionHtml
-          + (reset ? '<div style="font-size:11px;color:#bfbfbf;margin-top:2px">' + reset + '</div>' : '')
+          + (reset ? '<div style="font-size:11px;color:var(--text-faint);margin-top:2px">' + reset + '</div>' : '')
           + '</div>';
       }
 
       // Default simple bar for other limits
       return '<div class="limit-row"><div class="limit-label"><span class="limit-name">' + label + '</span><span class="limit-value">' + value + '</span></div>'
         + '<div class="limit-bar"><div class="limit-fill ' + getColorClass(pct) + '" style="width:' + Math.min(pct,100) + '%"></div></div>'
-        + (reset ? '<div style="font-size:11px;color:#bfbfbf;margin-top:3px">' + reset + '</div>' : '') + '</div>';
+        + (reset ? '<div style="font-size:11px;color:var(--text-faint);margin-top:3px">' + reset + '</div>' : '') + '</div>';
     }
 
     function platformTag(platform, planType) {
@@ -995,10 +1144,10 @@
 
       if (theoPct >= 0) {
         var ti = tensionInfo(pct, theoPct);
-        html += '<div class="tension-row"><span style="color:' + ti.color + ';font-weight:500">' + ti.text + '</span><span style="color:#bfbfbf">理论 ' + theoPct.toFixed(0) + '%</span></div>';
+        html += '<div class="tension-row"><span style="color:' + ti.color + ';font-weight:500">' + ti.text + '</span><span style="color:var(--text-faint)">理论 ' + theoPct.toFixed(0) + '%</span></div>';
       }
 
-      if (resetTxt) html += '<div style="font-size:11px;color:#bfbfbf;margin-top:2px">' + resetTxt + '</div>';
+      if (resetTxt) html += '<div style="font-size:11px;color:var(--text-faint);margin-top:2px">' + resetTxt + '</div>';
       html += '</div>';
       return html;
     }
@@ -1042,10 +1191,10 @@
 
       if (theoPct >= 0) {
         var ti = tensionInfo(pct, theoPct);
-        html += '<div class="tension-row"><span style="color:' + ti.color + ';font-weight:500">' + ti.text + '</span><span style="color:#bfbfbf">理论 ' + theoPct.toFixed(0) + '%</span></div>';
+        html += '<div class="tension-row"><span style="color:' + ti.color + ';font-weight:500">' + ti.text + '</span><span style="color:var(--text-faint)">理论 ' + theoPct.toFixed(0) + '%</span></div>';
       }
 
-      if (resetTxt) html += '<div style="font-size:11px;color:#bfbfbf;margin-top:2px">' + resetTxt + '</div>';
+      if (resetTxt) html += '<div style="font-size:11px;color:var(--text-faint);margin-top:2px">' + resetTxt + '</div>';
       html += '</div>';
       return html;
     }
@@ -1128,10 +1277,10 @@
 
       if (theoPct >= 0) {
         var ti = tensionInfo(realPct, theoPct);
-        html += '<div class="tension-row"><span style="color:' + ti.color + ';font-weight:500">' + ti.text + '</span><span style="color:#bfbfbf">理论 ' + theoPct.toFixed(0) + '%</span></div>';
+        html += '<div class="tension-row"><span style="color:' + ti.color + ';font-weight:500">' + ti.text + '</span><span style="color:var(--text-faint)">理论 ' + theoPct.toFixed(0) + '%</span></div>';
       }
 
-      if (resetTxt) html += '<div style="font-size:11px;color:#bfbfbf;margin-top:2px">' + resetTxt + '</div>';
+      if (resetTxt) html += '<div style="font-size:11px;color:var(--text-faint);margin-top:2px">' + resetTxt + '</div>';
       html += '</div>';
       return html;
     }
@@ -1258,9 +1407,9 @@
       html += '</div>';
       if (theoPct >= 0) {
         var ti = tensionInfo(pct, theoPct);
-        html += '<div class="tension-row"><span style="color:' + ti.color + ';font-weight:500">' + ti.text + '</span><span style="color:#bfbfbf">理论 ' + theoPct.toFixed(0) + '%</span></div>';
+        html += '<div class="tension-row"><span style="color:' + ti.color + ';font-weight:500">' + ti.text + '</span><span style="color:var(--text-faint)">理论 ' + theoPct.toFixed(0) + '%</span></div>';
       }
-      if (resetTxt) html += '<div style="font-size:11px;color:#bfbfbf;margin-top:2px">' + resetTxt + '</div>';
+      if (resetTxt) html += '<div style="font-size:11px;color:var(--text-faint);margin-top:2px">' + resetTxt + '</div>';
       html += '</div>';
       return html;
     }
@@ -1286,7 +1435,7 @@
       } else {
         html += '<div class="limit-bar-wrap"><div class="limit-bar"><div class="limit-fill ' + getColorClass(pct) + '" style="width:' + pct + '%"></div></div></div>';
       }
-      if (w.resetMs) html += '<div style="font-size:11px;color:#bfbfbf;margin-top:2px">重置 ' + formatTime(w.resetMs) + '</div>';
+      if (w.resetMs) html += '<div style="font-size:11px;color:var(--text-faint);margin-top:2px">重置 ' + formatTime(w.resetMs) + '</div>';
       html += '</div>';
       return html;
     }
@@ -1357,7 +1506,7 @@
           + renderSpendRow('本月消费', d.current_month_spend || 0, plan.monthly_spend_limit || 0, d.last_month_reset, 30 * 86400000);
         var mpY = yescodeMaxPct(d);
         var planBadge = '<span class="level-badge">' + esc(plan.name || '-') + '</span>';
-        var balanceBadge = (d.balance != null) ? '<span class="level-badge" style="background:rgba(16,185,129,.16);color:#0e9f6e;border-color:rgba(16,185,129,.34)">余额 $' + (+d.balance).toFixed(0) + '</span>' : '';
+        var balanceBadge = (d.balance != null) ? '<span class="level-badge level-badge-ok">余额 $' + (+d.balance).toFixed(0) + '</span>' : '';
         var expHtmlY = '';
         if (d.subscription_expiry) {
           var expDate = new Date(d.subscription_expiry);
@@ -1455,7 +1604,7 @@
         var mpQ = Math.max(q5, q7);
         var qBody = qwenRow('每5小时', q5, qR5, 5 * 3600000, 5) + qwenRow('每周', q7, qR7, 7 * 86400000, 7);
         var qPlanBadge = '<span class="level-badge">' + esc(qwenSpecName(qS && qS.specCode)) + '</span>';
-        var qDaysBadge = (qS && qS.remainingDays != null) ? '<span class="level-badge" style="background:rgba(16,185,129,.16);color:#0e9f6e;border-color:rgba(16,185,129,.34)">剩余 ' + qS.remainingDays + '天</span>' : '';
+        var qDaysBadge = (qS && qS.remainingDays != null) ? '<span class="level-badge level-badge-ok">剩余 ' + qS.remainingDays + '天</span>' : '';
         var qExpHtml = '';
         if (qS && qS.endTime) {
           var qExpDate = new Date(qS.endTime);
@@ -1477,8 +1626,8 @@
         // 用量接口接入前仅展示套餐信息占位;接入后 usage.windows 自动渲染为进度行
         var mBody = mU
           ? minimaxUsageRows(mU)
-          : '<div class="limit-row"><div class="limit-label"><span class="limit-name">用量</span><span class="limit-value" style="color:#bfbfbf">待接入</span></div>'
-            + '<div style="font-size:11px;color:#bfbfbf;margin-top:2px">用量接口对接中,当前仅展示套餐与到期信息</div></div>';
+          : '<div class="limit-row"><div class="limit-label"><span class="limit-name">用量</span><span class="limit-value" style="color:var(--text-faint)">待接入</span></div>'
+            + '<div style="font-size:11px;color:var(--text-faint);margin-top:2px">用量接口对接中,当前仅展示套餐与到期信息</div></div>';
         var mpM = mU ? minimaxMaxPct(mU) : 0;
         var mStatusCls = getStatusClass(mpM), mStatusTxt = getStatusText(mpM);
         if (!mU) { mStatusCls = 'status-ok'; mStatusTxt = '正常'; }
@@ -1518,7 +1667,7 @@
         var expHint = daysLeft <= 0 ? '已过期' : daysLeft + '天后到期';
         expHtml = '<div class="expire-row" onclick="refreshExpire(' + i + ')" title="点击刷新"><span class="expire-label">订阅到期</span><span class="expire-value ' + expCls + '">' + esc(exp.expireTime) + '<span class="expire-hint">' + expHint + '</span></span></div>';
       }
-      var keyBadge = acc.keyCount != null ? '<span class="level-badge" style="background:rgba(16,185,129,.16);color:#0e9f6e;border-color:rgba(16,185,129,.34)">Key: ' + acc.keyCount + '个</span>' : '';
+      var keyBadge = acc.keyCount != null ? '<span class="level-badge level-badge-ok">Key: ' + acc.keyCount + '个</span>' : '';
       var rBadge = riskBadgeHTML(acc);
       var resetBadge = resetBadgeHTML(acc);
       var resetClass = resetBadge ? ' reset-needed' : '';
@@ -1749,7 +1898,7 @@
       if (platform === 'yescode') {
         var d = acc.data || {}, plan = d.subscription_plan || {};
         var b = '<span class="level-badge">' + esc(plan.name || '-') + '</span>';
-        if (d.balance != null) b += '<span class="level-badge" style="background:rgba(16,185,129,.16);color:#0e9f6e;border-color:rgba(16,185,129,.34)">余额 $' + (+d.balance).toFixed(0) + '</span>';
+        if (d.balance != null) b += '<span class="level-badge level-badge-ok">余额 $' + (+d.balance).toFixed(0) + '</span>';
         return b;
       }
       if (platform === 'huoli') {
@@ -1766,7 +1915,7 @@
       if (platform === 'qwen') {
         var qSub = (acc.data && acc.data.subscription) || null;
         var b = '<span class="level-badge">' + esc(qwenSpecName(qSub && qSub.specCode)) + '</span>';
-        if (qSub && qSub.remainingDays != null) b += '<span class="level-badge" style="background:rgba(16,185,129,.16);color:#0e9f6e;border-color:rgba(16,185,129,.34)">剩余 ' + qSub.remainingDays + '天</span>';
+        if (qSub && qSub.remainingDays != null) b += '<span class="level-badge level-badge-ok">剩余 ' + qSub.remainingDays + '天</span>';
         return b;
       }
       if (platform === 'minimax') {
@@ -1782,7 +1931,7 @@
       var level = levelLabel(acc);
       var b = '<span class="level-badge">' + level + '</span>';
       b += glmFooterBadges(acc);
-      if (acc.keyCount != null) b += '<span class="level-badge" style="background:rgba(16,185,129,.16);color:#0e9f6e;border-color:rgba(16,185,129,.34)">Key: ' + acc.keyCount + '个</span>';
+      if (acc.keyCount != null) b += '<span class="level-badge level-badge-ok">Key: ' + acc.keyCount + '个</span>';
       b += resetBadgeHTML(acc);
       b += riskBadgeHTML(acc);
       return b;
@@ -2072,11 +2221,11 @@
       html += '<div class="info-section"><div class="info-section-title">账号信息</div><div class="info-grid">'
         + '<span class="info-label">用户名</span><span class="info-value">' + esc(d.username||'-') + '</span>'
         + '<span class="info-label">邮箱</span><span class="info-value">' + esc(d.email||'-') + '</span>'
-        + '<span class="info-label">套餐</span><span class="info-value">' + esc(plan.name||'-') + (plan.description ? ' <span style="color:#bfbfbf">· ' + esc(plan.description) + '</span>' : '') + '</span>'
+        + '<span class="info-label">套餐</span><span class="info-value">' + esc(plan.name||'-') + (plan.description ? ' <span style="color:var(--text-faint)">· ' + esc(plan.description) + '</span>' : '') + '</span>'
         + '<span class="info-label">价格</span><span class="info-value">' + (plan.price != null ? '$' + plan.price : '-') + '</span>'
         + '<span class="info-label">注册时间</span><span class="info-value">' + esc(fmtYesCodeDate(d.created_at)) + '</span>'
         + '<span class="info-label">订阅到期</span><span class="info-value">' + esc(fmtYesCodeDate(d.subscription_expiry)) + '</span>'
-        + '<span class="info-label">官网</span><span class="info-value"><a href="https://co.yes.vg/" target="_blank" rel="noopener" style="color:#7c3aed;text-decoration:none">https://co.yes.vg/ ↗</a></span>'
+        + '<span class="info-label">官网</span><span class="info-value"><a href="https://co.yes.vg/" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none">https://co.yes.vg/ ↗</a></span>'
         + '</div></div>';
 
       html += '<div class="info-section"><div class="info-section-title">余额详情</div><div class="info-grid">'
@@ -2098,15 +2247,15 @@
       html += '<div class="info-section"><div class="info-section-title">消费情况</div>'
         + '<div class="limit-row"><div class="limit-label"><span class="limit-name">今日已消费</span><span class="limit-value">$' + dailySpent.toFixed(2) + ' / $' + dailyLimit.toFixed(2) + ' (' + dailyPct.toFixed(1) + '%)</span></div>'
         + '<div class="limit-bar"><div class="limit-fill ' + getColorClass(dailyPct) + '" style="width:' + dailyPct + '%"></div></div>'
-        + (dailyNext ? '<div style="font-size:11px;color:#bfbfbf;margin-top:3px">每日额度重置时间：' + fmtYesCodeDate(dailyNext) + '（每日0点 UTC+8）</div>' : '')
+        + (dailyNext ? '<div style="font-size:11px;color:var(--text-faint);margin-top:3px">每日额度重置时间：' + fmtYesCodeDate(dailyNext) + '（每日0点 UTC+8）</div>' : '')
         + '</div>'
         + '<div class="limit-row"><div class="limit-label"><span class="limit-name">本周已消费</span><span class="limit-value">$' + weekSpent.toFixed(2) + ' / $' + weekLimit.toFixed(2) + ' (' + weekPct.toFixed(1) + '%)</span></div>'
         + '<div class="limit-bar"><div class="limit-fill ' + getColorClass(weekPct) + '" style="width:' + weekPct + '%"></div></div>'
-        + (weekNext ? '<div style="font-size:11px;color:#bfbfbf;margin-top:3px">周配额重置时间：' + fmtYesCodeDate(weekNext) + '（每7天滚动）</div>' : '')
+        + (weekNext ? '<div style="font-size:11px;color:var(--text-faint);margin-top:3px">周配额重置时间：' + fmtYesCodeDate(weekNext) + '（每7天滚动）</div>' : '')
         + '</div>'
         + '<div class="limit-row"><div class="limit-label"><span class="limit-name">本月已消费</span><span class="limit-value">$' + monthSpent.toFixed(2) + ' / $' + monthLimit.toFixed(2) + ' (' + monthPct.toFixed(1) + '%)</span></div>'
         + '<div class="limit-bar"><div class="limit-fill ' + getColorClass(monthPct) + '" style="width:' + monthPct + '%"></div></div>'
-        + (monthNext ? '<div style="font-size:11px;color:#bfbfbf;margin-top:3px">月度配额重置时间：' + fmtYesCodeDate(monthNext) + '（每30天滚动）</div>' : '')
+        + (monthNext ? '<div style="font-size:11px;color:var(--text-faint);margin-top:3px">月度配额重置时间：' + fmtYesCodeDate(monthNext) + '（每30天滚动）</div>' : '')
         + '</div>'
         + '</div>';
 
@@ -2131,14 +2280,14 @@
         + '</div></div>';
 
       html += '<div class="info-section"><div class="info-section-title">订阅信息</div><div class="info-grid">'
-        + '<span class="info-label">套餐名称</span><span class="info-value">' + esc(grp.name||'-') + (grp.description ? ' <span style="color:#bfbfbf">· ' + esc(grp.description) + '</span>' : '') + '</span>'
+        + '<span class="info-label">套餐名称</span><span class="info-value">' + esc(grp.name||'-') + (grp.description ? ' <span style="color:var(--text-faint)">· ' + esc(grp.description) + '</span>' : '') + '</span>'
         + '<span class="info-label">平台</span><span class="info-value">' + esc(grp.platform||'-') + '</span>'
         + '<span class="info-label">倍率</span><span class="info-value">' + (grp.rate_multiplier != null ? grp.rate_multiplier + 'x' : '-') + '</span>'
         + '<span class="info-label">状态</span><span class="info-value">' + esc(sub.status||'-') + '</span>'
         + '<span class="info-label">开始时间</span><span class="info-value">' + esc(fmtYesCodeDate(sub.starts_at)) + '</span>'
         + '<span class="info-label">到期时间</span><span class="info-value">' + esc(fmtYesCodeDate(sub.expires_at)) + '</span>'
         + '<span class="info-label">支持模型</span><span class="info-value">' + ((grp.supported_models||[]).join(', ') || '-') + '</span>'
-        + '<span class="info-label">官网</span><span class="info-value"><a href="https://huolilink.com/" target="_blank" rel="noopener" style="color:#7c3aed;text-decoration:none">https://huolilink.com/ ↗</a></span>'
+        + '<span class="info-label">官网</span><span class="info-value"><a href="https://huolilink.com/" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none">https://huolilink.com/ ↗</a></span>'
         + '</div></div>';
 
       var dailyPct = dailyLimit > 0 ? Math.min(100, (dailyUsed / dailyLimit) * 100) : 0;
@@ -2151,15 +2300,15 @@
       html += '<div class="info-section"><div class="info-section-title">消费情况</div>'
         + '<div class="limit-row"><div class="limit-label"><span class="limit-name">今日已消费</span><span class="limit-value">$' + dailyUsed.toFixed(2) + ' / $' + dailyLimit.toFixed(2) + ' (' + dailyPct.toFixed(1) + '%)</span></div>'
         + '<div class="limit-bar"><div class="limit-fill ' + getColorClass(dailyPct) + '" style="width:' + dailyPct + '%"></div></div>'
-        + (dailyNext ? '<div style="font-size:11px;color:#bfbfbf;margin-top:3px">每日额度重置时间：' + fmtYesCodeDate(dailyNext) + '</div>' : '')
+        + (dailyNext ? '<div style="font-size:11px;color:var(--text-faint);margin-top:3px">每日额度重置时间：' + fmtYesCodeDate(dailyNext) + '</div>' : '')
         + '</div>'
         + '<div class="limit-row"><div class="limit-label"><span class="limit-name">本周已消费</span><span class="limit-value">$' + weeklyUsed.toFixed(2) + ' / $' + weeklyLimit.toFixed(2) + ' (' + weeklyPct.toFixed(1) + '%)</span></div>'
         + '<div class="limit-bar"><div class="limit-fill ' + getColorClass(weeklyPct) + '" style="width:' + weeklyPct + '%"></div></div>'
-        + (weeklyNext ? '<div style="font-size:11px;color:#bfbfbf;margin-top:3px">周配额重置时间：' + fmtYesCodeDate(weeklyNext) + '</div>' : '')
+        + (weeklyNext ? '<div style="font-size:11px;color:var(--text-faint);margin-top:3px">周配额重置时间：' + fmtYesCodeDate(weeklyNext) + '</div>' : '')
         + '</div>'
         + '<div class="limit-row"><div class="limit-label"><span class="limit-name">本月已消费</span><span class="limit-value">$' + monthlyUsed.toFixed(2) + ' / $' + monthlyLimit.toFixed(2) + ' (' + monthlyPct.toFixed(1) + '%)</span></div>'
         + '<div class="limit-bar"><div class="limit-fill ' + getColorClass(monthlyPct) + '" style="width:' + monthlyPct + '%"></div></div>'
-        + (monthlyNext ? '<div style="font-size:11px;color:#bfbfbf;margin-top:3px">月度配额重置时间：' + fmtYesCodeDate(monthlyNext) + '</div>' : '')
+        + (monthlyNext ? '<div style="font-size:11px;color:var(--text-faint);margin-top:3px">月度配额重置时间：' + fmtYesCodeDate(monthlyNext) + '</div>' : '')
         + '</div>'
         + '</div>';
 
@@ -2188,7 +2337,7 @@
         + '<span class="info-label">开始时间</span><span class="info-value">' + esc(fmtYesCodeDate(sub && sub.StartTime)) + '</span>'
         + '<span class="info-label">到期时间</span><span class="info-value">' + esc(fmtYesCodeDate(sub && sub.EndTime)) + '</span>'
         + '<span class="info-label">自动续费</span><span class="info-value">' + (sub ? (sub.EnableAutoRenew ? '是' : '否') : '-') + '</span>'
-        + '<span class="info-label">官网</span><span class="info-value"><a href="https://console.volcengine.com/ark/region:ark+cn-beijing/openManagement?LLM=%7B%7D&advancedActiveKey=agentPlan" target="_blank" rel="noopener" style="color:#7c3aed;text-decoration:none">火山引擎控制台 ↗</a></span>'
+        + '<span class="info-label">官网</span><span class="info-value"><a href="https://console.volcengine.com/ark/region:ark+cn-beijing/openManagement?LLM=%7B%7D&advancedActiveKey=agentPlan" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none">火山引擎控制台 ↗</a></span>'
         + '</div></div>';
 
       function detailRow(label, bucket) {
@@ -2197,7 +2346,7 @@
         var resetTxt = bucket && bucket.ResetTime ? fmtYesCodeDate(bucket.ResetTime) : '-';
         return '<div class="limit-row"><div class="limit-label"><span class="limit-name">' + label + '</span><span class="limit-value">' + used.toFixed(2) + ' / ' + quota + ' (' + pct.toFixed(1) + '%)</span></div>'
           + '<div class="limit-bar"><div class="limit-fill ' + getColorClass(pct) + '" style="width:' + pct + '%"></div></div>'
-          + '<div style="font-size:11px;color:#bfbfbf;margin-top:3px">额度重置时间：' + resetTxt + '</div>'
+          + '<div style="font-size:11px;color:var(--text-faint);margin-top:3px">额度重置时间：' + resetTxt + '</div>'
           + '</div>';
       }
 
@@ -2232,7 +2381,7 @@
         + '<span class="info-label">开始时间</span><span class="info-value">' + esc(fmtYesCodeDate(sub && sub.StartTime)) + '</span>'
         + '<span class="info-label">到期时间</span><span class="info-value">' + esc(fmtYesCodeDate(sub && sub.EndTime)) + '</span>'
         + '<span class="info-label">自动续费</span><span class="info-value">' + (sub ? (sub.EnableAutoRenew ? '是' : '否') : '-') + '</span>'
-        + '<span class="info-label">官网</span><span class="info-value"><a href="https://console.volcengine.com/ark/region:cn-beijing/subscription/coding-plan" target="_blank" rel="noopener" style="color:#7c3aed;text-decoration:none">火山引擎控制台 ↗</a></span>'
+        + '<span class="info-label">官网</span><span class="info-value"><a href="https://console.volcengine.com/ark/region:cn-beijing/subscription/coding-plan" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none">火山引擎控制台 ↗</a></span>'
         + '</div></div>';
 
       function cDetailRow(label, item) {
@@ -2241,7 +2390,7 @@
         var resetTxt = item && item.ResetTimestamp ? fmtYesCodeDate(item.ResetTimestamp * 1000) : '-';
         return '<div class="limit-row"><div class="limit-label"><span class="limit-name">' + label + '</span><span class="limit-value">已用 ' + realPct.toFixed(1) + '%</span></div>'
           + '<div class="limit-bar"><div class="limit-fill ' + getColorClass(pct) + '" style="width:' + pct + '%"></div></div>'
-          + '<div style="font-size:11px;color:#bfbfbf;margin-top:3px">额度重置时间：' + resetTxt + '</div>'
+          + '<div style="font-size:11px;color:var(--text-faint);margin-top:3px">额度重置时间：' + resetTxt + '</div>'
           + '</div>';
       }
 
@@ -2276,7 +2425,7 @@
         + '<span class="info-label">预计可用</span><span class="info-value">' + telecomDaysText(tm.remainingDays) + '（' + tm.rateBasis + '）</span>'
         + '<span class="info-label">模型组</span><span class="info-value">' + (d.modelGroupCount != null ? d.modelGroupCount : '-') + '</span>'
         + '<span class="info-label">模型数</span><span class="info-value">' + (d.modelCount != null ? d.modelCount : '-') + '</span>'
-        + '<span class="info-label">官网</span><span class="info-value"><a href="https://token.telecomjs.com/finance/cost" target="_blank" rel="noopener" style="color:#7c3aed;text-decoration:none">智云费用中心 ↗</a></span>'
+        + '<span class="info-label">官网</span><span class="info-value"><a href="https://token.telecomjs.com/finance/cost" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none">智云费用中心 ↗</a></span>'
         + '</div></div>';
       document.getElementById('modalBody').innerHTML = html;
     }
@@ -2298,7 +2447,7 @@
         + '<span class="info-label">开始时间</span><span class="info-value">' + esc(fmtYesCodeDate(sub && sub.startTime)) + '</span>'
         + '<span class="info-label">到期时间</span><span class="info-value">' + esc(fmtYesCodeDate(sub && sub.endTime)) + '</span>'
         + '<span class="info-label">实例编号</span><span class="info-value">' + esc((sub && sub.instanceCode) || '-') + '</span>'
-        + '<span class="info-label">官网</span><span class="info-value"><a href="https://platform.qianwenai.com/home/billing/subscription/token-plan-individual" target="_blank" rel="noopener" style="color:#7c3aed;text-decoration:none">千问控制台 ↗</a></span>'
+        + '<span class="info-label">官网</span><span class="info-value"><a href="https://platform.qianwenai.com/home/billing/subscription/token-plan-individual" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none">千问控制台 ↗</a></span>'
         + '</div></div>';
 
       html += '<div class="info-section"><div class="info-section-title">用量曲线</div>'
@@ -2334,7 +2483,7 @@
         + '<span class="info-label">到期时间</span><span class="info-value">' + esc((sub && sub.expireDate) || '-') + '</span>'
         + '<span class="info-label">剩余天数</span><span class="info-value">' + daysLeftTxt + '</span>'
         + '<span class="info-label">权益发放时间</span><span class="info-value">' + esc(fmtYesCodeDate(sub && sub.notifiedAt)) + '</span>'
-        + '<span class="info-label">官网</span><span class="info-value"><a href="https://platform.minimaxi.com/console/plan" target="_blank" rel="noopener" style="color:#7c3aed;text-decoration:none">MiniMax 控制台 ↗</a></span>'
+        + '<span class="info-label">官网</span><span class="info-value"><a href="https://platform.minimaxi.com/console/plan" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none">MiniMax 控制台 ↗</a></span>'
         + '</div></div>';
 
       // 用量曲线:官方 usage_summary 仅支持 7/30 天口径,与智谱/千问共用图表渲染
@@ -2432,7 +2581,7 @@
           + '<div class="keys-section"><div class="keys-header"><div class="keys-title">IP 白名单</div>'
           + '<div class="keys-create"><input id="newIpAddr" placeholder="如 1.2.3.4 或 10.0.0.0/8" style="width:200px"><button onclick="addIpWhitelist(' + index + ')">添加</button></div>'
           + '</div>'
-          + '<p style="font-size:12px;color:#8c8c8c;margin:-6px 0 12px">未配置时不限制 IP;添加后仅白名单内 IP 可调用本账号 API。</p>'
+          + '<p style="font-size:12px;color:var(--text-mute);margin:-6px 0 12px">未配置时不限制 IP;添加后仅白名单内 IP 可调用本账号 API。</p>'
           + '<div id="ipContainer" class="keys-loading">点击「IP 白名单」标签加载...</div></div>'
           + '</div>' : '');
 
@@ -2454,7 +2603,7 @@
         if (keys.error) { document.getElementById('keysContainer').innerHTML = '<p class="error-text">' + esc(keys.error) + '</p>'; return; }
         accountsData[index].keyCount = keys.length || 0;
         updateCard(index, accountsData[index]);
-        if (!keys.length) { document.getElementById('keysContainer').innerHTML = '<p style="color:#8c8c8c;font-size:13px">无 API Key</p>'; return; }
+        if (!keys.length) { document.getElementById('keysContainer').innerHTML = '<p style="color:var(--text-mute);font-size:13px">无 API Key</p>'; return; }
         renderKeysTable(index, keys, admin);
       }).catch(function(err) {
         document.getElementById('keysContainer').innerHTML = '<p class="error-text">加载失败: ' + esc(err.message) + '</p>';
@@ -2478,7 +2627,30 @@
       }
     }
 
+    // 图表空态:区分时段给出友好文案(无调用 ≠ Cookie 失效,后端已分开处理)
+    var CHART_EMPTY_TEXT = {
+      today: { title: '今日暂无调用记录', sub: '当日有模型调用后,这里会按小时展示用量曲线' },
+      '7d': { title: '近 7 天暂无调用记录', sub: '产生用量后,这里会按天展示用量曲线' },
+      '30d': { title: '近 30 天暂无调用记录', sub: '产生用量后,这里会按天展示用量曲线' }
+    };
+
+    function renderChartEmpty(idx, period) {
+      var container = document.getElementById('chartContainer-' + idx);
+      if (!container) return;
+      if (_usageCharts[idx]) { _usageCharts[idx].dispose(); delete _usageCharts[idx]; }
+      var sumEl = document.getElementById('chartSummary-' + idx);
+      if (sumEl) sumEl.innerHTML = '';
+      var txt = CHART_EMPTY_TEXT[period] || CHART_EMPTY_TEXT['7d'];
+      container._chartLoaded = true;
+      container.innerHTML = '<div class="chart-empty">'
+        + '<div class="chart-empty-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M6 15l4-5 3.5 3L18 7"/></svg></div>'
+        + '<div class="chart-empty-title">' + txt.title + '</div>'
+        + '<div class="chart-empty-sub">' + txt.sub + '</div>'
+        + '</div>';
+    }
+
     function loadUsageChart(idx, period) {
+      _chartPeriod[idx] = period;
       ['today', '7d', '30d'].forEach(function(p) {
         var btn = document.getElementById('period-' + p + '-' + idx);
         if (btn) btn.classList.toggle('active', p === period);
@@ -2492,13 +2664,27 @@
         .then(function(resp) {
           if (resp.error) { if (loading) { loading.textContent = '加载失败: ' + resp.error; loading.style.display = 'flex'; } return; }
           var data = resp.data;
-          if (!data || !data.x_time || !data.modelDataList) { if (loading) { loading.textContent = '暂无数据'; loading.style.display = 'flex'; } return; }
+          if (!data || !data.x_time || !data.modelDataList || !data.x_time.length || !data.modelDataList.length) {
+            if (loading) loading.style.display = 'none';
+            renderChartEmpty(idx, period);
+            return;
+          }
           if (loading) loading.style.display = 'none';
           container._chartLoaded = true;
           renderUsageChart(idx, data, period);
         })
         .catch(function(err) { if (loading) { loading.textContent = '请求失败: ' + err.message; loading.style.display = 'flex'; } });
     }
+
+    // 图表配色随主题切换:亮/暗沿用原冷暖,Claude 用暖陶土系
+    var CHART_THEMES = {
+      light: { txt: '#334155', line: '#94a3b8', split: '#e2e8f0', tipBg: 'rgba(255,255,255,.96)', tipBorder: '#e2e8f0',
+               colors: ['#3b5bdb','#e03131','#9c36b5','#0c8599','#2f9e44','#e67700','#d6336c','#1971c2'] },
+      dark: { txt: '#cbd5e1', line: '#475569', split: '#1e293b', tipBg: 'rgba(15,23,42,.96)', tipBorder: '#334155',
+              colors: ['#74a8ff','#ff8787','#da77f2','#3bc9db','#69db7c','#ffa94d','#f783ac','#4dabf7'] },
+      claude: { txt: '#3d3929', line: '#b9b09c', split: '#e8e2d2', tipBg: 'rgba(255,253,248,.97)', tipBorder: '#e0d8c4',
+                colors: ['#c05b36','#8a6d3b','#5c7a4e','#46697d','#a04e6e','#7a6a9c','#3f7d71','#b0783f'] }
+    };
 
     function renderUsageChart(idx, data, period) {
       var container = document.getElementById('chartContainer-' + idx);
@@ -2507,12 +2693,12 @@
       if (_usageCharts[idx]) { _usageCharts[idx].dispose(); }
       var chart = echarts.init(container);
       _usageCharts[idx] = chart;
-      var dark = document.body.classList.contains('dark');
-      var txtColor = dark ? '#ccc' : '#333';
-      var lineColor = dark ? '#444' : '#999';
-      var splitColor = dark ? '#2a2a2a' : '#e8e8e8';
-      var tipBg = dark ? '#1f1f1f' : '#fff';
-      var tipBorder = dark ? '#444' : '#eee';
+      var ct = CHART_THEMES[currentTheme()] || CHART_THEMES.light;
+      var txtColor = ct.txt;
+      var lineColor = ct.line;
+      var splitColor = ct.split;
+      var tipBg = ct.tipBg;
+      var tipBorder = ct.tipBorder;
 
       var xData = data.x_time;
       var models = (data.modelDataList || []).filter(function(m) {
@@ -2523,7 +2709,7 @@
         return t.slice(5, 13).replace(' ', '\n');
       });
       var interval = Math.max(0, Math.floor(xData.length / 14) - 1);
-      var colors = ['#3b5bdb','#e03131','#9c36b5','#0c8599','#2f9e44','#e67700','#d6336c','#1971c2'];
+      var colors = ct.colors;
 
       chart.setOption({
         color: colors,
@@ -2706,7 +2892,7 @@
       if (!container) return;
       container.className = '';
       if (!rows || !rows.length) {
-        container.innerHTML = '<p style="color:#8c8c8c;font-size:13px">暂无白名单 IP(当前不限制访问 IP)</p>';
+        container.innerHTML = '<p style="color:var(--text-mute);font-size:13px">暂无白名单 IP(当前不限制访问 IP)</p>';
         return;
       }
       var body = rows.map(function(r) {
@@ -2798,7 +2984,7 @@
         .then(function(accounts) {
           if (!accounts) return;
           var html = '';
-          if (!accounts.length) html += '<div style="text-align:center;padding:24px;color:#8c8c8c;font-size:13px">暂无账号</div>';
+          if (!accounts.length) html += '<div style="text-align:center;padding:24px;color:var(--text-mute);font-size:13px">暂无账号</div>';
           accounts.forEach(function(a, i) {
             html += '<div class="acct-item" draggable="true" data-idx="'+i+'"><div class="drag-handle" title="拖动排序">' + _svgGrip + '</div>'
               + '<div class="acct-info"><div class="acct-name">' + platformTag(a.platform || 'glm') + ' ' + esc(a.name||'未命名') + '</div>'
@@ -3363,7 +3549,7 @@
       _weightEditIndex = i; _weightEditName = acc.name;
       document.getElementById('weightBody').innerHTML = ''
         + '<div class="form-group"><label class="form-label">账号</label><div style="font-weight:600">' + esc(acc.name) + '</div></div>'
-        + '<div class="form-group"><label class="form-label">基础用量</label><div id="w_base_info" style="color:#8c8c8c;font-size:13px">-</div></div>'
+        + '<div class="form-group"><label class="form-label">基础用量</label><div id="w_base_info" style="color:var(--text-mute);font-size:13px">-</div></div>'
         + '<div class="form-group"><label class="form-label">默认权重(token 失效 / 无缓存时使用,0~10)</label><input class="form-input" type="number" min="0" max="10" step="1" id="w_default" value="' + cfg.defaultWeight + '" oninput="updateWeightPreview()"></div>'
         + '<div class="form-row"><div class="form-group"><label class="form-label">权重策略</label><select class="form-input" id="w_strategy" onchange="updateWeightPreview()">'
           + '<option value="B"' + (cfg.strategy==='B'?' selected':'') + '>B 倍率(默认 ×1)</option>'
@@ -3372,7 +3558,7 @@
           + '<option value="D"' + (cfg.strategy==='D'?' selected':'') + '>D 固定加减</option>'
         + '</select></div>'
         + '<div class="form-group"><label class="form-label">策略值</label><input class="form-input" type="number" step="any" id="w_value" value="' + cfg.value + '" oninput="updateWeightPreview()"></div></div>'
-        + '<div class="form-group"><label class="form-label">预览最终权重</label><div style="font-size:22px;font-weight:700;color:#7c3aed">W <span id="w_preview">-</span> <span style="font-size:12px;color:#bfbfbf;font-weight:400">(钳制到 0~10)</span></div></div>'
+        + '<div class="form-group"><label class="form-label">预览最终权重</label><div style="font-size:22px;font-weight:700;color:var(--accent)">W <span id="w_preview">-</span> <span style="font-size:12px;color:var(--text-faint);font-weight:400">(钳制到 0~10)</span></div></div>'
         + '<div class="form-actions"><button class="btn-default" onclick="closeModal(\'weightOverlay\')">取消</button><button class="btn-primary" onclick="saveWeightConfig()">保存</button></div>';
       updateWeightPreview();
       document.getElementById('weightOverlay').classList.add('active');
