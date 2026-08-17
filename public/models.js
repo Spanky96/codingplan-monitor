@@ -40,15 +40,16 @@ function toast(msg, isError) {
 /* ================= 配置(localStorage) ================= */
 var LS_URL = 'minimax_api_url_v1';
 var LS_KEY = 'minimax_api_key_v1';
-// 中转站(sub2api)默认配置:内置反代 /minimax/* 转发到中转站,由中转站透传 MiniMax
-var DEFAULT_API_URL = '/minimax/v1';
+// 中转站(sub2api)默认配置:浏览器直连公网网关(已配置 CORS);
+// 同源反代 /minimax/v1 仍可用作备选(上游同样指向中转站)
+var DEFAULT_API_URL = 'https://lwai.05info.com:8887/v1';
 var DEFAULT_API_KEY = 'sk-b4c8274e71c34ea69d6915b03e59d0241d331bb7f27cb67f91ae5ad44ad446fe';
 
 function loadConfig() {
   var url = localStorage.getItem(LS_URL);
-  // 默认走内置反向代理(同源 /minimax/* → sub2api 中转站),规避浏览器跨域;
-  // 一次性把旧的直连默认值迁移到代理(仅匹配该默认值,不影响自定义 URL)
-  if (!url || url === 'https://api.minimaxi.com/v1') url = DEFAULT_API_URL;
+  // 默认直连中转站公网地址(网关已放行本页来源的跨域);
+  // 一次性把旧的反代/直连默认值迁移过去(仅匹配已知默认值,不影响自定义 URL)
+  if (!url || url === 'https://api.minimaxi.com/v1' || url === '/minimax/v1') url = DEFAULT_API_URL;
   $('api_url').value = url;
   var key = localStorage.getItem(LS_KEY);
   // 未保存过密钥时默认填中转站密钥,保存后以浏览器本地为准
@@ -57,7 +58,8 @@ function loadConfig() {
 function saveConfig() {
   var url = $('api_url').value.trim().replace(/\/+$/, '');
   var key = $('api_key').value.trim();
-  if (!url || !/^https?:\/\//.test(url)) return showConfigStatus('API URL 格式不正确', true);
+  // 完整 http(s) 地址,或以 / 开头的同源相对路径(内置反代)
+  if (!url || !/^(https?:\/\/|\/[a-z0-9_-]+)/i.test(url)) return showConfigStatus('API URL 格式不正确', true);
   if (!key) return showConfigStatus('请填写 API Key', true);
   localStorage.setItem(LS_URL, url);
   localStorage.setItem(LS_KEY, key);
