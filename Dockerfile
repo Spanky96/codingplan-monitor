@@ -10,7 +10,9 @@ ENV TELECOMJS_CHROME_PATH=/usr/bin/chromium
 
 # 先复制依赖描述并安装,利用 Docker 层缓存:仅 package*.json 变化才会重装
 COPY package*.json ./
-RUN npm ci --omit=dev
+# 国内构建默认走 npmmirror,可用 --build-arg NPM_REGISTRY=... 覆盖
+ARG NPM_REGISTRY=https://registry.npmmirror.com
+RUN npm_config_registry=${NPM_REGISTRY} npm ci --omit=dev
 
 # 再复制源码(.dockerignore 已排除 node_modules / .env / accounts.json / data 等)
 COPY . .
