@@ -106,7 +106,9 @@ var videoMode = 'first_frame';
 
 function videoSelCap() {
   var model = $('model_name').value;
-  if (modelCategory(model) !== 'video') return 0;
+  var cat = modelCategory(model);
+  if (cat === 'image') return 1; // image-01 图生图:subject_reference 仅支持 1 张
+  if (cat !== 'video') return 0;
   if (videoApiVersion(model) === 'v1') return 1; // Hailuo-02 仅支持 1 张首帧图
   return VIDEO_MODES[videoMode].cap;
 }
@@ -405,7 +407,7 @@ function selectById(id) {
 }
 function toggleSelect(id) {
   var cap = videoSelCap();
-  if (cap <= 0) { toast('当前模型不是视频模型,无需勾选参考图'); return; }
+  if (cap <= 0) { toast('当前模型不支持勾选参考图'); return; }
   if (SEL.indexOf(id) >= 0) {
     SEL = SEL.filter(function (x) { return x !== id; });
     savePool();
@@ -501,9 +503,9 @@ function refreshForm() {
   $('model_category_badge').className = cat === 'video' ? 'badge badge-warn' : 'badge';
   $('input_category_badge').textContent = labels[cat];
 
-  // 文生图同样需要提示词输入框,仅语音合成(自带文本输入)隐藏
-  $('prompt_field').classList.toggle('hidden', cat === 'tts');
-  $('prompt_label').textContent = cat === 'video' && ver === 'v2' ? '提示词(H3 必填)' : '提示词';
+  // 提示词/合成文本输入框对所有模态可见(tts 用它输入要合成的文字)
+  $('prompt_field').classList.remove('hidden');
+  $('prompt_label').textContent = cat === 'tts' ? '要合成的文本' : (cat === 'video' && ver === 'v2' ? '提示词(H3 必填)' : '提示词');
   if (cat === 'video' && ver === 'v1') $('prompt').setAttribute('maxlength', '2000');
   else $('prompt').removeAttribute('maxlength');
 
@@ -665,14 +667,17 @@ function runChat(model) {
     });
 }
 
-/* ================= 文生图 ================= */
+/* ================= 文生图 / 图生图 ================= */
 function runImage(model) {
   var prompt = $('prompt').value.trim();
   if (!prompt) return showError('请输入提示词');
   var ratio = $('aspect_ratio').value;
   var parts = ratio.split(':');
   var n = parseInt($('image_count').value, 10) || 1;
-  var histInput = { prompt: prompt, ratio: ratio, n: n };
+  // 图生图:勾选 1 张参考图作为 subject_reference(官方仅支持单张;
+  // image_file 接受 base64 Data URL,图片池本地项可直接使用)
+  var items = selectedItems();
+  var histInput = { prompt: prompt, ratio: ratio, n: n, refImage: items.length ? items[0].name : null };
   var body = {
     model: model,
     prompt: prompt,
@@ -681,6 +686,9 @@ function runImage(model) {
     n: n,
     response_format: 'url'
   };
+  if (items.length) {
+    body.subject_reference = [{ type: 'character', image_file: items[0].src }];
+  }
   setBusy(true);
   showLoading('生成图片中...');
   fetch(apiBase() + '/image_generation', {
