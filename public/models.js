@@ -499,7 +499,8 @@ function refreshForm() {
   $('model_category_badge').className = cat === 'video' ? 'badge badge-warn' : 'badge';
   $('input_category_badge').textContent = labels[cat];
 
-  $('prompt_field').classList.toggle('hidden', cat === 'tts' || cat === 'image');
+  // 文生图同样需要提示词输入框,仅语音合成(自带文本输入)隐藏
+  $('prompt_field').classList.toggle('hidden', cat === 'tts');
   $('prompt_label').textContent = cat === 'video' && ver === 'v2' ? '提示词(H3 必填)' : '提示词';
   if (cat === 'video' && ver === 'v1') $('prompt').setAttribute('maxlength', '2000');
   else $('prompt').removeAttribute('maxlength');
