@@ -692,21 +692,134 @@ function readCoverAudio() {
   });
 }
 
+/* ================= 歌词结构化编辑器(音乐生成) =================
+ * 段落式编辑:选段落类型(主歌/副歌/桥段…) + 每行一句的文本,
+ * 自动拼装成官方要求的 [Verse]/[Chorus] 标签格式,无需手写标签。 */
+var LYRICS_SECTION_TYPES = [
+  ['Intro', '前奏'], ['Verse', '主歌'], ['Pre Chorus', '预副歌'], ['Chorus', '副歌'],
+  ['Post Chorus', '尾副歌'], ['Hook', '记忆点'], ['Bridge', '桥段'], ['Interlude', '间奏'],
+  ['Break', '停顿'], ['Build Up', '铺垫'], ['Transition', '过渡'], ['Inst', '器乐段'],
+  ['Solo', '独奏'], ['Outro', '尾奏']
+];
+var LYRICS_BLOCKS = [
+  { type: 'Verse', text: '' },
+  { type: 'Chorus', text: '' }
+];
+var lyricsSrc = 'manual'; // manual=手动编写 | auto=AI 生成(按描述) | none=不填(翻唱 ASR 提取)
+
+function isCoverMusicModel() { return /cover/.test($('model_name').value || ''); }
+
+function renderLyricsBlocks() {
+  var wrap = $('lyrics_blocks');
+  wrap.innerHTML = LYRICS_BLOCKS.map(function (b, i) {
+    var opts = LYRICS_SECTION_TYPES.map(function (t) {
+      return '<option value="' + escHtml(t[0]) + '"' + (t[0] === b.type ? ' selected' : '') + '>'
+        + escHtml(t[0]) + ' · ' + escHtml(t[1]) + '</option>';
+    }).join('');
+    return '<div class="lyrics-block" data-i="' + i + '">'
+      + '<div class="lyrics-block-head">'
+      + '<select class="lyrics-type">' + opts + '</select>'
+      + '<button type="button" class="lyrics-move" data-act="up" title="上移"' + (i === 0 ? ' disabled' : '') + '>↑</button>'
+      + '<button type="button" class="lyrics-move" data-act="down" title="下移"' + (i === LYRICS_BLOCKS.length - 1 ? ' disabled' : '') + '>↓</button>'
+      + '<button type="button" class="lyrics-del" data-act="del" title="删除段落">×</button>'
+      + '</div>'
+      + '<textarea class="lyrics-text" rows="3" placeholder="每行一句&#10;旧梦像一场雨落进心里">' + escHtml(b.text) + '</textarea>'
+      + '</div>';
+  }).join('');
+  wrap.querySelectorAll('.lyrics-block').forEach(function (el) {
+    var i = parseInt(el.dataset.i, 10);
+    el.querySelector('.lyrics-type').onchange = function () {
+      var v = this.value;
+      LYRICS_BLOCKS = LYRICS_BLOCKS.map(function (b, j) { return j === i ? { type: v, text: b.text } : b; });
+      renderLyricsBlocks(); // 重建以刷新上/下移可用态
+    };
+    el.querySelector('.lyrics-text').oninput = function () {
+      var v = this.value;
+      LYRICS_BLOCKS = LYRICS_BLOCKS.map(function (b, j) { return j === i ? { type: b.type, text: v } : b; });
+      updateLyricsPreview(); // 不重建,保持输入焦点
+    };
+    el.querySelectorAll('.lyrics-move,.lyrics-del').forEach(function (btn) {
+      btn.onclick = function () {
+        var act = btn.dataset.act;
+        if (act === 'del') {
+          if (LYRICS_BLOCKS.length <= 1) { toast('至少保留一个段落'); return; }
+          LYRICS_BLOCKS = LYRICS_BLOCKS.filter(function (item, idx) { return idx !== i; });
+        } else if (act === 'up' && i > 0) {
+          LYRICS_BLOCKS = LYRICS_BLOCKS.slice(0, i - 1).concat([LYRICS_BLOCKS[i], LYRICS_BLOCKS[i - 1]]).concat(LYRICS_BLOCKS.slice(i + 1));
+        } else if (act === 'down' && i < LYRICS_BLOCKS.length - 1) {
+          LYRICS_BLOCKS = LYRICS_BLOCKS.slice(0, i).concat([LYRICS_BLOCKS[i + 1], LYRICS_BLOCKS[i]]).concat(LYRICS_BLOCKS.slice(i + 2));
+        }
+        renderLyricsBlocks();
+      };
+    });
+  });
+  updateLyricsPreview();
+}
+
+/* 拼装为官方格式:空段落自动忽略,段落顺序即演唱顺序 */
+function assembledLyrics() {
+  return LYRICS_BLOCKS
+    .map(function (b) { return { type: b.type, text: String(b.text || '').trim() }; })
+    .filter(function (b) { return b.text; })
+    .map(function (b) { return '[' + b.type + ']\n' + b.text; })
+    .join('\n');
+}
+function updateLyricsPreview() {
+  $('lyrics_preview').textContent = assembledLyrics() || '(空 — 尚未填写歌词段落)';
+}
+function setLyricsSrc(src) {
+  lyricsSrc = src;
+  $('lyrics_src_seg').querySelectorAll('.seg-btn').forEach(function (b) {
+    b.classList.toggle('active', b.dataset.src === src);
+  });
+  var manual = src === 'manual';
+  $('btn_add_lyrics_block').disabled = !manual || $('music_instrumental').checked;
+  var hint = $('lyrics_hint');
+  if (src === 'manual') hint.textContent = '段落顺序即演唱顺序;空段落自动忽略;无需手写 [Verse] 等标签。';
+  else if (src === 'auto') hint.textContent = '按「音乐描述」自动写词(仅 music-3.0 / 2.6 支持),需填写描述。';
+  else hint.textContent = '不填歌词:翻唱时自动从参考音频提取(ASR)。';
+  dimLyricsForInstrumental();
+}
+/* 历史记录恢复:解析 [Tag] 段落回编辑器 */
+function setLyricsFromHistory(input) {
+  if (input.optimize) { setLyricsSrc('auto'); return; }
+  var lyrics = input.lyrics || '';
+  var blocks = [];
+  var current = null;
+  lyrics.split('\n').forEach(function (line) {
+    var m = line.trim().match(/^\[([A-Za-z ]+)\]$/);
+    if (m) {
+      if (current) blocks.push(current);
+      current = { type: m[1], text: '' };
+    } else if (current) {
+      current.text += (current.text ? '\n' : '') + line;
+    }
+  });
+  if (current) blocks.push(current);
+  if (blocks.length) {
+    LYRICS_BLOCKS = blocks;
+    setLyricsSrc('manual');
+    renderLyricsBlocks();
+  } else {
+    setLyricsSrc(isCoverMusicModel() && !lyrics ? 'none' : 'manual');
+  }
+}
+
 function runMusic(model) {
   var isCover = /cover/.test(model);
   var prompt = $('prompt').value.trim();
-  var lyrics = $('music_lyrics').value.trim();
+  var lyrics = lyricsSrc === 'manual' ? assembledLyrics() : '';
   var instrumental = $('music_instrumental').checked;
-  var optimize = $('music_optimize').checked;
+  var optimize = lyricsSrc === 'auto';
 
   if (isCover && (prompt.length < 10 || prompt.length > 300)) {
     return showError('翻唱需填写 10~300 字的目标风格描述(在「音乐描述」中)');
   }
-  if (!instrumental && !optimize && !lyrics) {
-    return showError('请填写歌词;或勾选「由描述自动生成歌词」;或勾选「纯音乐」');
+  if (optimize && !prompt && !isCover) {
+    return showError('「AI 生成」需要先填写音乐描述(风格/情绪/场景)');
   }
-  if (!instrumental && !prompt && !optimize && !isCover && lyrics) {
-    return showError('非纯音乐建议同时填写音乐描述(风格/情绪),当前为空');
+  if (!instrumental && !optimize && !lyrics && !isCover) {
+    return showError('请在歌词编辑器中填写段落,或选择「AI 生成」,或勾选「纯音乐」');
   }
   if (prompt && prompt.length > 2000) return showError('音乐描述最长 2000 字符');
   if (lyrics && lyrics.length > 3500) return showError('歌词最长 3500 字符');
@@ -787,11 +900,31 @@ function refreshAudioForm(cat) {
   $('music_cover_row').classList.toggle('hidden', !isCover);
   $('tts_stream').disabled = currentTtsMode() !== 'sync';
   $('tts_bitrate').disabled = $('tts_format').value !== 'mp3';
+  if (isMusic) {
+    /* 歌词来源约束:翻唱不支持 AI 写词(lyrics_optimizer 仅 3.0/2.6);
+     * 文生音乐必须给歌词(AI 写词或手写),「不填」仅翻唱可用 */
+    $('lyrics_auto_btn').disabled = isCover;
+    $('lyrics_none_btn').disabled = !isCover;
+    if (isCover && lyricsSrc === 'auto') setLyricsSrc(isCoverHasLyrics() ? 'manual' : 'none');
+    if (!isCover && lyricsSrc === 'none') setLyricsSrc('manual');
+    dimLyricsForInstrumental();
+  }
   /* 首次进入语音模型时自动拉一次在线音色库(失败静默,可手动点按钮重试) */
   if (isTts && !_voiceLibAutoFetched) {
     _voiceLibAutoFetched = true;
     if (!VOICE_LIB.ts) fetchVoiceLib(true);
   }
+}
+/* 翻唱切回手写时,已有段落内容则保留手写,否则默认「不填」(ASR 提取) */
+function isCoverHasLyrics() {
+  return assembledLyrics().length > 0;
+}
+/* 勾选纯音乐时,歌词整块置灰(无人声无需歌词) */
+function dimLyricsForInstrumental() {
+  var dim = $('music_instrumental').checked;
+  $('lyrics_src_seg').classList.toggle('disabled-area', dim);
+  $('lyrics_blocks').classList.toggle('disabled-area', dim || lyricsSrc !== 'manual');
+  $('lyrics_preview').classList.toggle('disabled-area', dim);
 }
 
 /* ================= 初始化(models.js 末尾调用) ================= */
@@ -839,6 +972,20 @@ function initAudioPage() {
     var f = this.files && this.files[0];
     $('music_cover_name').textContent = f ? (f.name + ' · ' + Math.round(f.size / 1024) + ' KB') : '未选择(与 URL 二选一)';
   });
+
+  /* 歌词结构化编辑器 */
+  renderLyricsBlocks();
+  setLyricsSrc('manual');
+  $('btn_add_lyrics_block').onclick = function () {
+    LYRICS_BLOCKS = LYRICS_BLOCKS.concat([{ type: 'Verse', text: '' }]);
+    renderLyricsBlocks();
+    var areas = $('lyrics_blocks').querySelectorAll('.lyrics-text');
+    if (areas.length) areas[areas.length - 1].focus();
+  };
+  $('lyrics_src_seg').querySelectorAll('.seg-btn').forEach(function (btn) {
+    btn.onclick = function () { if (!btn.disabled) setLyricsSrc(btn.dataset.src); };
+  });
+  $('music_instrumental').addEventListener('change', dimLyricsForInstrumental);
 }
 
 /* 清除本页音频相关本地状态(供 models.js clearConfig 调用) */

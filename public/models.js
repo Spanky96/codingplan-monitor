@@ -1216,9 +1216,8 @@ function loadRecord(r) {
     }
   }
   if (r.category === 'music') {
-    if (input.lyrics != null) $('music_lyrics').value = input.lyrics;
+    if (typeof setLyricsFromHistory === 'function') setLyricsFromHistory(input);
     if (input.instrumental != null) $('music_instrumental').checked = !!input.instrumental;
-    if (input.optimize != null) $('music_optimize').checked = !!input.optimize;
     if (input.format) $('music_format').value = input.format;
   }
   if (r.error) showError('失败: ' + r.error.message);

@@ -188,15 +188,28 @@
       </div>
     </div>
 
-    <!-- 音乐生成参数(经中转站透传 /v1/music_generation) -->
+    <!-- 歌词编辑器:结构化段落,自动生成 [Verse]/[Chorus] 等标签,无需手写 -->
     <div class="field hidden" id="music_lyrics_field">
-      <label for="music_lyrics">歌词(每行一句,支持 [Verse]/[Chorus]/[Outro] 等结构标签;纯音乐可留空)</label>
-      <textarea id="music_lyrics" placeholder="[Verse]&#10;旧梦像一场雨落进心里&#10;[Chorus]&#10;我们在人海里学会呼吸"></textarea>
+      <label>歌词(结构化编辑 · 每行一句 · 段落标签自动生成)</label>
+      <div class="lyrics-toolbar">
+        <span class="seg" id="lyrics_src_seg">
+          <button type="button" class="seg-btn active" data-src="manual">手动编写</button>
+          <button type="button" class="seg-btn" data-src="auto" id="lyrics_auto_btn">AI 生成(按描述)</button>
+          <button type="button" class="seg-btn" data-src="none" id="lyrics_none_btn">不填</button>
+        </span>
+        <button class="btn-secondary btn-sm" id="btn_add_lyrics_block" type="button">＋ 添加段落</button>
+      </div>
+      <div id="lyrics_blocks"></div>
+      <div class="field-hint" id="lyrics_hint"></div>
+      <details class="lyrics-preview-wrap">
+        <summary>预览生成的歌词(带结构标签)</summary>
+        <pre id="lyrics_preview" class="lyrics-preview"></pre>
+      </details>
     </div>
+    <!-- 音乐生成参数(经中转站透传 /v1/music_generation) -->
     <div class="model-row hidden" id="music_row">
       <div class="field check-field">
         <label class="check-inline"><input type="checkbox" id="music_instrumental"> 纯音乐(无人声)</label>
-        <label class="check-inline"><input type="checkbox" id="music_optimize"> 由描述自动生成歌词</label>
       </div>
       <div class="field">
         <label for="music_format">音频格式</label>
@@ -233,6 +246,7 @@
       <div class="field">
         <label for="music_cover_url">或参考音频 URL</label>
         <input id="music_cover_url" type="text" placeholder="https://...(与本地文件二选一)" autocomplete="off" spellcheck="false">
+        <div class="field-hint">翻唱的人声取自参考音频本身(官方接口不支持指定复刻音色);想用某个声音翻唱,请提供该声音演唱的音频。歌词留空时自动从参考音频提取。</div>
       </div>
     </div>
 
