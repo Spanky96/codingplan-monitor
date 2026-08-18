@@ -836,7 +836,7 @@
         syncIcon();
         if (accountsData.length) renderCards(accountsData);
         if (_detailIndex >= 0 && document.getElementById('modalOverlay').classList.contains('active')) {
-          var acc = accountsData[_detailIndex];
+          var acc = accAt(_detailIndex);
           if (acc) document.getElementById('modalTitle').textContent = displayName(acc, _detailIndex);
         }
       });
@@ -1674,7 +1674,7 @@
         var expHint = daysLeft <= 0 ? '已过期' : daysLeft + '天后到期';
         expHtml = '<div class="expire-row" onclick="refreshExpire(' + i + ')" title="点击刷新"><span class="expire-label">订阅到期</span><span class="expire-value ' + expCls + '">' + esc(exp.expireTime) + '<span class="expire-hint">' + expHint + '</span></span></div>';
       }
-      var keyBadge = acc.keyCount != null ? '<span class="level-badge level-badge-ok">Key: ' + acc.keyCount + '个</span>' : '';
+      var keyBadge = isAdmin() && acc.keyCount != null ? '<span class="level-badge level-badge-ok">Key: ' + acc.keyCount + '个</span>' : '';
       var rBadge = riskBadgeHTML(acc);
       var resetBadge = resetBadgeHTML(acc);
       var resetClass = resetBadge ? ' reset-needed' : '';
@@ -1938,7 +1938,7 @@
       var level = levelLabel(acc);
       var b = '<span class="level-badge">' + level + '</span>';
       b += glmFooterBadges(acc);
-      if (acc.keyCount != null) b += '<span class="level-badge level-badge-ok">Key: ' + acc.keyCount + '个</span>';
+      if (isAdmin() && acc.keyCount != null) b += '<span class="level-badge level-badge-ok">Key: ' + acc.keyCount + '个</span>';
       b += resetBadgeHTML(acc);
       b += riskBadgeHTML(acc);
       return b;
@@ -2146,6 +2146,10 @@
       var grid = document.getElementById('cardGrid');
       if (grid) grid.className = _viewMode === 'list' ? 'list-grid' : 'card-grid';
     })();
+
+    // 按钮携带的是账号配置序号(acc.index),与 accountsData 数组槽位在
+    // 存在未返回账号(隐藏/停用)时不一致;查账号一律经此转换,API 调用仍用配置序号
+    function accAt(configIndex) { return accountsData[accountSlotIndex(configIndex)]; }
 
     function accountSlotIndex(accountIndex) {
       for (var k = 0; k < accountsData.length; k++) {
@@ -2511,7 +2515,7 @@
       // Dispose existing chart if any
       if (_usageCharts[_detailIndex]) { _usageCharts[_detailIndex].dispose(); delete _usageCharts[_detailIndex]; }
       _detailIndex = index;
-      var acc = accountsData[index];
+      var acc = accAt(index);
       if (!acc) return;
       document.getElementById('modalTitle').textContent = displayName(acc, index) || ('账号 ' + (index + 1));
 
@@ -2566,15 +2570,15 @@
         + '<span class="info-label">备注</span><span class="info-value">' + esc(acc.notes||'-') + '</span>'
         + '</div></div>'
         + '<div class="detail-tabs">'
-        + '<button class="detail-tab active" id="dtab-keys-' + index + '" onclick="switchDetailTab(\'keys\',' + index + ')">API Keys</button>'
-        + '<button class="detail-tab" id="dtab-chart-' + index + '" onclick="switchDetailTab(\'chart\',' + index + ')">用量曲线</button>'
+        + '<button class="detail-tab active" id="dtab-chart-' + index + '" onclick="switchDetailTab(\'chart\',' + index + ')">用量曲线</button>'
+        + (admin ? '<button class="detail-tab" id="dtab-keys-' + index + '" onclick="switchDetailTab(\'keys\',' + index + ')">API Keys</button>' : '')
         + (admin ? '<button class="detail-tab" id="dtab-ip-' + index + '" onclick="switchDetailTab(\'ip\',' + index + ')">IP 白名单</button>' : '')
         + '</div>'
-        + '<div id="dpanel-keys-' + index + '">'
-        + '<div class="keys-section"><div class="keys-header"><div class="keys-title">API Keys</div>' + createRow + '</div>'
-        + '<div id="keysContainer" class="keys-loading">加载中...</div></div>'
-        + '</div>'
-        + '<div id="dpanel-chart-' + index + '" style="display:none">'
+        + (admin ? '<div id="dpanel-keys-' + index + '" style="display:none">'
+          + '<div class="keys-section"><div class="keys-header"><div class="keys-title">API Keys</div>' + createRow + '</div>'
+          + '<div id="keysContainer" class="keys-loading">加载中...</div></div>'
+          + '</div>' : '')
+        + '<div id="dpanel-chart-' + index + '">'
         + '<div class="chart-controls">'
         + '<button class="period-btn active" id="period-today-' + index + '" onclick="loadUsageChart(' + index + ',\'today\')">当日</button>'
         + '<button class="period-btn" id="period-7d-' + index + '" onclick="loadUsageChart(' + index + ',\'7d\')">近7天</button>'
@@ -2595,26 +2599,31 @@
       document.getElementById('modalBody').innerHTML = html;
       document.getElementById('modalOverlay').classList.add('active');
 
+      // 默认展示用量曲线;keys 相关仅管理员可见,不发起请求
+      loadUsageChart(index, 'today');
+
       // 每次打开智谱个人版账号详情都刷新风控/异常状态:有风险则记录到 accounts.json,已解除则清除
       if ((acc.platform || 'glm') === 'glm') {
         fetch(API_PREFIX + '/api/risk/' + index, { headers: authHeaders() }).then(function(r){return r.json()}).then(function(r) {
           if (r.error) return;
-          accountsData[index].risk = r.text ? { level: r.level, text: r.text } : null;
+          accAt(index).risk = r.text ? { level: r.level, text: r.text } : null;
           var rb = document.getElementById('riskBanner-' + index);
-          if (rb) rb.innerHTML = riskBannerHTML(accountsData[index]);
-          updateCard(index, accountsData[index]);
+          if (rb) rb.innerHTML = riskBannerHTML(accAt(index));
+          updateCard(index, accAt(index));
         }).catch(function() {});
       }
 
-      fetch(API_PREFIX + '/api/keys/' + index, { headers: authHeaders() }).then(function(r){return r.json()}).then(function(keys) {
-        if (keys.error) { document.getElementById('keysContainer').innerHTML = '<p class="error-text">' + esc(keys.error) + '</p>'; return; }
-        accountsData[index].keyCount = keys.length || 0;
-        updateCard(index, accountsData[index]);
-        if (!keys.length) { document.getElementById('keysContainer').innerHTML = '<p style="color:var(--text-mute);font-size:13px">无 API Key</p>'; return; }
-        renderKeysTable(index, keys, admin);
-      }).catch(function(err) {
-        document.getElementById('keysContainer').innerHTML = '<p class="error-text">加载失败: ' + esc(err.message) + '</p>';
-      });
+      if (admin) {
+        fetch(API_PREFIX + '/api/keys/' + index, { headers: authHeaders() }).then(function(r){return r.json()}).then(function(keys) {
+          if (keys.error) { document.getElementById('keysContainer').innerHTML = '<p class="error-text">' + esc(keys.error) + '</p>'; return; }
+          accAt(index).keyCount = keys.length || 0;
+          updateCard(index, accAt(index));
+          if (!keys.length) { document.getElementById('keysContainer').innerHTML = '<p style="color:var(--text-mute);font-size:13px">无 API Key</p>'; return; }
+          renderKeysTable(index, keys, admin);
+        }).catch(function(err) {
+          document.getElementById('keysContainer').innerHTML = '<p class="error-text">加载失败: ' + esc(err.message) + '</p>';
+        });
+      }
     }
 
     function switchDetailTab(tab, idx) {
@@ -3545,7 +3554,7 @@
     }
 
     function openWeightConfig(i) {
-      var acc = accountsData[i];
+      var acc = accAt(i);
       if (!acc) return;
       var det = weightsDetail[acc.name] || {};
       var cfg = {
@@ -3604,7 +3613,7 @@
       fetch(API_PREFIX + '/api/expire/' + index + '?force=1', { headers: authHeaders() })
         .then(function(r){return r.json()}).then(function(data){
         expireData[index] = data;
-        updateCard(index, accountsData[index]);
+        updateCard(index, accAt(index));
       });
     }
 
