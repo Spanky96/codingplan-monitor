@@ -530,7 +530,7 @@
     }
     .theme-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 9999; pointer-events: none; }
   </style>
-  <script src="/js/echart/echarts.min.js"></script>
+  <script src="js/echart/echarts.min.js"></script>
   <script>
     // 首帧前应用主题,避免闪烁;兼容旧键 usage_dark(true → dark)
     (function(){
@@ -2189,7 +2189,7 @@
     function refreshCard(index) {
       var btn = document.getElementById('refresh-' + index);
       if (btn) btn.classList.add('spinning');
-      fetch('/api/usage/' + index + '?force=1', { headers: authHeaders() })
+      fetch('api/usage/' + index + '?force=1', { headers: authHeaders() })
         .then(function(r){return r.json()}).then(function(acc){updateCard(index,acc)}).catch(function(){if(btn)btn.classList.remove('spinning')});
     }
 
@@ -2590,7 +2590,7 @@
 
       // 每次打开智谱个人版账号详情都刷新风控/异常状态:有风险则记录到 accounts.json,已解除则清除
       if ((acc.platform || 'glm') === 'glm') {
-        fetch('/api/risk/' + index, { headers: authHeaders() }).then(function(r){return r.json()}).then(function(r) {
+        fetch('api/risk/' + index, { headers: authHeaders() }).then(function(r){return r.json()}).then(function(r) {
           if (r.error) return;
           accountsData[index].risk = r.text ? { level: r.level, text: r.text } : null;
           var rb = document.getElementById('riskBanner-' + index);
@@ -2599,7 +2599,7 @@
         }).catch(function() {});
       }
 
-      fetch('/api/keys/' + index, { headers: authHeaders() }).then(function(r){return r.json()}).then(function(keys) {
+      fetch('api/keys/' + index, { headers: authHeaders() }).then(function(r){return r.json()}).then(function(keys) {
         if (keys.error) { document.getElementById('keysContainer').innerHTML = '<p class="error-text">' + esc(keys.error) + '</p>'; return; }
         accountsData[index].keyCount = keys.length || 0;
         updateCard(index, accountsData[index]);
@@ -2659,7 +2659,7 @@
       var container = document.getElementById('chartContainer-' + idx);
       if (!container) return;
       if (loading) { loading.textContent = '加载中...'; loading.style.display = 'flex'; }
-      fetch('/api/model-usage/' + idx + '?period=' + period, { headers: authHeaders() })
+      fetch('api/model-usage/' + idx + '?period=' + period, { headers: authHeaders() })
         .then(function(r) { return r.json(); })
         .then(function(resp) {
           if (resp.error) { if (loading) { loading.textContent = '加载失败: ' + resp.error; loading.style.display = 'flex'; } return; }
@@ -2790,7 +2790,7 @@
       if (btn.disabled) return;
       btn.disabled = true;
       btn.innerHTML = '...';
-      fetch('/api/keys/' + idx + '/copy/' + apiKey, { headers: authHeaders() })
+      fetch('api/keys/' + idx + '/copy/' + apiKey, { headers: authHeaders() })
         .then(function(r) {
           if (r.status === 401) { localStorage.removeItem('glm_pwd'); btn.disabled = false; btn.innerHTML = _svgCopy; requireAuth(function(){copySecret(btn,idx,apiKey)}); return null; }
           return r.json();
@@ -2815,7 +2815,7 @@
       var name = (input.value || '').trim();
       if (!name) { alert('请输入 Key 名称'); input.focus(); return; }
       input.disabled = true;
-      fetch('/api/keys/' + idx, { method: 'POST', headers: authHeaders(), body: JSON.stringify({ name: name }) })
+      fetch('api/keys/' + idx, { method: 'POST', headers: authHeaders(), body: JSON.stringify({ name: name }) })
         .then(function(r) {
           if (r.status === 401) { localStorage.removeItem('glm_pwd'); input.disabled = false; requireAuth(function(){createKey(idx)}); return null; }
           return r.json();
@@ -2826,7 +2826,7 @@
           // 创建成功后，通过 copy 接口获取完整密钥再复制
           var apiKey = d.apiKey || '';
           if (apiKey) {
-            fetch('/api/keys/' + idx + '/copy/' + apiKey, { headers: authHeaders() })
+            fetch('api/keys/' + idx + '/copy/' + apiKey, { headers: authHeaders() })
               .then(function(r) { return r.json(); })
               .then(function(cd) {
                 if (cd.error) { alert('创建成功，但获取密钥失败: ' + cd.error); showDetail(idx); return; }
@@ -2851,7 +2851,7 @@
       if (!confirm('确定删除此 Key？删除后不可恢复。')) return;
       btn.disabled = true;
       btn.innerHTML = '...';
-      fetch('/api/keys/' + idx + '/' + apiKey, { method: 'DELETE', headers: authHeaders() })
+      fetch('api/keys/' + idx + '/' + apiKey, { method: 'DELETE', headers: authHeaders() })
         .then(function(r) {
           if (r.status === 401) { localStorage.removeItem('glm_pwd'); btn.disabled = false; btn.innerHTML = _svgDel; requireAuth(function(){deleteKey(btn,idx,apiKey)}); return null; }
           return r.json();
@@ -2874,7 +2874,7 @@
       container._ipLoaded = true;
       container.className = 'keys-loading';
       container.textContent = '加载中...';
-      fetch('/api/ip-whitelist/' + idx, { headers: authHeaders() })
+      fetch('api/ip-whitelist/' + idx, { headers: authHeaders() })
         .then(function(r) {
           if (r.status === 401) { localStorage.removeItem('glm_pwd'); requireAuth(function(){loadIpWhitelist(idx)}); return null; }
           return r.json();
@@ -2909,7 +2909,7 @@
       var ip = (input.value || '').trim();
       if (!ip) { alert('请输入 IP 地址'); input.focus(); return; }
       input.disabled = true;
-      fetch('/api/ip-whitelist/' + idx, { method: 'POST', headers: authHeaders(), body: JSON.stringify({ ipAddress: ip }) })
+      fetch('api/ip-whitelist/' + idx, { method: 'POST', headers: authHeaders(), body: JSON.stringify({ ipAddress: ip }) })
         .then(function(r) {
           if (r.status === 401) { localStorage.removeItem('glm_pwd'); input.disabled = false; requireAuth(function(){addIpWhitelist(idx)}); return null; }
           return r.json();
@@ -2927,7 +2927,7 @@
       if (!confirm('确定删除此白名单 IP？')) return;
       btn.disabled = true;
       btn.innerHTML = '...';
-      fetch('/api/ip-whitelist/' + idx + '/' + id, { method: 'DELETE', headers: authHeaders() })
+      fetch('api/ip-whitelist/' + idx + '/' + id, { method: 'DELETE', headers: authHeaders() })
         .then(function(r) {
           if (r.status === 401) { localStorage.removeItem('glm_pwd'); btn.disabled = false; btn.innerHTML = _svgDelIp; requireAuth(function(){deleteIpWhitelist(btn,idx,id)}); return null; }
           return r.json();
@@ -2944,7 +2944,7 @@
 
     function submitPassword() {
       var pwd = document.getElementById('pwdInput').value;
-      fetch('/api/auth', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({password: pwd}) })
+      fetch('api/auth', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({password: pwd}) })
         .then(function(r) { return r.json(); })
         .then(function(d) {
           if (d.success) {
@@ -2979,7 +2979,7 @@
 
     function renderMgmtList() {
       document.getElementById('mgmtTitle').textContent = '账号管理';
-      fetch('/api/accounts', { headers: authHeaders() })
+      fetch('api/accounts', { headers: authHeaders() })
         .then(function(r) { if (r.status===401){localStorage.removeItem('glm_pwd');alert('密码已失效');closeModal('mgmtOverlay');return null;} return r.json(); })
         .then(function(accounts) {
           if (!accounts) return;
@@ -3023,12 +3023,12 @@
           var targetIdx = parseInt(el.dataset.idx);
           if (_dragSrcIdx === null || _dragSrcIdx === targetIdx) return;
           // 从服务端拿最新数据做重排
-          fetch('/api/accounts', { headers: authHeaders() })
+          fetch('api/accounts', { headers: authHeaders() })
             .then(function(r){ return r.json(); })
             .then(function(accounts) {
               var moved = accounts.splice(_dragSrcIdx, 1)[0];
               accounts.splice(targetIdx, 0, moved);
-              return fetch('/api/accounts', { method: 'PUT', headers: authHeaders(), body: JSON.stringify(accounts) });
+              return fetch('api/accounts', { method: 'PUT', headers: authHeaders(), body: JSON.stringify(accounts) });
             })
             .then(function(r){ return r.json(); })
             .then(function(d) {
@@ -3045,7 +3045,7 @@
       editingIndex = idx;
       document.getElementById('mgmtTitle').textContent = idx >= 0 ? '编辑账号' : '新增账号';
       if (idx >= 0) {
-        fetch('/api/accounts',{headers:authHeaders()}).then(function(r){return r.json()}).then(function(a){renderForm(a[idx]||{})});
+        fetch('api/accounts',{headers:authHeaders()}).then(function(r){return r.json()}).then(function(a){renderForm(a[idx]||{})});
       } else { renderForm({}); }
     }
 
@@ -3318,7 +3318,7 @@
     function editAccount(i){showForm(i)}
     function deleteAccount(i) {
       if(!confirm('确定删除该账号？'))return;
-      fetch('/api/accounts/'+i,{method:'DELETE',headers:authHeaders()}).then(function(r){return r.json()}).then(function(d){
+      fetch('api/accounts/'+i,{method:'DELETE',headers:authHeaders()}).then(function(r){return r.json()}).then(function(d){
         if(d.error){alert('删除失败: '+d.error);return;} renderMgmtList(); loadData();
       });
     }
@@ -3360,7 +3360,7 @@
       _telecomLoginSessionId = null;
       _telecomLoginIndex = -1;
       if (cancelRemote && sessionId) {
-        fetch('/api/telecomjs/login/' + encodeURIComponent(sessionId), { method: 'DELETE', headers: authHeaders() }).catch(function(){});
+        fetch('api/telecomjs/login/' + encodeURIComponent(sessionId), { method: 'DELETE', headers: authHeaders() }).catch(function(){});
       }
     }
 
@@ -3368,7 +3368,7 @@
       if (!_telecomLoginSessionId || _telecomQrLoading) return;
       _telecomQrLoading = true;
       var id = _telecomLoginSessionId;
-      fetch('/api/telecomjs/login/' + encodeURIComponent(id) + '/screenshot?t=' + Date.now(), { headers: authHeaders() })
+      fetch('api/telecomjs/login/' + encodeURIComponent(id) + '/screenshot?t=' + Date.now(), { headers: authHeaders() })
         .then(function(r) { if (!r.ok) throw new Error('二维码加载失败'); return r.blob(); })
         .then(function(blob) {
           if (id !== _telecomLoginSessionId) return;
@@ -3435,7 +3435,7 @@
       })
         .then(function(d) {
           if (generation !== _telecomLoginGeneration) {
-            fetch('/api/telecomjs/login/' + encodeURIComponent(d.id), { method: 'DELETE', headers: authHeaders() }).catch(function(){});
+            fetch('api/telecomjs/login/' + encodeURIComponent(d.id), { method: 'DELETE', headers: authHeaders() }).catch(function(){});
             return;
           }
           _telecomLoginSessionId = d.id;
@@ -3573,7 +3573,7 @@
         strategy: document.getElementById('w_strategy').value,
         value: isFinite(value) ? value : 1
       };
-      fetch('/api/weights/config/' + i, { method: 'PUT', headers: authHeaders(), body: JSON.stringify(body) })
+      fetch('api/weights/config/' + i, { method: 'PUT', headers: authHeaders(), body: JSON.stringify(body) })
         .then(function(r){return r.json()})
         .then(function(d){
           if (d.error) { alert('保存失败: ' + d.error); return; }
@@ -3594,7 +3594,7 @@
     }
 
     function refreshExpire(index) {
-      fetch('/api/expire/' + index + '?force=1', { headers: authHeaders() })
+      fetch('api/expire/' + index + '?force=1', { headers: authHeaders() })
         .then(function(r){return r.json()}).then(function(data){
         expireData[index] = data;
         updateCard(index, accountsData[index]);
