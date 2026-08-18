@@ -7,6 +7,8 @@
  *   图片 role: first_frame ≤1 / last_frame ≤1 / reference_image ≤9,首尾帧与参考图互斥;
  *   resolution 仅 768P|2K,duration 4~15;查询 /v2/query/video_generation,成功返回 task.content.url。
  * - 文件上传 /v1/files/upload:purpose=video_generation_input,引用格式 mm_file://{file_id},有效期 7 天。
+ * - 对话统一走 /v1/chat/completions(sub2api 跨平台统一入口,openai/anthropic 等
+ *   分组的 Key 均可用);MiniMax 原生 chatcompletion_v2 仅 openai 分组可用,已弃用。
  * 语音/复刻/音乐(见 models-audio.js,官方文档 2026-08 核对):
  * - 同步 /v1/t2a_v2(合法模型 speech-2.8/2.6/02-hd|turbo,裸 speech-02 为非法名);
  * - 异步 /v1/t2a_async_v2 → /v1/query/t2a_async_query_v2 → /v1/files/retrieve_content;
@@ -115,7 +117,7 @@ function loadModels() {
   }
   setModelGate('(模型加载中...)', true);
   fetch(API_URL + '/models', { headers: { 'Authorization': 'Bearer ' + key } })
-    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, json: j }; }); })
+    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, status: r.status, json: j }; }); })
     .then(function (resp) {
       if (!resp.ok || !resp.json || !Array.isArray(resp.json.data)) {
         modelsLoaded = false;
@@ -425,7 +427,7 @@ function uploadItem(id) {
     headers: { 'Authorization': 'Bearer ' + key },
     body: fd
   })
-    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, json: j }; }); })
+    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, status: r.status, json: j }; }); })
     .then(function (resp) {
       var base = resp.json && resp.json.base_resp;
       var fid = resp.json && resp.json.file && resp.json.file.file_id;
@@ -717,16 +719,20 @@ function runChat(model) {
   };
   setBusy(true);
   showLoading('对话中...');
-  fetch(apiBase() + '/text/chatcompletion_v2', {
+  /* 对话走 sub2api 统一 /chat/completions(跨平台:openai / anthropic 等
+   * 分组的 Key 都可用,响应为 OpenAI 格式);MiniMax 原生 chatcompletion_v2
+   * 仅 openai 平台分组可用,不再使用 */
+  fetch(apiBase() + '/chat/completions', {
     method: 'POST',
     headers: { 'Authorization': 'Bearer ' + apiKey(), 'Content-Type': 'application/json' },
     body: JSON.stringify(body)
   })
-    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, json: j }; }); })
+    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, status: r.status, json: j }; }); })
     .then(function (resp) {
       setBusy(false);
       if (!resp.ok) {
-        var msg = 'HTTP ' + resp.status + ' · ' + JSON.stringify(resp.json);
+        var msg = 'HTTP ' + resp.status + ' · ' + JSON.stringify(resp.json).slice(0, 400)
+          + (/not supported for this platform/.test(JSON.stringify(resp.json)) ? '\n💡 当前分组平台不支持该端点:对话请确认所选模型属于本 Key 的分组' : '');
         addHistory({ id: histId(), ts: Date.now(), model: model, category: 'chat', input: histInput, error: { message: msg } });
         return showError(msg);
       }
@@ -781,7 +787,7 @@ function runImage(model) {
     headers: { 'Authorization': 'Bearer ' + apiKey(), 'Content-Type': 'application/json' },
     body: JSON.stringify(body)
   })
-    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, json: j }; }); })
+    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, status: r.status, json: j }; }); })
     .then(function (resp) {
       setBusy(false);
       if (!resp.ok) {
@@ -927,7 +933,7 @@ function submitVideo(ctx) {
     headers: { 'Authorization': 'Bearer ' + apiKey(), 'Content-Type': 'application/json' },
     body: JSON.stringify(buildVideoBody(ctx))
   })
-    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, json: j }; }); })
+    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, status: r.status, json: j }; }); })
     .then(function (resp) {
       var taskId, baseResp;
       if (!resp.ok) {
