@@ -1334,9 +1334,9 @@ module.exports = function(app) {
         } catch (err) { res.status(500).json({ error: err.message }); }
     });
 
-    // ============ API Keys（查看公开，操作需密码） ============
+    // ============ API Keys（仅管理员可见可操作） ============
 
-    app.get('/api/keys/:index', async function(req, res) {
+    app.get('/api/keys/:index', checkAuth, async function(req, res) {
         try {
             var i = parseInt(req.params.index);
             var account = getAccount(req);
