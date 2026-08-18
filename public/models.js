@@ -48,13 +48,12 @@ function toast(msg, isError) {
 var LS_KEY = 'minimax_api_key_v1';
 // 网关地址固定为 sub2api 中转站公网入口(只读,不提供修改)
 var API_URL = 'https://lwai.05info.com:8887/v1';
-var DEFAULT_API_KEY = 'sk-b4c8274e71c34ea69d6915b03e59d0241d331bb7f27cb67f91ae5ad44ad446fe';
 
 function loadConfig() {
   $('api_url').value = API_URL;
-  var key = localStorage.getItem(LS_KEY);
-  // 未保存过密钥时默认填中转站密钥,保存后以浏览器本地为准
-  $('api_key').value = key || DEFAULT_API_KEY;
+  // Key 只来自用户保存;不内置任何默认密钥(避免硬编码泄露,
+  // 并保证「清除配置」后刷新仍为空,需重新输入)
+  $('api_key').value = localStorage.getItem(LS_KEY) || '';
   loadModels();
 }
 function saveConfig() {
