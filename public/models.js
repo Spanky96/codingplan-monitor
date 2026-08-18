@@ -38,33 +38,24 @@ function toast(msg, isError) {
 }
 
 /* ================= 配置(localStorage) ================= */
-var LS_URL = 'minimax_api_url_v1';
 var LS_KEY = 'minimax_api_key_v1';
-// 中转站(sub2api)默认配置:浏览器直连公网网关(已配置 CORS);
-// 同源反代 /minimax/v1 仍可用作备选(上游同样指向中转站)
-var DEFAULT_API_URL = 'https://lwai.05info.com:8887/v1';
+// 网关地址固定为 sub2api 中转站公网入口(只读,不提供修改)
+var API_URL = 'https://lwai.05info.com:8887/v1';
 var DEFAULT_API_KEY = 'sk-b4c8274e71c34ea69d6915b03e59d0241d331bb7f27cb67f91ae5ad44ad446fe';
 
 function loadConfig() {
-  var url = localStorage.getItem(LS_URL);
-  // 默认直连中转站公网地址(网关已放行本页来源的跨域);
-  // 一次性把旧的反代/直连默认值迁移过去(仅匹配已知默认值,不影响自定义 URL)
-  if (!url || url === 'https://api.minimaxi.com/v1' || url === '/minimax/v1') url = DEFAULT_API_URL;
-  $('api_url').value = url;
+  $('api_url').value = API_URL;
   var key = localStorage.getItem(LS_KEY);
   // 未保存过密钥时默认填中转站密钥,保存后以浏览器本地为准
   $('api_key').value = key || DEFAULT_API_KEY;
+  loadModels();
 }
 function saveConfig() {
-  var url = $('api_url').value.trim().replace(/\/+$/, '');
   var key = $('api_key').value.trim();
-  // 完整 http(s) 地址,或以 / 开头的同源相对路径(内置反代)
-  if (!url || !/^(https?:\/\/|\/[a-z0-9_-]+)/i.test(url)) return showConfigStatus('API URL 格式不正确', true);
   if (!key) return showConfigStatus('请填写 API Key', true);
-  localStorage.setItem(LS_URL, url);
   localStorage.setItem(LS_KEY, key);
-  showConfigStatus('已保存到浏览器');
-  toast('配置已保存到浏览器');
+  showConfigStatus('正在加载可用模型...');
+  loadModels();
 }
 function showConfigStatus(msg, isError) {
   var el = $('config_status');
@@ -73,17 +64,76 @@ function showConfigStatus(msg, isError) {
 }
 
 /* 静默读取(供上传等非主流程使用,不污染结果区) */
-function readApiUrl() { return $('api_url').value.trim().replace(/\/+$/, ''); }
+function readApiUrl() { return API_URL; }
 function readApiKey() { return $('api_key').value.trim(); }
-function apiBase() {
-  var url = readApiUrl();
-  if (!url) { showError('请先填写 API URL'); throw new Error('no url'); }
-  return url;
-}
+function apiBase() { return API_URL; }
 function apiKey() {
   var k = readApiKey();
   if (!k) { showError('请先填写 API Key'); throw new Error('no key'); }
   return k;
+}
+
+/* ================= 可用模型加载(按 API Key) ================= */
+var modelsLoaded = false;
+function setModelGate(hint, disabled) {
+  $('model_name').disabled = !!disabled;
+  var el = $('model_gate_hint');
+  if (el) el.textContent = hint || '';
+}
+/* 第一步:用户设置 Key 后,经 GET {API_URL}/models 拉取该 Key 分组内
+ * 可调用的上游模型(sub2api 按账号模型映射返回),再渲染可选模型。 */
+function loadModels() {
+  var key = readApiKey();
+  if (!key) {
+    setModelGate('(请先在上方设置 API Key)', true);
+    return;
+  }
+  setModelGate('(模型加载中...)', true);
+  fetch(API_URL + '/models', { headers: { 'Authorization': 'Bearer ' + key } })
+    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, json: j }; }); })
+    .then(function (resp) {
+      if (!resp.ok || !resp.json || !Array.isArray(resp.json.data)) {
+        modelsLoaded = false;
+        $('model_name').innerHTML = '<option value="">— API Key 校验失败 —</option>';
+        setModelGate('(Key 无效或加载失败: HTTP ' + (resp.ok ? '格式' : 'status') + ')', true);
+        showConfigStatus('模型列表加载失败,请检查 API Key', true);
+        refreshForm();
+        return;
+      }
+      var ids = resp.json.data
+        .map(function (m) { return String((m && m.id) || '').trim(); })
+        .filter(Boolean);
+      if (!ids.length) {
+        modelsLoaded = false;
+        $('model_name').innerHTML = '<option value="">— 该 Key 无可用模型 —</option>';
+        setModelGate('(上游未开放任何模型)', true);
+        showConfigStatus('该 API Key 没有可用模型', true);
+        refreshForm();
+        return;
+      }
+      var groups = { chat: [], image: [], video: [], tts: [] };
+      ids.forEach(function (id) { groups[modelCategory(id)].push(id); });
+      var labels = { chat: '对话', image: '图像', video: '视频', tts: '语音合成' };
+      var html = '';
+      ['chat', 'image', 'video', 'tts'].forEach(function (cat) {
+        if (!groups[cat].length) return;
+        html += '<optgroup label="' + labels[cat] + '">';
+        groups[cat].sort().forEach(function (id) {
+          html += '<option value="' + escHtml(id) + '">' + escHtml(id) + '</option>';
+        });
+        html += '</optgroup>';
+      });
+      $('model_name').innerHTML = html;
+      modelsLoaded = true;
+      setModelGate('', false);
+      showConfigStatus('已加载 ' + ids.length + ' 个可用模型');
+      refreshForm();
+    })
+    .catch(function (e) {
+      modelsLoaded = false;
+      setModelGate('(模型加载失败: ' + e.message + ')', true);
+      showConfigStatus('模型列表加载失败: ' + e.message, true);
+    });
 }
 /* 去掉用户所填 URL 末尾的版本段,再按需要的版本重拼(避免 /v1/v2/... 这类错误路径) */
 function versionedBase(ver) { return apiBase().replace(/\/v\d+$/, '') + '/' + ver; }
@@ -609,7 +659,9 @@ function pollUntil(fn, intervalMs, maxAttempts, label) {
 
 /* ================= 调度 ================= */
 function onGenerate() {
+  if (!modelsLoaded) return showError('请先设置 API Key,加载可用模型后再调用');
   var model = $('model_name').value;
+  if (!model) return showError('请选择模型');
   var cat = modelCategory(model);
   if (cat === 'chat') return runChat(model);
   if (cat === 'image') return runImage(model);

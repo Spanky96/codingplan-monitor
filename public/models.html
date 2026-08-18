@@ -3,15 +3,15 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MiniMax 模型调用</title>
+  <title>模型调用</title>
   <link rel="stylesheet" href="models.css">
 </head>
 <body>
 
 <header class="header">
   <div class="header-left">
-    <h1>MiniMax 模型调用</h1>
-    <span class="header-sub">对话 · 文生图 · 视频 · 语音合成</span>
+    <h1>模型调用</h1>
+    <span class="header-sub">对话 · 文生图 · 视频 · 语音合成 · 音色复刻 · 音乐生成</span>
   </div>
   <div class="header-right">
     <a class="header-btn" href="./">← 用量监控</a>
@@ -20,18 +20,18 @@
 
 <div class="container">
 
-  <!-- 配置栏:API URL + Key,仅保存在浏览器本地 -->
+  <!-- 配置栏:API Key(网关地址固定) -->
   <div class="card config-bar">
     <div class="field grow">
-      <label for="api_url">API URL</label>
-      <input id="api_url" type="text" placeholder="https://lwai.05info.com:8887/v1(默认直连中转站;也可填 /minimax/v1 走内置反代)" autocomplete="off" spellcheck="false">
+      <label for="api_url">API URL(固定中转站)</label>
+      <input id="api_url" type="text" value="https://lwai.05info.com:8887/v1" readonly autocomplete="off" spellcheck="false" style="background:rgba(127,127,127,.08);cursor:not-allowed">
     </div>
     <div class="field grow">
-      <label for="api_key">API Key(仅保存在浏览器本地,不上传服务器;默认中转站密钥)</label>
-      <input id="api_key" type="password" placeholder="sk-...(默认已填中转站密钥)" autocomplete="off" spellcheck="false">
+      <label for="api_key">API Key(仅保存在浏览器本地;设置后自动加载可用模型)</label>
+      <input id="api_key" type="password" placeholder="sk-..." autocomplete="off" spellcheck="false">
     </div>
     <div class="config-actions">
-      <button class="btn-primary btn-sm" id="btn_save_config">保存配置</button>
+      <button class="btn-primary btn-sm" id="btn_save_config">保存并加载模型</button>
       <span id="config_status" class="config-hint"></span>
     </div>
   </div>
@@ -41,24 +41,9 @@
     <div class="card-title">模型 <span class="badge" id="model_category_badge">对话</span></div>
     <div class="model-row">
       <div class="field">
-        <label for="model_name">模型名称</label>
-        <select id="model_name">
-          <optgroup label="对话">
-            <option value="MiniMax-Text-01">MiniMax-Text-01(对话,旗舰文本)</option>
-            <option value="MiniMax-M3">MiniMax-M3(对话,最新)</option>
-            <option value="MiniMax-M2.7-highspeed">MiniMax-M2.7-highspeed</option>
-          </optgroup>
-          <optgroup label="图像">
-            <option value="image-01">image-01(文生图,旗舰)</option>
-          </optgroup>
-          <optgroup label="视频">
-            <option value="MiniMax-Hailuo-02">MiniMax-Hailuo-02(视频 V1,图生视频)</option>
-            <option value="MiniMax-H3">MiniMax-H3(视频 V2,需高级套餐)</option>
-          </optgroup>
-          <optgroup label="语音合成">
-            <option value="speech-02-hd">speech-02-hd(语音合成,高清)</option>
-            <option value="speech-02">speech-02(语音合成,标准)</option>
-          </optgroup>
+        <label for="model_name">模型名称 <span id="model_gate_hint" class="config-hint">(请先在上方设置 API Key)</span></label>
+        <select id="model_name" disabled>
+          <option value="">— 设置 API Key 后自动加载可用模型 —</option>
         </select>
       </div>
       <div class="field hidden" id="duration_field">
