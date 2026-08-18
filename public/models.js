@@ -7,6 +7,13 @@
  *   图片 role: first_frame ≤1 / last_frame ≤1 / reference_image ≤9,首尾帧与参考图互斥;
  *   resolution 仅 768P|2K,duration 4~15;查询 /v2/query/video_generation,成功返回 task.content.url。
  * - 文件上传 /v1/files/upload:purpose=video_generation_input,引用格式 mm_file://{file_id},有效期 7 天。
+ * 语音/复刻/音乐(见 models-audio.js,官方文档 2026-08 核对):
+ * - 同步 /v1/t2a_v2(合法模型 speech-2.8/2.6/02-hd|turbo,裸 speech-02 为非法名);
+ * - 异步 /v1/t2a_async_v2 → /v1/query/t2a_async_query_v2 → /v1/files/retrieve_content;
+ * - 复刻 /v1/files/upload(voice_clone) → /v1/voice_clone;音色库 /v1/get_voice;/v1/delete_voice;
+ * - 音乐 /v1/music_generation。
+ * 全部经中转站透传(sub2api 已注册这些原生端点);可用模型严格以 GET /v1/models
+ * 按分组返回为准,非法裸名(如 speech-02)会被剔除,页面上不额外合并模型。
  */
 'use strict';
 
@@ -57,6 +64,25 @@ function saveConfig() {
   showConfigStatus('正在加载可用模型...');
   loadModels();
 }
+/* 清除本页写入浏览器的全部数据:API Key、音色库缓存、复刻音色记录、
+ * 调用记录、图片池(去掉使用痕迹;代码内置的默认演示 Key 不受影响) */
+function clearConfig() {
+  if (!confirm('确认清除本页保存在浏览器中的全部数据?\n\n包括:API Key、音色库缓存、我的复刻音色记录、调用记录、图片池。\n清除后需重新填写 API Key。')) return;
+  [LS_KEY, 'minimax_voice_lib_v1', 'minimax_my_clones_v1', LS_HISTORY, LS_POOL].forEach(function (k) {
+    localStorage.removeItem(k);
+  });
+  $('api_key').value = '';
+  if (typeof clearAudioState === 'function') clearAudioState();
+  POOL = [];
+  SEL = [];
+  modelsLoaded = false;
+  $('model_name').innerHTML = '<option value="">— 设置 API Key 后自动加载可用模型 —</option>';
+  setModelGate('(请先在上方设置 API Key)', true);
+  showConfigStatus('已清除浏览器本地数据');
+  renderHistory();
+  renderPool();
+  toast('已清除配置与本页本地数据');
+}
 function showConfigStatus(msg, isError) {
   var el = $('config_status');
   el.textContent = msg;
@@ -100,9 +126,12 @@ function loadModels() {
         refreshForm();
         return;
       }
-      var ids = resp.json.data
+      var relayIds = resp.json.data
         .map(function (m) { return String((m && m.id) || '').trim(); })
         .filter(Boolean);
+      // 规范化:仅剔除网关返回的非法裸名(如 speech-02),不额外合并模型 ——
+      // 分组支持哪些模型完全由中转站 /v1/models 决定
+      var ids = normalizeModelIds(relayIds);
       if (!ids.length) {
         modelsLoaded = false;
         $('model_name').innerHTML = '<option value="">— 该 Key 无可用模型 —</option>';
@@ -111,15 +140,15 @@ function loadModels() {
         refreshForm();
         return;
       }
-      var groups = { chat: [], image: [], video: [], tts: [] };
-      ids.forEach(function (id) { groups[modelCategory(id)].push(id); });
-      var labels = { chat: '对话', image: '图像', video: '视频', tts: '语音合成' };
+      var groups = { chat: [], image: [], video: [], tts: [], music: [] };
+      ids.forEach(function (m) { groups[modelCategory(m.id)].push(m); });
+      var labels = { chat: '对话', image: '图像', video: '视频', tts: '语音合成', music: '音乐生成' };
       var html = '';
-      ['chat', 'image', 'video', 'tts'].forEach(function (cat) {
+      ['chat', 'image', 'video', 'tts', 'music'].forEach(function (cat) {
         if (!groups[cat].length) return;
         html += '<optgroup label="' + labels[cat] + '">';
-        groups[cat].sort().forEach(function (id) {
-          html += '<option value="' + escHtml(id) + '">' + escHtml(id) + '</option>';
+        groups[cat].forEach(function (m) {
+          html += '<option value="' + escHtml(m.id) + '">' + escHtml(m.id) + (m.note ? '(' + escHtml(m.note) + ')' : '') + '</option>';
         });
         html += '</optgroup>';
       });
@@ -142,6 +171,7 @@ function versionedBase(ver) { return apiBase().replace(/\/v\d+$/, '') + '/' + ve
 function modelCategory(model) {
   if (/^image-/.test(model)) return 'image';
   if (/^MiniMax-Hailuo|^MiniMax-H3|^video-/.test(model)) return 'video';
+  if (/^music-/.test(model)) return 'music';
   if (/^speech-/.test(model)) return 'tts';
   return 'chat';
 }
@@ -548,14 +578,16 @@ function refreshForm() {
   var model = $('model_name').value;
   var cat = modelCategory(model);
   var ver = cat === 'video' ? videoApiVersion(model) : '';
-  var labels = { chat: '对话', image: '文生图', video: '视频', tts: '语音合成' };
+  var labels = { chat: '对话', image: '文生图', video: '视频', tts: '语音合成', music: '音乐生成' };
   $('model_category_badge').textContent = labels[cat];
   $('model_category_badge').className = cat === 'video' ? 'badge badge-warn' : 'badge';
   $('input_category_badge').textContent = labels[cat];
 
   // 提示词/合成文本输入框对所有模态可见(tts 用它输入要合成的文字)
   $('prompt_field').classList.remove('hidden');
-  $('prompt_label').textContent = cat === 'tts' ? '要合成的文本' : (cat === 'video' && ver === 'v2' ? '提示词(H3 必填)' : '提示词');
+  $('prompt_label').textContent = cat === 'tts' ? '要合成的文本'
+    : cat === 'music' ? '音乐描述(风格/情绪/场景,如:独立民谣,忧郁,独自漫步)'
+    : (cat === 'video' && ver === 'v2' ? '提示词(H3 必填)' : '提示词');
   if (cat === 'video' && ver === 'v1') $('prompt').setAttribute('maxlength', '2000');
   else $('prompt').removeAttribute('maxlength');
 
@@ -568,6 +600,7 @@ function refreshForm() {
   $('pool_card').classList.toggle('hidden', cat !== 'video' && cat !== 'image');
 
   if (cat === 'video') rebuildVideoOptions(ver);
+  if (typeof refreshAudioForm === 'function') refreshAudioForm(cat);
   renderModePills();
   trimSelToCap();
   renderPool();
@@ -667,6 +700,7 @@ function onGenerate() {
   if (cat === 'image') return runImage(model);
   if (cat === 'video') return runVideo(model);
   if (cat === 'tts') return runTts(model);
+  if (cat === 'music') return runMusic(model);
 }
 
 /* ================= 对话 ================= */
@@ -1000,72 +1034,8 @@ function finalizeVideo(ctx, taskId, result) {
   return null;
 }
 
-/* ================= 语音合成(TTS) ================= */
-function runTts(model) {
-  var text = $('prompt').value.trim();
-  if (!text) return showError('请输入要合成的文本(在「输入」区)');
-  var voice_id = $('voice_id').value;
-  var speed = parseFloat($('tts_speed').value) || 1.0;
-  var pitch = parseInt($('tts_pitch').value, 10) || 0;
-  var format = $('tts_format').value;
-  var histInput = { text: text, voice_id: voice_id, speed: speed, pitch: pitch, format: format };
-  var body = {
-    model: model,
-    text: text,
-    stream: false,
-    voice_setting: { voice_id: voice_id, speed: speed, vol: 1.0, pitch: pitch },
-    audio_setting: { sample_rate: 32000, bitrate: 128000, format: format }
-  };
-  setBusy(true);
-  showLoading('合成语音中...');
-  fetch(apiBase() + '/t2a_v2', {
-    method: 'POST',
-    headers: { 'Authorization': 'Bearer ' + apiKey(), 'Content-Type': 'application/json' },
-    body: JSON.stringify(body)
-  })
-    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, json: j }; }); })
-    .then(function (resp) {
-      setBusy(false);
-      if (!resp.ok) {
-        var msg = 'HTTP ' + resp.status + ' · ' + JSON.stringify(resp.json);
-        addHistory({ id: histId(), ts: Date.now(), model: model, category: 'tts', input: histInput, error: { message: msg } });
-        return showError(msg);
-      }
-      if (resp.json.base_resp && resp.json.base_resp.status_code !== 0) {
-        var msg2 = 'MiniMax 错误 ' + resp.json.base_resp.status_code + ': ' + resp.json.base_resp.status_msg;
-        addHistory({ id: histId(), ts: Date.now(), model: model, category: 'tts', input: histInput, error: { message: msg2 } });
-        return showError(msg2);
-      }
-      var hexAudio = (resp.json.data || {}).audio;
-      if (!hexAudio) {
-        var msg3 = '未返回 audio: ' + JSON.stringify(resp.json);
-        addHistory({ id: histId(), ts: Date.now(), model: model, category: 'tts', input: histInput, error: { message: msg3 } });
-        return showError(msg3);
-      }
-      var bytes = hexToBytes(hexAudio);
-      var mime = format === 'wav' ? 'audio/wav' : 'audio/mpeg';
-      var blob = new Blob([bytes], { type: mime });
-      var url = URL.createObjectURL(blob);
-      var filename = 'minimax-tts-' + Date.now() + '.' + (format || 'mp3');
-      showResult(
-        '<div class="audio-wrap">'
-        + '<audio src="' + url + '" controls autoplay></audio>'
-        + '<a class="audio-download" href="' + url + '" download="' + filename + '">⬇ 下载 ' + filename + ' (' + Math.round(bytes.length / 1024) + ' KB)</a>'
-        + '</div>'
-        + '<div class="result-meta">model: <code>' + escHtml(model) + '</code> · voice: <code>' + escHtml(voice_id) + '</code> · ' + bytes.length + ' bytes</div>'
-      );
-      addHistory({
-        id: histId(), ts: Date.now(), model: model, category: 'tts',
-        input: histInput,
-        result: { audio: hexAudio, format: format, bytes: bytes.length }
-      });
-    })
-    .catch(function (e) {
-      setBusy(false);
-      addHistory({ id: histId(), ts: Date.now(), model: model, category: 'tts', input: histInput, error: { message: e.message } });
-      showError(e.message);
-    });
-}
+/* ================= 语音合成 / 复刻 / 音乐 ================= */
+/* runTts / runMusic / 音色库 / 复刻闭环 均在 models-audio.js 定义(先于本文件加载) */
 
 /* MiniMax TTS 返回的 audio 是 hex 字符串:转 Uint8Array */
 function hexToBytes(hex) {
@@ -1113,7 +1083,7 @@ function clearHistory() {
 }
 
 function categoryLabel(c) {
-  return ({ chat: '对话', image: '文生图', video: '视频', tts: '语音合成' })[c] || c;
+  return ({ chat: '对话', image: '文生图', video: '视频', tts: '语音合成', music: '音乐生成', clone: '音色复刻' })[c] || c;
 }
 function formatTime(ts) {
   var d = new Date(ts);
@@ -1147,7 +1117,14 @@ function histPreview(r) {
     return escHtml(promptShort) + imgNote + ' <span class="arrow">→</span> <span style="color:#595959">' + (r.result.videoUrl ? '视频已就绪' : '生成失败') + '</span>';
   }
   if (r.category === 'tts') {
-    return escHtml(promptShort) + ' <span class="arrow">→</span> <span style="color:#595959">' + (r.result.format || 'mp3').toUpperCase() + ' ' + Math.round((r.result.bytes || 0) / 1024) + ' KB</span>';
+    var modeNote = r.input.mode === 'async' ? ' · 异步' : '';
+    return escHtml(promptShort) + modeNote + ' <span class="arrow">→</span> <span style="color:#595959">' + (r.result.format || 'mp3').toUpperCase() + ' ' + Math.round((r.result.bytes || 0) / 1024) + ' KB</span>';
+  }
+  if (r.category === 'music') {
+    return escHtml(promptShort) + ' <span class="arrow">→</span> <span style="color:#595959">音乐 ' + Math.round((r.result.bytes || 0) / 1024) + ' KB' + (r.result.durationMs ? ' · ' + Math.round(r.result.durationMs / 1000) + 's' : '') + '</span>';
+  }
+  if (r.category === 'clone') {
+    return '复刻 ' + escHtml((r.input && r.input.voice_id) || '-') + ' <span class="arrow">→</span> <span style="color:#595959">' + (r.error ? '失败' : '成功') + '</span>';
   }
   return '';
 }
@@ -1223,10 +1200,27 @@ function loadRecord(r) {
     renderPool();
   }
   if (r.category === 'tts') {
-    if (input.voice_id) $('voice_id').value = input.voice_id;
+    if (input.voice_id) setSelectValue($('voice_id'), input.voice_id);
     if (input.speed != null) $('tts_speed').value = input.speed;
+    if (input.vol != null) $('tts_vol').value = input.vol;
     if (input.pitch != null) $('tts_pitch').value = input.pitch;
+    if (input.emotion != null) $('tts_emotion').value = input.emotion;
+    if (input.lang != null) $('tts_lang_boost').value = input.lang;
     if (input.format) $('tts_format').value = input.format;
+    if (input.sample_rate) $('tts_sample_rate').value = input.sample_rate;
+    if (input.bitrate) $('tts_bitrate').value = input.bitrate;
+    if (input.mode) {
+      var wantMode = input.mode === 'async' ? 'async' : 'sync';
+      $('tts_mode_seg').querySelectorAll('.seg-btn').forEach(function (b) {
+        b.classList.toggle('active', b.dataset.mode === wantMode);
+      });
+    }
+  }
+  if (r.category === 'music') {
+    if (input.lyrics != null) $('music_lyrics').value = input.lyrics;
+    if (input.instrumental != null) $('music_instrumental').checked = !!input.instrumental;
+    if (input.optimize != null) $('music_optimize').checked = !!input.optimize;
+    if (input.format) $('music_format').value = input.format;
   }
   if (r.error) showError('失败: ' + r.error.message);
   else showResult(buildResultHTML(r));
@@ -1260,9 +1254,15 @@ function buildResultHTML(r) {
       + ' · <span style="color:#52c41a">来自历史记录</span></div>';
   }
   if (r.category === 'tts') {
-    if (!r.result.audio) return '<div class="result-error">音频数据丢失</div>';
+    /* 异步结果不缓存音频(hex 过大),按 file_id 现取(9 小时内有效) */
+    if (!r.result.audio && r.result.fileId) {
+      return '<div class="result-meta">异步合成结果(9 小时内可重新下载):'
+        + '<button class="btn-secondary btn-sm" type="button" onclick="redownloadAsyncAudio(\'' + escHtml(r.result.fileId) + '\',\'' + escHtml(r.result.format || 'mp3') + '\')">⬇ 重新获取音频</button></div>'
+        + '<div class="result-meta">model: <code>' + escHtml(r.model) + '</code> · file_id: <code>' + escHtml(r.result.fileId) + '</code> · <span style="color:#52c41a">来自历史记录</span></div>';
+    }
+    if (!r.result.audio) return '<div class="result-error">音频数据丢失或过大未缓存,请重新生成</div>';
     var bytes2 = hexToBytes(r.result.audio);
-    var mime2 = r.result.format === 'wav' ? 'audio/wav' : 'audio/mpeg';
+    var mime2 = r.result.format === 'wav' ? 'audio/wav' : (r.result.format === 'flac' ? 'audio/flac' : 'audio/mpeg');
     var blob2 = new Blob([bytes2], { type: mime2 });
     var url2 = URL.createObjectURL(blob2);
     var filename2 = 'minimax-tts-' + r.id + '.' + (r.result.format || 'mp3');
@@ -1272,8 +1272,29 @@ function buildResultHTML(r) {
       + '</div>'
       + '<div class="result-meta">model: <code>' + escHtml(r.model) + '</code>'
       + ' · voice: <code>' + escHtml(r.input.voice_id || '-') + '</code>'
+      + (r.result.chars ? ' · 计费 ' + r.result.chars + ' 字' : '')
       + ' · ' + bytes2.length + ' bytes'
       + ' · <span style="color:#52c41a">来自历史记录</span></div>';
+  }
+  if (r.category === 'music') {
+    if (!r.result.audio) return '<div class="result-error">音频过大未缓存(仅记录参数),请重新生成</div>';
+    var bytes3 = hexToBytes(r.result.audio);
+    var blob3 = new Blob([bytes3], { type: r.result.format === 'wav' ? 'audio/wav' : 'audio/mpeg' });
+    var url3 = URL.createObjectURL(blob3);
+    var filename3 = 'minimax-music-' + r.id + '.' + (r.result.format || 'mp3');
+    return '<div class="audio-wrap">'
+      + '<audio src="' + url3 + '" controls></audio>'
+      + '<a class="audio-download" href="' + url3 + '" download="' + filename3 + '">⬇ 下载 ' + filename3 + ' (' + Math.round(bytes3.length / 1024) + ' KB)</a>'
+      + '</div>'
+      + '<div class="result-meta">model: <code>' + escHtml(r.model) + '</code>'
+      + (r.result.durationMs ? ' · 时长 ' + Math.round(r.result.durationMs / 1000) + 's' : '')
+      + ' · <span style="color:#52c41a">来自历史记录</span></div>';
+  }
+  if (r.category === 'clone') {
+    var demo = r.result && r.result.demoAudio;
+    return '<div class="result-meta">复刻音色: <code>' + escHtml((r.input && r.input.voice_id) || '-') + '</code>'
+      + ' · <span style="color:#52c41a">' + (r.error ? '失败' : '成功') + '</span>'
+      + (demo ? '</div><div class="audio-wrap"><audio src="' + escHtml(demo) + '" controls></audio>' : '</div>');
   }
   return '<div class="result-error">未知记录类型</div>';
 }
@@ -1281,6 +1302,7 @@ function buildResultHTML(r) {
 /* ================= 初始化 ================= */
 loadConfig();
 $('btn_save_config').onclick = saveConfig;
+$('btn_clear_config').onclick = clearConfig;
 $('model_name').onchange = refreshForm;
 $('duration').onchange = applyV1Constraint;
 $('btn_generate').onclick = onGenerate;
@@ -1325,3 +1347,4 @@ loadPool();
 refreshForm();
 renderHistory();
 $('btn_clear_history').onclick = clearHistory;
+if (typeof initAudioPage === 'function') initAudioPage();

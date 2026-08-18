@@ -367,6 +367,67 @@ body {
 }
 .hist-del:hover { background: #fef2f2; color: #ef4444; }
 
+/* ===== 复选行 / 音色复刻 ===== */
+.check-field { flex-direction: row; align-items: flex-end; flex-wrap: wrap; gap: 14px; min-width: 0; }
+.check-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  color: #6b7280;
+  cursor: pointer;
+  padding-bottom: 9px;
+  white-space: nowrap;
+  user-select: none;
+}
+.check-inline input { accent-color: #4f46e5; width: 15px; height: 15px; cursor: pointer; margin: 0; }
+.check-inline input:disabled { cursor: not-allowed; }
+
+.clone-mine-title { font-size: 12.5px; color: #6b7280; font-weight: 600; margin: 16px 0 8px; }
+.clone-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.clone-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: #eef2ff;
+  border: 1px solid #c7d2fe;
+  color: #4338ca;
+  padding: 4px 6px 4px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+}
+.clone-chip button {
+  border: none;
+  background: rgba(255, 255, 255, 0.75);
+  color: #64748b;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+  padding: 0;
+  transition: all 0.15s;
+}
+.clone-chip button:hover { background: #fee2e2; color: #dc2626; }
+.clone-result:empty { display: none; }
+.clone-ok {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  color: #15803d;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  margin-top: 12px;
+}
+.clone-ok code {
+  background: #dcfce7;
+  padding: 1px 7px;
+  border-radius: 4px;
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+}
+
 /* ===== Toast ===== */
 .toast {
   position: fixed;

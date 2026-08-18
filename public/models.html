@@ -32,6 +32,7 @@
     </div>
     <div class="config-actions">
       <button class="btn-primary btn-sm" id="btn_save_config">保存并加载模型</button>
+      <button class="btn-ghost" id="btn_clear_config" type="button" title="清除本页保存在浏览器里的全部数据">清除配置</button>
       <span id="config_status" class="config-hint"></span>
     </div>
   </div>
@@ -98,22 +99,59 @@
       </div>
     </div>
 
-    <!-- 语音合成参数 -->
+    <!-- 语音合成参数(经中转站透传 /v1/t2a_v2 · /v1/t2a_async_v2) -->
     <div class="model-row hidden" id="tts_row">
-      <div class="field">
+      <div class="field" style="flex:0 1 auto">
+        <label>合成方式</label>
+        <div class="seg" id="tts_mode_seg">
+          <button type="button" class="seg-btn active" data-mode="sync">同步 ≤1万字</button>
+          <button type="button" class="seg-btn" data-mode="async">异步 ≤5万字</button>
+        </div>
+      </div>
+      <div class="field" style="flex:2 1 330px">
         <label for="voice_id">音色</label>
-        <select id="voice_id">
-          <option value="female-shaonv">female-shaonv(少女音)</option>
-          <option value="male-qn-jingying">male-qn-jingying(精英男)</option>
-          <option value="female-yujie">female-yujie(御姐)</option>
-          <option value="male-qn-qingse">male-qn-qingse(清澈男)</option>
-          <option value="presenter_male">presenter_male(主持人男)</option>
-          <option value="presenter_female">presenter_female(主持人女)</option>
+        <div class="field-row">
+          <select id="voice_id" style="flex:1;min-width:0"></select>
+          <button class="btn-secondary btn-sm" id="btn_fetch_voices" type="button" style="flex-shrink:0">获取在线音色</button>
+        </div>
+        <div class="field-hint" id="voice_hint">内置常用系统音色;「获取在线音色」经中转站拉取全部系统音色 + 我的复刻音色(复刻音色正式合成一次后才会出现在接口里)</div>
+      </div>
+      <div class="field">
+        <label for="tts_emotion">情绪(一般无需指定)</label>
+        <select id="tts_emotion">
+          <option value="">自动</option>
+          <option value="happy">happy 高兴</option>
+          <option value="sad">sad 悲伤</option>
+          <option value="angry">angry 愤怒</option>
+          <option value="fearful">fearful 害怕</option>
+          <option value="disgusted">disgusted 厌恶</option>
+          <option value="surprised">surprised 惊讶</option>
+          <option value="calm">calm 中性</option>
+          <option value="fluent">fluent 生动(仅2.6)</option>
+          <option value="whisper">whisper 低语(仅2.6)</option>
         </select>
       </div>
       <div class="field">
+        <label for="tts_lang_boost">语种增强</label>
+        <select id="tts_lang_boost">
+          <option value="">默认</option>
+          <option value="auto">auto 自动判断</option>
+          <option value="Chinese">Chinese 普通话</option>
+          <option value="Chinese,Yue">Chinese,Yue 粤语</option>
+          <option value="English">English 英语</option>
+          <option value="Japanese">Japanese 日语</option>
+          <option value="Korean">Korean 韩语</option>
+        </select>
+      </div>
+    </div>
+    <div class="model-row hidden" id="tts_row2">
+      <div class="field">
         <label for="tts_speed">语速 (0.5 ~ 2.0)</label>
         <input id="tts_speed" type="number" value="1.0" step="0.1" min="0.5" max="2.0">
+      </div>
+      <div class="field">
+        <label for="tts_vol">音量 (0 ~ 10)</label>
+        <input id="tts_vol" type="number" value="1.0" step="0.1" min="0.1" max="10">
       </div>
       <div class="field">
         <label for="tts_pitch">音调 (-12 ~ 12)</label>
@@ -124,8 +162,77 @@
         <select id="tts_format">
           <option value="mp3">mp3</option>
           <option value="wav">wav</option>
-          <option value="pcm">pcm</option>
+          <option value="flac">flac</option>
         </select>
+      </div>
+      <div class="field">
+        <label for="tts_sample_rate">采样率</label>
+        <select id="tts_sample_rate">
+          <option value="16000">16000</option>
+          <option value="24000">24000</option>
+          <option value="32000" selected>32000</option>
+          <option value="44100">44100</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="tts_bitrate">比特率(仅mp3)</label>
+        <select id="tts_bitrate">
+          <option value="64000">64000</option>
+          <option value="128000" selected>128000</option>
+          <option value="256000">256000</option>
+        </select>
+      </div>
+      <div class="field check-field">
+        <label class="check-inline"><input type="checkbox" id="tts_stream"> 流式接收(同步·长文)</label>
+        <label class="check-inline"><input type="checkbox" id="tts_subtitle"> 生成字幕(句级)</label>
+      </div>
+    </div>
+
+    <!-- 音乐生成参数(经中转站透传 /v1/music_generation) -->
+    <div class="field hidden" id="music_lyrics_field">
+      <label for="music_lyrics">歌词(每行一句,支持 [Verse]/[Chorus]/[Outro] 等结构标签;纯音乐可留空)</label>
+      <textarea id="music_lyrics" placeholder="[Verse]&#10;旧梦像一场雨落进心里&#10;[Chorus]&#10;我们在人海里学会呼吸"></textarea>
+    </div>
+    <div class="model-row hidden" id="music_row">
+      <div class="field check-field">
+        <label class="check-inline"><input type="checkbox" id="music_instrumental"> 纯音乐(无人声)</label>
+        <label class="check-inline"><input type="checkbox" id="music_optimize"> 由描述自动生成歌词</label>
+      </div>
+      <div class="field">
+        <label for="music_format">音频格式</label>
+        <select id="music_format">
+          <option value="mp3">mp3</option>
+          <option value="wav">wav</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="music_sample_rate">采样率</label>
+        <select id="music_sample_rate">
+          <option value="24000">24000</option>
+          <option value="32000">32000</option>
+          <option value="44100" selected>44100</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="music_bitrate">比特率</label>
+        <select id="music_bitrate">
+          <option value="128000">128000</option>
+          <option value="256000" selected>256000</option>
+        </select>
+      </div>
+    </div>
+    <div class="model-row hidden" id="music_cover_row">
+      <div class="field">
+        <label for="music_cover_file_input">翻唱参考音频(6秒~6分钟 · ≤50MB)</label>
+        <div class="field-row">
+          <label class="btn-upload" for="music_cover_file_input">＋ 选择音频</label>
+          <input type="file" id="music_cover_file_input" accept=".mp3,.wav,.flac,audio/*" hidden>
+          <span class="field-hint" id="music_cover_name">未选择(与 URL 二选一)</span>
+        </div>
+      </div>
+      <div class="field">
+        <label for="music_cover_url">或参考音频 URL</label>
+        <input id="music_cover_url" type="text" placeholder="https://...(与本地文件二选一)" autocomplete="off" spellcheck="false">
       </div>
     </div>
 
@@ -146,6 +253,44 @@
       <button class="btn-secondary hidden" id="btn_cancel">取消轮询</button>
       <span class="field-hint" id="status_hint"></span>
     </div>
+  </div>
+
+  <!-- 音色复刻(上传音频 → 复刻 → 试听 → 进音色下拉,经中转站透传 /v1/voice_clone) -->
+  <div class="card hidden" id="clone_card">
+    <div class="card-title">音色复刻 <span class="badge">复刻</span></div>
+    <div class="model-row">
+      <div class="field">
+        <label for="clone_file_input">复刻音频(mp3 / m4a / wav · 10秒~5分钟 · ≤20MB)</label>
+        <div class="field-row">
+          <label class="btn-upload" for="clone_file_input">＋ 选择音频</label>
+          <input type="file" id="clone_file_input" accept=".mp3,.m4a,.wav,audio/mpeg,audio/mp4,audio/x-m4a,audio/wav,audio/x-wav" hidden>
+          <span class="field-hint" id="clone_file_name">未选择文件</span>
+        </div>
+      </div>
+      <div class="field">
+        <label for="clone_voice_id">自定义 Voice ID(8~256位,字母开头,仅字母/数字/-/_)</label>
+        <div class="field-row">
+          <input id="clone_voice_id" type="text" placeholder="如 MyVoice2026" autocomplete="off" spellcheck="false">
+          <button class="btn-ghost" id="btn_rand_vid" type="button" style="flex-shrink:0">随机</button>
+        </div>
+      </div>
+      <div class="field" style="flex:2 1 320px">
+        <label for="clone_demo_text">复刻成功后的试听文本(≤1000字,按字符计费)</label>
+        <input id="clone_demo_text" type="text" value="你好,这是我的复刻音色,听起来自然吗?" autocomplete="off">
+      </div>
+      <div class="field check-field">
+        <label class="check-inline"><input type="checkbox" id="clone_demo_enable" checked> 生成试听</label>
+        <label class="check-inline"><input type="checkbox" id="clone_nr"> 降噪</label>
+        <label class="check-inline"><input type="checkbox" id="clone_vnorm"> 音量归一化</label>
+      </div>
+    </div>
+    <div class="actions">
+      <button class="btn-primary btn-sm" id="btn_clone">开始复刻</button>
+      <span class="field-hint" id="clone_hint">复刻需中转站上游账号已完成个人/企业认证;复刻音色 7 天内未正式合成会被系统删除</span>
+    </div>
+    <div class="clone-result" id="clone_result"></div>
+    <div class="clone-mine-title">我的复刻音色(本地记录,也显示在音色下拉框)</div>
+    <div class="clone-chips" id="clone_chips"><span class="field-hint">暂无 — 复刻成功后会出现在这里</span></div>
   </div>
 
   <!-- 图片池:上传/生成的图片本地缓存,勾选后作为视频参考图 -->
@@ -189,6 +334,7 @@
 
 <div class="toast" id="toast"></div>
 
+<script src="models-audio.js"></script>
 <script src="models.js"></script>
 </body>
 </html>
