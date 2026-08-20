@@ -927,9 +927,10 @@ function minimaxHeaders(account) {
 
 function minimaxPad2(n) { return n.length < 2 ? '0' + n : n; }
 
-// 从消息盒子(message_category=4)的权益发放通知解析订阅:
+// 从消息盒子(message_category=4)的权益发放通知解析订阅(兜底数据源,官方订阅接口无数据时使用):
 // content 形如「您已成功获得 <b>Token Plan Max (1个月)</b> 权益。当前权益有效期截止至 <b>2026年08月30日</b>。」
 // 取首个 <b> 内容为套餐名,\d{4}年\d{1,2}月\d{1,2}日 为到期日;多条通知时取 send_time 最新的一条。
+// 注意:续费后盒子通知可能仍停留在上一周期,导致到期日滞后误标已过期,故仅作兜底。
 // 解析不到返回 null(账号可能从未购买过 Token Plan)。
 function parseMinimaxSubscription(json) {
     var infos = (json && Array.isArray(json.template_infos)) ? json.template_infos : [];
@@ -954,6 +955,30 @@ function parseMinimaxSubscription(json) {
         };
     }
     return best;
+}
+
+// 解析官方订阅接口(charge/combo/cycle_audio_resource_package)的 current_subscribe(权威到期来源):
+// current_subscribe_end_time_ts 为北京时间次日零点(如 1788019200000 = 2026-08-30 00:00 CST,即 08-29 24 点到期),
+// 加 8 小时后取 UTC 日期,保证服务器任意时区下格式化结果一致;无 current_subscribe 或缺 ts 返回 null。
+function parseMinimaxSubscribeInfo(json) {
+    var sub = json && json.current_subscribe;
+    var endTs = Number(sub && sub.current_subscribe_end_time_ts) || 0;
+    if (!endTs) return null;
+    var d = new Date(endTs + 8 * 3600 * 1000);
+    return {
+        planName: sub.current_subscribe_title || null,
+        expireDate: d.getUTCFullYear() + '-' + minimaxPad2(String(d.getUTCMonth() + 1)) + '-' + minimaxPad2(String(d.getUTCDate())),
+        expireMs: endTs
+    };
+}
+
+// 订阅到期合成:官方订阅接口优先,消息盒子权益通知兜底;官方套餐名缺失时借用通知中的套餐名。
+function minimaxMergeSubscription(subJson, boxJson) {
+    var official = parseMinimaxSubscribeInfo(subJson);
+    var noticed = parseMinimaxSubscription(boxJson);
+    if (!official) return noticed;
+    if (official.planName || !noticed) return official;
+    return Object.assign({}, official, { planName: noticed.planName });
 }
 
 // 「%」字符串 → 数字(保留 1 位小数);解析失败返回 null
@@ -1064,20 +1089,23 @@ async function fetchMiniMaxModelUsage(account, period) {
     return chart;
 }
 
-// MiniMax 抓取:并行调套餐消息盒子 + 用量接口(remains_percent)。
+// MiniMax 抓取:并行调套餐消息盒子 + 用量接口(remains_percent) + 官方订阅接口(charge/combo)。
 // 用量契约: data.usage.windows = [{ label, usedPct 或 used+quota, resetMs, periodMs, segments? }]
-// 用量接口软失败(返回 null)→ data.usage = null → 前端显示「待接入」占位;消息盒子失败则整体抛错(凭据失效)
+// 到期以官方订阅接口的 current_subscribe 为准,消息盒子通知兜底(续费后通知可能停留在上一周期)。
+// 用量/订阅接口软失败(返回 null)→ 用量显示「待接入」占位、到期退回通知兜底;消息盒子失败则整体抛错(凭据失效)
 async function fetchMiniMaxUsage(account, index) {
     try {
         var headers = minimaxHeaders(account);
         var boxPromise = httpsGet('https://www.minimaxi.com/backend/message/box?message_category=4&not_read=false', headers);
         var usagePromise = httpsGet('https://www.minimaxi.com/backend/account/token_plan/remains_percent', headers)
             .catch(function() { return null; });
+        var subPromise = httpsGet('https://www.minimaxi.com/v1/api/openplatform/charge/combo/cycle_audio_resource_package?biz_line=2&cycle_type=3&resource_package_type=7', headers)
+            .catch(function() { return null; });
         var boxJson = await boxPromise;
         if (!boxJson || !boxJson.base_resp || boxJson.base_resp.status_code !== 0) {
             throw new Error((boxJson && boxJson.base_resp && boxJson.base_resp.status_msg) || '请求失败（Cookie 可能已失效）');
         }
-        var subscription = parseMinimaxSubscription(boxJson);
+        var subscription = minimaxMergeSubscription(await subPromise, boxJson);
         var usageJson = await usagePromise;
         var usageWindows = parseMinimaxUsage(usageJson);
         var result = {
@@ -1682,6 +1710,8 @@ module.exports._loginGlm = loginGlm;
 module.exports._fetchGLMUsage = fetchGLMUsage;
 module.exports._withGlmAuthRetry = withGlmAuthRetry;
 module.exports._parseMinimaxSubscription = parseMinimaxSubscription;
+module.exports._parseMinimaxSubscribeInfo = parseMinimaxSubscribeInfo;
+module.exports._minimaxMergeSubscription = minimaxMergeSubscription;
 module.exports._parseMinimaxUsage = parseMinimaxUsage;
 module.exports._parseMinimaxModelUsage = parseMinimaxModelUsage;
 module.exports._minimaxGroupId = minimaxGroupId;
