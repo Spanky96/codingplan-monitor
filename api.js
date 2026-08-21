@@ -277,6 +277,11 @@ function riskInfoUrl() {
     return 'https://bigmodel.cn/api/biz/customer/risk/info';
 }
 
+// 智谱账号(个人版)重置卡列表接口(Coding Plan 用量页)
+function resetCardsUrl() {
+    return 'https://bigmodel.cn/api/biz/customer-package-reset/list?targetType=PERSONAL';
+}
+
 // 风控等级 → 提示文案映射(data 值 1~8)
 var RISK_TIPS = {
     1: '检测到当前支付方式短期内多次购买套餐，存在异常使用风险，部分权益已被限制。详情参阅《订阅服务协议》',
@@ -302,6 +307,20 @@ function decodeJwtUserType(authorization) {
         var json = JSON.parse(Buffer.from(payload, 'base64').toString('utf8'));
         return json.user_type || null;
     } catch (e) { return null; }
+}
+
+// 解析重置卡列表:合并 5小时/周两类卡,仅保留 available 的有效卡
+function parseGlmResetCards(data) {
+    var cards = [];
+    var groups = [['fiveHourResets', 'fiveHour'], ['weekResets', 'week']];
+    groups.forEach(function(g) {
+        var list = (data && data[g[0]]) || [];
+        if (!Array.isArray(list)) return;
+        list.forEach(function(c) {
+            if (c && c.available) cards.push({ type: g[1], expireTime: c.expireTime || null });
+        });
+    });
+    return cards;
 }
 
 // 校验 IP 地址格式:支持 IPv4 或 IPv4/CIDR(如 1.2.3.4 / 10.0.0.0/8)
@@ -401,11 +420,11 @@ async function fetchGLMUsage(account, index) {
         });
         var userType = decodeJwtUserType(account.authorization);
         var personalEdition = userType ? userType === 'PERSONAL' : !account.teamEdition;
-        var result = { index: index, name: account.name, platform: 'glm', responsiblePerson: account.responsiblePerson, phone: account.phone, notes: account.notes, keyCount: account.keyCount, teamEdition: account.teamEdition || undefined, personalEdition: personalEdition, isPublic: account.isPublic, risk: account.risk || undefined, data: json.data, success: true, cachedAt: Date.now() };
+        var result = { index: index, name: account.name, platform: 'glm', responsiblePerson: account.responsiblePerson, phone: account.phone, notes: account.notes, keyCount: account.keyCount, teamEdition: account.teamEdition || undefined, personalEdition: personalEdition, isPublic: account.isPublic, risk: account.risk || undefined, resetCards: account.resetCards || undefined, data: json.data, success: true, cachedAt: Date.now() };
         setCache(index, result);
         return result;
     } catch (err) {
-        return { index: index, name: account.name, platform: 'glm', responsiblePerson: account.responsiblePerson, phone: account.phone, notes: account.notes, keyCount: account.keyCount, teamEdition: account.teamEdition || undefined, isPublic: account.isPublic, risk: account.risk || undefined, error: err.message, success: false };
+        return { index: index, name: account.name, platform: 'glm', responsiblePerson: account.responsiblePerson, phone: account.phone, notes: account.notes, keyCount: account.keyCount, teamEdition: account.teamEdition || undefined, isPublic: account.isPublic, risk: account.risk || undefined, resetCards: account.resetCards || undefined, error: err.message, success: false };
     }
 }
 
@@ -1503,6 +1522,40 @@ module.exports = function(app) {
         } catch (err) { res.status(500).json({ error: err.message }); }
     });
 
+    // ============ 重置卡(Coding Plan 个人版,仅管理员打开详情时加载)============
+
+    app.get('/api/reset-cards/:index', checkAuth, async function(req, res) {
+        try {
+            var i = parseInt(req.params.index);
+            var account = getAccount(req);
+            if (!account) return res.status(404).json({ error: '未找到账号' });
+            // 仅智谱个人版账号有重置卡;团队版(teamEdition)不适用。
+            // 不用 JWT user_type 判断:部分个人订阅账号 JWT 也标 ENTERPRISE(见 weights.js 同款说明)
+            if ((account.platform || 'glm') !== 'glm' || account.teamEdition) {
+                return res.json({ cards: [] });
+            }
+            var json = await withGlmAuthRetry(account, i, function(acc) {
+                return httpsGet(resetCardsUrl(), makeHeaders(acc));
+            });
+            var cards = parseGlmResetCards(json && json.data);
+
+            // 每次打开详情刷新:有卡则记录数量与到期时间,无卡则清除(与风控同模式)
+            var accounts = readAccounts();
+            if (accounts[i]) {
+                if (cards.length) {
+                    accounts[i].resetCards = { count: cards.length, cards: cards, checkedAt: Date.now() };
+                } else {
+                    delete accounts[i].resetCards;
+                }
+                writeAccounts(accounts);
+                // 同步刷新内存用量缓存里的 resetCards,避免 /api/usage 仍返回旧值
+                var c = usageCache[i];
+                if (c && c.result) c.result.resetCards = cards.length ? accounts[i].resetCards : undefined;
+            }
+            res.json({ cards: cards, checkedAt: Date.now() });
+        } catch (err) { res.status(500).json({ error: err.message }); }
+    });
+
     // ============ 智云自助登录（手机号核对后，成功自动更新 satoken）============
 
     app.post('/api/telecomjs/login/:index', jsonParser, async function(req, res) {
@@ -1704,6 +1757,8 @@ module.exports = function(app) {
 // 供单测覆盖 GLM 自动重登路径（不走 HTTP 路由）
 module.exports._isGlmAuthError = isGlmAuthError;
 module.exports._hasGlmLoginCredentials = hasGlmLoginCredentials;
+// 供单测覆盖重置卡列表解析（不走 HTTP 路由）
+module.exports._parseGlmResetCards = parseGlmResetCards;
 // 供单测覆盖千问用量曲线响应解析（不走 HTTP 路由）
 module.exports._parseQwenModelUsageJson = parseQwenModelUsageJson;
 module.exports._loginGlm = loginGlm;

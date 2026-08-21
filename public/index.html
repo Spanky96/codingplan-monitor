@@ -288,6 +288,7 @@
     .weight-badge.w-high { background: var(--ok-bg); color: var(--ok); border-color: var(--ok-bd); }
     .risk-badge { padding: 1px 8px; border-radius: 11px; font-size: 11px; font-weight: 700; background: var(--danger-bg); color: var(--danger); border: 1px solid var(--danger-bd); cursor: help; white-space: nowrap; flex-shrink: 0; }
     .reset-badge { padding: 1px 8px; border-radius: 11px; font-size: 11px; font-weight: 700; background: var(--warn-bg); color: var(--warn); border: 1px solid var(--warn-bd); cursor: help; white-space: nowrap; flex-shrink: 0; }
+    .resetcard-badge { padding: 1px 8px; border-radius: 11px; font-size: 11px; font-weight: 700; background: var(--ok-bg); color: var(--ok); border: 1px solid var(--ok-bd); cursor: help; white-space: nowrap; flex-shrink: 0; }
     .plan-badge { padding: 1px 8px; border-radius: 11px; font-size: 11px; font-weight: 700; background: var(--accent-soft); color: var(--accent); border: 1px solid var(--accent-soft-bd); cursor: help; white-space: nowrap; flex-shrink: 0; }
     .plan-badge-peak { background: var(--warn-bg); color: var(--warn); border: 1px solid var(--warn-bd); }
     .card.reset-needed { box-shadow: inset 0 3px 0 var(--warn), var(--glass-shadow); border-color: rgba(217,119,6,.4); }
@@ -298,7 +299,7 @@
     .detail-btn { background: var(--glass-soft); border: 1px solid var(--glass-border-soft); color: var(--text-soft); padding: 4px 13px; border-radius: 8px; cursor: pointer; font-size: 13px; transition: all .2s; flex-shrink: 0; }
     .detail-btn:hover { border-color: var(--accent); color: var(--accent); }
 
-    .badge-tooltip { position: fixed; z-index: 3000; max-width: min(360px, calc(100vw - 16px)); padding: 8px 11px; border-radius: 8px; background: rgba(15,23,42,.94); color: #fff; border: 1px solid rgba(255,255,255,.1); box-shadow: 0 8px 30px rgba(0,0,0,.3); font-size: 12px; line-height: 1.55; overflow-wrap: anywhere; pointer-events: none; opacity: 0; visibility: hidden; transition: opacity .12s; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+    .badge-tooltip { position: fixed; z-index: 3000; max-width: min(360px, calc(100vw - 16px)); padding: 8px 11px; border-radius: 8px; background: rgba(15,23,42,.94); color: #fff; border: 1px solid rgba(255,255,255,.1); box-shadow: 0 8px 30px rgba(0,0,0,.3); font-size: 12px; line-height: 1.55; overflow-wrap: anywhere; pointer-events: none; opacity: 0; visibility: hidden; transition: opacity .12s; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); white-space: pre-line; }
     .badge-tooltip.visible { opacity: 1; visibility: visible; }
 
     .expire-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 20px; border-top: 1px solid var(--line); font-size: 13px; cursor: pointer; transition: background .15s; }
@@ -931,6 +932,33 @@
         + '%；按当前速度预计会在重置前提前耗尽，约 ' + duration + ' 无法使用';
       var text = esc(title);
       return '<span class="reset-badge" title="" data-tooltip="' + text + '" aria-label="' + text + '" tabindex="0">需要重置</span>';
+    }
+    // 重置卡(Coding Plan):卡片与列表徽章,hover 显示各卡到期时间;无有效卡返回空串
+    function resetCardBadgeHTML(acc) {
+      var rc = acc && acc.resetCards;
+      if (!rc || !rc.count) return '';
+      var lines = (rc.cards || []).map(function(c) {
+        return (c.type === 'fiveHour' ? '5小时卡' : '周卡') + (c.expireTime ? ' · ' + c.expireTime + ' 到期' : '');
+      });
+      var tip = '有效重置卡 ' + rc.count + ' 张' + (lines.length ? ':\n' + lines.join('\n') : '');
+      if (rc.checkedAt) tip += '\n检查于 ' + formatTime(rc.checkedAt);
+      var text = esc(tip);
+      return '<span class="resetcard-badge" title="" data-tooltip="' + text + '" aria-label="' + text + '" tabindex="0">重置卡×' + rc.count + '</span>';
+    }
+    // 详情页「重置卡」区块:有效卡数量 + 各卡到期时间;无卡时仅管理员显示「无」
+    function resetCardsSectionHTML(acc, admin) {
+      var rc = acc && acc.resetCards;
+      if (!rc || !rc.count) {
+        return admin ? '<div class="info-section"><div class="info-section-title">重置卡</div>'
+          + '<div class="info-grid"><span class="info-label">有效重置卡</span><span class="info-value">无</span></div></div>' : '';
+      }
+      var rows = (rc.cards || []).map(function(c, n) {
+        return '<span class="info-label">' + (c.type === 'fiveHour' ? '5小时重置卡' : '周重置卡') + ' ' + (n + 1) + '</span>'
+          + '<span class="info-value">' + esc(c.expireTime || '-') + ' 到期</span>';
+      }).join('');
+      var checked = rc.checkedAt ? '<span class="info-label">检查时间</span><span class="info-value">' + esc(formatTime(rc.checkedAt)) + '</span>' : '';
+      return '<div class="info-section"><div class="info-section-title">重置卡 · ' + rc.count + ' 张有效</div>'
+        + '<div class="info-grid">' + rows + checked + '</div></div>';
     }
     // 风控/异常:详情页顶部横幅,展示完整提示文案;无风险返回空串
     function riskBannerHTML(acc) {
@@ -1675,13 +1703,14 @@
         expHtml = '<div class="expire-row" onclick="refreshExpire(' + i + ')" title="点击刷新"><span class="expire-label">订阅到期</span><span class="expire-value ' + expCls + '">' + esc(exp.expireTime) + '<span class="expire-hint">' + expHint + '</span></span></div>';
       }
       var keyBadge = isAdmin() && acc.keyCount != null ? '<span class="level-badge level-badge-ok">Key: ' + acc.keyCount + '个</span>' : '';
+      var rcBadge = resetCardBadgeHTML(acc);
       var rBadge = riskBadgeHTML(acc);
       var resetBadge = resetBadgeHTML(acc);
       var resetClass = resetBadge ? ' reset-needed' : '';
       return '<div class="card' + resetClass + '" id="card-' + i + '"><div class="card-header">' + headerLeft
         + '<div class="card-header-right">' + btn + '<span class="card-status ' + getStatusClass(mp) + '">' + getStatusText(mp) + '</span></div></div>'
         + '<div class="card-body">' + limits.map(renderLimitRow).join('') + '</div>' + expHtml
-        + '<div class="card-footer"><div class="card-footer-left"><span class="level-badge">' + level + '</span>' + glmFooterBadges(acc) + keyBadge + resetBadge + rBadge + cache + '</div>'
+        + '<div class="card-footer"><div class="card-footer-left"><span class="level-badge">' + level + '</span>' + glmFooterBadges(acc) + keyBadge + rcBadge + resetBadge + rBadge + cache + '</div>'
         + '<button class="detail-btn" onclick="showDetail(' + i + ')">详情</button></div></div>';
     }
 
@@ -1939,6 +1968,7 @@
       var b = '<span class="level-badge">' + level + '</span>';
       b += glmFooterBadges(acc);
       if (isAdmin() && acc.keyCount != null) b += '<span class="level-badge level-badge-ok">Key: ' + acc.keyCount + '个</span>';
+      b += resetCardBadgeHTML(acc);
       b += resetBadgeHTML(acc);
       b += riskBadgeHTML(acc);
       return b;
@@ -2569,6 +2599,7 @@
         + '<span class="info-label">电话</span><span class="info-value">' + esc(acc.phone||'-') + '</span>'
         + '<span class="info-label">备注</span><span class="info-value">' + esc(acc.notes||'-') + '</span>'
         + '</div></div>'
+        + '<div id="resetCards-' + index + '">' + resetCardsSectionHTML(acc, admin) + '</div>'
         + '<div class="detail-tabs">'
         + '<button class="detail-tab active" id="dtab-chart-' + index + '" onclick="switchDetailTab(\'chart\',' + index + ')">用量曲线</button>'
         + (admin ? '<button class="detail-tab" id="dtab-keys-' + index + '" onclick="switchDetailTab(\'keys\',' + index + ')">API Keys</button>' : '')
@@ -2609,6 +2640,19 @@
           accAt(index).risk = r.text ? { level: r.level, text: r.text } : null;
           var rb = document.getElementById('riskBanner-' + index);
           if (rb) rb.innerHTML = riskBannerHTML(accAt(index));
+          updateCard(index, accAt(index));
+        }).catch(function() {});
+      }
+
+      // 管理员打开详情时才加载重置卡:有卡则记录数量,卡片外徽章随之更新;游客只看缓存
+      if ((acc.platform || 'glm') === 'glm' && admin) {
+        fetch(API_PREFIX + '/api/reset-cards/' + index, { headers: authHeaders() }).then(function(r){return r.json()}).then(function(r) {
+          if (r.error) return;
+          accAt(index).resetCards = (r.cards && r.cards.length)
+            ? { count: r.cards.length, cards: r.cards, checkedAt: r.checkedAt }
+            : null;
+          var sec = document.getElementById('resetCards-' + index);
+          if (sec) sec.innerHTML = resetCardsSectionHTML(accAt(index), true);
           updateCard(index, accAt(index));
         }).catch(function() {});
       }
