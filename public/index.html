@@ -289,6 +289,9 @@
     .risk-badge { padding: 1px 8px; border-radius: 11px; font-size: 11px; font-weight: 700; background: var(--danger-bg); color: var(--danger); border: 1px solid var(--danger-bd); cursor: help; white-space: nowrap; flex-shrink: 0; }
     .reset-badge { padding: 1px 8px; border-radius: 11px; font-size: 11px; font-weight: 700; background: var(--warn-bg); color: var(--warn); border: 1px solid var(--warn-bd); cursor: help; white-space: nowrap; flex-shrink: 0; }
     .resetcard-badge { padding: 1px 8px; border-radius: 11px; font-size: 11px; font-weight: 700; background: var(--ok-bg); color: var(--ok); border: 1px solid var(--ok-bd); cursor: help; white-space: nowrap; flex-shrink: 0; }
+    .use-card-btn { padding: 2px 10px; margin-left: 8px; border-radius: 7px; border: 1px solid var(--ok-bd); background: var(--ok-bg); color: var(--ok); cursor: pointer; font-size: 11px; font-weight: 600; vertical-align: 1px; }
+    .use-card-btn:hover:not(:disabled) { background: var(--ok); color: #fff; }
+    .use-card-btn:disabled { opacity: .5; cursor: default; }
     .plan-badge { padding: 1px 8px; border-radius: 11px; font-size: 11px; font-weight: 700; background: var(--accent-soft); color: var(--accent); border: 1px solid var(--accent-soft-bd); cursor: help; white-space: nowrap; flex-shrink: 0; }
     .plan-badge-peak { background: var(--warn-bg); color: var(--warn); border: 1px solid var(--warn-bd); }
     .card.reset-needed { box-shadow: inset 0 3px 0 var(--warn), var(--glass-shadow); border-color: rgba(217,119,6,.4); }
@@ -945,16 +948,19 @@
       var text = esc(tip);
       return '<span class="resetcard-badge" title="" data-tooltip="' + text + '" aria-label="' + text + '" tabindex="0">重置卡×' + rc.count + '</span>';
     }
-    // 详情页「重置卡」区块:有效卡数量 + 各卡到期时间;无卡时仅管理员显示「无」
-    function resetCardsSectionHTML(acc, admin) {
+    // 详情页「重置卡」区块:有效卡数量 + 各卡到期时间;管理员每张卡可「使用」;无卡时仅管理员显示「无」
+    function resetCardsSectionHTML(acc, admin, index) {
       var rc = acc && acc.resetCards;
       if (!rc || !rc.count) {
         return admin ? '<div class="info-section"><div class="info-section-title">重置卡</div>'
           + '<div class="info-grid"><span class="info-label">有效重置卡</span><span class="info-value">无</span></div></div>' : '';
       }
       var rows = (rc.cards || []).map(function(c, n) {
+        var useBtn = (admin && index != null && c.recordId != null)
+          ? '<button class="use-card-btn" onclick="useResetCard(this,' + index + ',\'' + esc(c.type) + '\',' + c.recordId + ')">使用</button>'
+          : '';
         return '<span class="info-label">' + (c.type === 'fiveHour' ? '5小时重置卡' : '周重置卡') + ' ' + (n + 1) + '</span>'
-          + '<span class="info-value">' + esc(c.expireTime || '-') + ' 到期</span>';
+          + '<span class="info-value">' + esc(c.expireTime || '-') + ' 到期 ' + useBtn + '</span>';
       }).join('');
       var checked = rc.checkedAt ? '<span class="info-label">检查时间</span><span class="info-value">' + esc(formatTime(rc.checkedAt)) + '</span>' : '';
       return '<div class="info-section"><div class="info-section-title">重置卡 · ' + rc.count + ' 张有效</div>'
@@ -2599,7 +2605,7 @@
         + '<span class="info-label">电话</span><span class="info-value">' + esc(acc.phone||'-') + '</span>'
         + '<span class="info-label">备注</span><span class="info-value">' + esc(acc.notes||'-') + '</span>'
         + '</div></div>'
-        + '<div id="resetCards-' + index + '">' + resetCardsSectionHTML(acc, admin) + '</div>'
+        + '<div id="resetCards-' + index + '">' + resetCardsSectionHTML(acc, admin, index) + '</div>'
         + '<div class="detail-tabs">'
         + '<button class="detail-tab active" id="dtab-chart-' + index + '" onclick="switchDetailTab(\'chart\',' + index + ')">用量曲线</button>'
         + (admin ? '<button class="detail-tab" id="dtab-keys-' + index + '" onclick="switchDetailTab(\'keys\',' + index + ')">API Keys</button>' : '')
@@ -2646,15 +2652,7 @@
 
       // 管理员打开详情时才加载重置卡:有卡则记录数量,卡片外徽章随之更新;游客只看缓存
       if ((acc.platform || 'glm') === 'glm' && admin) {
-        fetch(API_PREFIX + '/api/reset-cards/' + index, { headers: authHeaders() }).then(function(r){return r.json()}).then(function(r) {
-          if (r.error) return;
-          accAt(index).resetCards = (r.cards && r.cards.length)
-            ? { count: r.cards.length, cards: r.cards, checkedAt: r.checkedAt }
-            : null;
-          var sec = document.getElementById('resetCards-' + index);
-          if (sec) sec.innerHTML = resetCardsSectionHTML(accAt(index), true);
-          updateCard(index, accAt(index));
-        }).catch(function() {});
+        loadResetCards(index);
       }
 
       if (admin) {
@@ -2998,6 +2996,51 @@
           loadIpWhitelist(idx);
         })
         .catch(function() { btn.disabled = false; btn.innerHTML = _svgDelIp; });
+    }
+
+    // ============ 重置卡操作（智谱个人版账号,管理员）============
+
+    // 用最新列表刷新内存态并重渲染详情区块与卡片徽章(列表接口与使用接口共用)
+    function applyResetCards(idx, cards, checkedAt) {
+      accAt(idx).resetCards = (cards && cards.length)
+        ? { count: cards.length, cards: cards, checkedAt: checkedAt }
+        : null;
+      var sec = document.getElementById('resetCards-' + idx);
+      if (sec) sec.innerHTML = resetCardsSectionHTML(accAt(idx), true, idx);
+      updateCard(idx, accAt(idx));
+    }
+
+    function loadResetCards(idx) {
+      fetch(API_PREFIX + '/api/reset-cards/' + idx, { headers: authHeaders() })
+        .then(function(r) {
+          if (r.status === 401) { localStorage.removeItem('glm_pwd'); requireAuth(function(){loadResetCards(idx)}); return null; }
+          return r.json();
+        })
+        .then(function(r) {
+          if (!r || r.error) return;
+          applyResetCards(idx, r.cards, r.checkedAt);
+        })
+        .catch(function() {});
+    }
+
+    function useResetCard(btn, idx, type, recordId) {
+      var label = type === 'fiveHour' ? '5小时重置卡' : '周重置卡';
+      if (!confirm('确定使用这张' + label + '？使用后将重置对应周期的用量,且不可撤销。')) return;
+      btn.disabled = true;
+      btn.textContent = '使用中...';
+      fetch(API_PREFIX + '/api/reset-cards/' + idx + '/use', { method: 'POST', headers: authHeaders(), body: JSON.stringify({ type: type, recordId: recordId }) })
+        .then(function(r) {
+          if (r.status === 401) { localStorage.removeItem('glm_pwd'); btn.disabled = false; btn.textContent = '使用'; requireAuth(function(){useResetCard(btn,idx,type,recordId)}); return null; }
+          return r.json();
+        })
+        .then(function(d) {
+          if (!d) return;
+          if (d.error) { alert('使用失败: ' + d.error); btn.disabled = false; btn.textContent = '使用'; return; }
+          // 直接用返回的最新列表刷新区块与徽章,免二次请求
+          applyResetCards(idx, d.cards, d.checkedAt);
+          alert('已使用,对应周期用量已重置');
+        })
+        .catch(function(err) { alert('请求失败: ' + err.message); btn.disabled = false; btn.textContent = '使用'; });
     }
 
     // ============ 密码验证 ============

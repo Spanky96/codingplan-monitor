@@ -1,6 +1,7 @@
 var fs = require('fs');
 var path = require('path');
 var https = require('https');
+var crypto = require('crypto');
 var express = require('express');
 var jsonParser = express.json();
 
@@ -282,6 +283,14 @@ function resetCardsUrl() {
     return 'https://bigmodel.cn/api/biz/customer-package-reset/list?targetType=PERSONAL';
 }
 
+// 智谱账号(个人版)重置卡使用接口(官方请求体需 targetType/resetType/recordId/requestId)
+function resetCardUseUrl() {
+    return 'https://bigmodel.cn/api/biz/customer-package-reset/use';
+}
+
+// 本地卡类型 → 官方 use 接口 resetType 取值(week 有官方抓包佐证;fiveHour 按列表字段 fiveHourResets 的命名惯例推断)
+var RESET_CARD_USE_TYPES = { fiveHour: 'FIVE_HOUR', week: 'WEEK' };
+
 // 风控等级 → 提示文案映射(data 值 1~8)
 var RISK_TIPS = {
     1: '检测到当前支付方式短期内多次购买套餐，存在异常使用风险，部分权益已被限制。详情参阅《订阅服务协议》',
@@ -310,6 +319,7 @@ function decodeJwtUserType(authorization) {
 }
 
 // 解析重置卡列表:合并 5小时/周两类卡,仅保留 available 的有效卡
+// recordId 供 use 接口定位具体卡片,必须透传
 function parseGlmResetCards(data) {
     var cards = [];
     var groups = [['fiveHourResets', 'fiveHour'], ['weekResets', 'week']];
@@ -317,10 +327,33 @@ function parseGlmResetCards(data) {
         var list = (data && data[g[0]]) || [];
         if (!Array.isArray(list)) return;
         list.forEach(function(c) {
-            if (c && c.available) cards.push({ type: g[1], expireTime: c.expireTime || null });
+            if (c && c.available) {
+                cards.push({ type: g[1], recordId: c.recordId != null ? c.recordId : null, expireTime: c.expireTime || null });
+            }
         });
     });
     return cards;
+}
+
+// 官方 use 接口要求 requestId 为 UUID v4(幂等键),示例 2a867e62-849e-4d90-87f3-f094ef0687d2
+function uuidV4() {
+    return crypto.randomUUID();
+}
+
+// 把最新重置卡列表落到 accounts.json 与内存用量缓存(列表接口与使用接口共用)
+function persistGlmResetCards(i, cards) {
+    var accounts = readAccounts();
+    if (!accounts[i]) return null;
+    if (cards.length) {
+        accounts[i].resetCards = { count: cards.length, cards: cards, checkedAt: Date.now() };
+    } else {
+        delete accounts[i].resetCards;
+    }
+    writeAccounts(accounts);
+    // 同步刷新内存用量缓存里的 resetCards,避免 /api/usage 仍返回旧值
+    var c = usageCache[i];
+    if (c && c.result) c.result.resetCards = cards.length ? accounts[i].resetCards : undefined;
+    return accounts[i].resetCards;
 }
 
 // 校验 IP 地址格式:支持 IPv4 或 IPv4/CIDR(如 1.2.3.4 / 10.0.0.0/8)
@@ -1538,21 +1571,53 @@ module.exports = function(app) {
                 return httpsGet(resetCardsUrl(), makeHeaders(acc));
             });
             var cards = parseGlmResetCards(json && json.data);
-
             // 每次打开详情刷新:有卡则记录数量与到期时间,无卡则清除(与风控同模式)
-            var accounts = readAccounts();
-            if (accounts[i]) {
-                if (cards.length) {
-                    accounts[i].resetCards = { count: cards.length, cards: cards, checkedAt: Date.now() };
-                } else {
-                    delete accounts[i].resetCards;
-                }
-                writeAccounts(accounts);
-                // 同步刷新内存用量缓存里的 resetCards,避免 /api/usage 仍返回旧值
-                var c = usageCache[i];
-                if (c && c.result) c.result.resetCards = cards.length ? accounts[i].resetCards : undefined;
-            }
+            persistGlmResetCards(i, cards);
             res.json({ cards: cards, checkedAt: Date.now() });
+        } catch (err) { res.status(500).json({ error: err.message }); }
+    });
+
+    // 使用一张重置卡:先取最新列表校验该卡仍有效,再调官方 use 接口,成功后刷新本地缓存
+    app.post('/api/reset-cards/:index/use', jsonParser, checkAuth, async function(req, res) {
+        try {
+            var i = parseInt(req.params.index);
+            var account = getAccount(req);
+            if (!account) return res.status(404).json({ error: '未找到账号' });
+            if ((account.platform || 'glm') !== 'glm' || account.teamEdition) {
+                return res.status(400).json({ error: '该账号不支持重置卡' });
+            }
+            var cardType = String((req.body && req.body.type) || '');
+            var useType = RESET_CARD_USE_TYPES[cardType];
+            var recordId = parseInt(req.body && req.body.recordId, 10);
+            if (!useType || !Number.isInteger(recordId) || recordId <= 0) {
+                return res.status(400).json({ error: '参数不正确,需要 type 与 recordId' });
+            }
+            // 用前校验:页面上的卡可能已被使用或过期,以官方最新列表为准
+            var listJson = await withGlmAuthRetry(account, i, function(acc) {
+                return httpsGet(resetCardsUrl(), makeHeaders(acc));
+            });
+            var stillValid = parseGlmResetCards(listJson && listJson.data).some(function(c) {
+                return c.type === cardType && c.recordId === recordId;
+            });
+            if (!stillValid) return res.status(409).json({ error: '该重置卡已使用、已过期或不存在,请刷新后重试' });
+
+            var json = await withGlmAuthRetry(account, i, function(acc) {
+                return httpsRequest('POST', resetCardUseUrl(), makeHeaders(acc), {
+                    targetType: 'PERSONAL',
+                    resetType: useType,
+                    recordId: recordId,
+                    requestId: uuidV4()
+                });
+            });
+            if (json && json.code != null && json.code !== 200) throw new Error(json.msg || '使用失败');
+
+            // 使用成功后重取列表刷新缓存(该卡 available 置 false 即消失),并回传前端免二次请求
+            var afterJson = await withGlmAuthRetry(account, i, function(acc) {
+                return httpsGet(resetCardsUrl(), makeHeaders(acc));
+            });
+            var cards = parseGlmResetCards(afterJson && afterJson.data);
+            persistGlmResetCards(i, cards);
+            res.json({ success: true, cards: cards, checkedAt: Date.now() });
         } catch (err) { res.status(500).json({ error: err.message }); }
     });
 
