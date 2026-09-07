@@ -5,7 +5,9 @@ WORKDIR /app
 
 # 智云受瑞数保护，需由真实 Chromium 环境执行页面脚本并生成逐请求签名。
 # tini 作为 PID 1，避免 Alpine xvfb-run 作为 PID 1 时卡在等待 Xvfb 的 SIGUSR1。
-RUN apk add --no-cache chromium xvfb-run tini
+# alpine 官方 CDN 国内不通：换阿里云镜像源再装包，否则 apk 会长时间挂起。
+RUN sed -i 's#https\?://dl-cdn.alpinelinux.org#https://mirrors.aliyun.com#g' /etc/apk/repositories \
+    && apk add --no-cache chromium xvfb-run tini
 ENV TELECOMJS_CHROME_PATH=/usr/bin/chromium
 
 # 先复制依赖描述并安装,利用 Docker 层缓存:仅 package*.json 变化才会重装
