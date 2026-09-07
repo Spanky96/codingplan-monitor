@@ -3643,7 +3643,7 @@
       if (!cap) return '';
       var cls = (cap.total > 0 && cap.current >= cap.total) ? 'full' : (cap.current > 0 ? 'busy' : '');
       var lines = cap.items.map(function(it) {
-        return it.name + '：' + it.current + '/' + it.total + (it.off ? '（停调度）' : '');
+        return it.name + '：' + it.current + '/' + it.total + (it.off ? '（已停调度）' : '');
       }).join('\n');
       return '<span class="cap-pill ' + cls + '" data-cap-tip="' + escCapAttr(lines) + '">'
         + cap.current + '|' + cap.total + '</span>';
@@ -3664,7 +3664,10 @@
             var active = a.schedulable && a.status === 'active';
             var cur = a.current_concurrency || 0;
             var tot = a.concurrency || 0;
-            if (active) { g.current += cur; g.total += tot; }
+            // 容量按全部匹配账号聚合（与 sub2api 管理页一致，停调度也在悬浮里标注），
+            // 否则卡片 0|0 与悬浮明细 0/1 对不上。
+            g.current += cur;
+            g.total += tot;
             g.items.push({ name: a.name, current: cur, total: tot, off: !active });
           });
           if (accountsData.length) renderCards(accountsData);
