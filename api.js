@@ -1,5 +1,6 @@
 var fs = require('fs');
 var path = require('path');
+var http = require('http');
 var https = require('https');
 var crypto = require('crypto');
 var express = require('express');
@@ -10,6 +11,7 @@ var telecomjs = require('./telecomjs');
 var glmAccountsFile = config.accountsFile;
 var PASSWORD = config.adminPassword;
 var weights = require('./weights');
+var SUB2API_BASE = config.sub2apiBaseUrl;
 var CACHE_TTL = 5 * 60 * 1000;
 var CACHE_FILE = process.env.USAGE_CACHE_FILE
     ? path.resolve(process.env.USAGE_CACHE_FILE)
@@ -181,6 +183,25 @@ function httpsGet(url, headers) {
                 catch (e) { reject(new Error('Invalid JSON: ' + body.slice(0, 200))); }
             });
         }).on('error', reject);
+    });
+}
+
+// http/https 通用的 JSON GET（带超时），用于拉取 sub2api 容量快照。
+function httpGetJSON(url, timeoutMs) {
+    return new Promise(function(resolve, reject) {
+        var mod = /^https:/.test(url) ? https : http;
+        var req = mod.get(url, function(res) {
+            var body = '';
+            res.on('data', function(c) { body += c; });
+            res.on('end', function() {
+                if (res.statusCode < 200 || res.statusCode >= 300)
+                    return reject(new Error('HTTP ' + res.statusCode + ': ' + body.slice(0, 200)));
+                try { resolve(JSON.parse(body)); }
+                catch (e) { reject(new Error('Invalid JSON: ' + body.slice(0, 200))); }
+            });
+        });
+        req.on('error', reject);
+        req.setTimeout(timeoutMs || 5000, function() { req.destroy(new Error('timeout')); });
     });
 }
 
@@ -1374,6 +1395,32 @@ module.exports = function(app) {
             } else {
                 res.json(result);
             }
+        } catch (err) { res.status(500).json({ error: err.message }); }
+    });
+
+    // ---- sub2api 容量快照（代理拉取 + 5s 内存缓存）----
+    // 供监控页渲染「当前调度中|总容量」胶囊；按 matched_key 聚合后悬浮可看
+    // 指向同一权重的多个 sub2api 账号细分。sub2api 侧快照为内网开放数据。
+    var _sub2apiCapacityCache = { at: 0, data: null };
+    app.get('/api/sub2api/capacity', function(req, res) {
+        try {
+            if (req.query.password !== PASSWORD) return res.status(401).json({ error: 'unauthorized' });
+            var now = Date.now();
+            if (_sub2apiCapacityCache.data && now - _sub2apiCapacityCache.at < 5000) {
+                return res.json(_sub2apiCapacityCache.data);
+            }
+            var url = SUB2API_BASE.replace(/\/+$/, '') + '/api/weight-snapshot';
+            httpGetJSON(url, 5000).then(function(envelope) {
+                // sub2api 统一信封 {code:0, message, data:{generated_at, accounts:[...]}}
+                var data = (envelope && envelope.code === 0 && envelope.data) ? envelope.data : null;
+                if (!data || !Array.isArray(data.accounts)) {
+                    return res.status(502).json({ error: 'unexpected sub2api snapshot shape' });
+                }
+                _sub2apiCapacityCache = { at: Date.now(), data: data };
+                res.json(data);
+            }).catch(function(err) {
+                res.status(502).json({ error: 'sub2api snapshot fetch failed: ' + err.message });
+            });
         } catch (err) { res.status(500).json({ error: err.message }); }
     });
 

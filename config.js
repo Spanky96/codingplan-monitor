@@ -17,6 +17,8 @@ const config = {
     : path.join(__dirname, 'accounts.json'),
   // 智云抓取使用的 Chrome/Chromium；留空时按操作系统常见路径自动发现
   telecomjsChromePath: process.env.TELECOMJS_CHROME_PATH || process.env.PUPPETEER_EXECUTABLE_PATH || '',
+  // sub2api 服务地址（容量快照代理用；快照为内网开放数据，无需密码）
+  sub2apiBaseUrl: process.env.SUB2API_BASE_URL || 'http://192.168.0.20:8090',
   // 运行环境
   nodeEnv: process.env.NODE_ENV || 'development',
 };

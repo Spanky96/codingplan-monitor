@@ -286,6 +286,18 @@
     .weight-badge.w-low { background: var(--warn-bg); color: var(--warn); border-color: var(--warn-bd); }
     .weight-badge.w-mid { background: var(--accent-soft); color: var(--accent-3); border-color: var(--accent-soft-bd); }
     .weight-badge.w-high { background: var(--ok-bg); color: var(--ok); border-color: var(--ok-bd); }
+    /* sub2api 容量胶囊：当前调度中|总容量；悬浮显示各 sub2api 账号细分 */
+    .cap-pill { position: relative; padding: 1px 9px; border-radius: 11px; font-size: 11px; font-weight: 700; border: 1px solid var(--glass-border-soft); background: var(--glass-soft); color: var(--text-soft); white-space: nowrap; flex-shrink: 0; cursor: help; user-select: none; font-variant-numeric: tabular-nums; }
+    .cap-pill.busy { background: var(--warn-bg); color: var(--warn); border-color: var(--warn-bd); }
+    .cap-pill.full { background: var(--danger-bg); color: var(--danger); border-color: var(--danger-bd); }
+    .cap-pill::after {
+      content: attr(data-cap-tip); position: absolute; bottom: calc(100% + 6px); left: 0; z-index: 40;
+      display: none; white-space: pre-line; text-align: left;
+      background: rgba(28, 30, 36, 0.97); color: #e8eaed; border: 1px solid rgba(255,255,255,0.12);
+      padding: 8px 11px; border-radius: 9px; font-size: 12px; font-weight: 400; line-height: 1.7;
+      min-width: 200px; max-width: 340px; box-shadow: 0 8px 24px rgba(0,0,0,0.35); pointer-events: none;
+    }
+    .cap-pill:hover::after { display: block; }
     .risk-badge { padding: 1px 8px; border-radius: 11px; font-size: 11px; font-weight: 700; background: var(--danger-bg); color: var(--danger); border: 1px solid var(--danger-bd); cursor: help; white-space: nowrap; flex-shrink: 0; }
     .reset-badge { padding: 1px 8px; border-radius: 11px; font-size: 11px; font-weight: 700; background: var(--warn-bg); color: var(--warn); border: 1px solid var(--warn-bd); cursor: help; white-space: nowrap; flex-shrink: 0; }
     .resetcard-badge { padding: 1px 8px; border-radius: 11px; font-size: 11px; font-weight: 700; background: var(--ok-bg); color: var(--ok); border: 1px solid var(--ok-bd); cursor: help; white-space: nowrap; flex-shrink: 0; }
@@ -687,6 +699,7 @@
     var expireData = [];
     var weightsMap = {};        // name → 最终权重(管理员,卡片左上角徽标)
     var weightsDetail = {};     // name → 明细(base/strategy/configValue/defaultWeight)
+    var capacityMap = {};       // name → {current,total,items[]} sub2api 容量聚合(按权重键)
     var _weightEditIndex = -1;
     var _weightEditName = null;
     var UNIT_LABELS = { 3: '每5小时', 5: 'MCP月额度', 6: '每周' };
@@ -1498,7 +1511,8 @@
       var btn = isAdmin() ? '<button class="card-refresh" id="refresh-' + i + '" onclick="refreshCard(' + i + ')" title="刷新">&#x21bb;</button>' : '';
       var pTag = platformTag(platform, acc.planType);
       var wBadge = weightBadgeHTML(acc.name, i);
-      var headerLeft = '<div class="card-header-left">' + pTag + wBadge + '<h3>' + esc(displayName(acc, i)) + '</h3></div>';
+      var capBadge = capacityBadgeHTML(acc.name);
+      var headerLeft = '<div class="card-header-left">' + pTag + wBadge + capBadge + '<h3>' + esc(displayName(acc, i)) + '</h3></div>';
 
       // 列表秒开占位:慢账号(尤其智云)先出骨架,不挡住其它卡
       if (isUsagePending(acc)) {
@@ -3585,6 +3599,49 @@
       return '<span class="' + cls + '" title="权重">' + w.toFixed(1) + '</span>';
     }
 
+    // ============ sub2api 容量胶囊(管理员) ============
+
+    function escCapAttr(s) {
+      return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    // capacityBadgeHTML 渲染「当前调度中|总容量」胶囊；
+    // 悬浮 data-cap-tip 逐行列出指向同一权重的 sub2api 账号（如 glm5-周慧珍 #85：2/5）。
+    function capacityBadgeHTML(name) {
+      var cap = capacityMap[name];
+      if (!cap || !cap.total) return '';
+      var cls = cap.current >= cap.total ? 'full' : (cap.current > 0 ? 'busy' : '');
+      var lines = cap.items.map(function(it) {
+        return it.name + '：' + it.current + '/' + it.total + (it.off ? '（停调度）' : '');
+      }).join('\n');
+      return '<span class="cap-pill ' + cls + '" data-cap-tip="' + escCapAttr(lines) + '" title="sub2api 当前调度中 | 总容量">'
+        + cap.current + '|' + cap.total + '</span>';
+    }
+
+    function loadCapacity() {
+      // 仅管理员展示（暴露内部账号名）；失败静默：没有快照就不渲染胶囊
+      var p = localStorage.getItem('glm_pwd') || '';
+      if (!p) { capacityMap = {}; return; }
+      fetch(API_PREFIX + '/api/sub2api/capacity?password=' + encodeURIComponent(p))
+        .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+        .then(function(data) {
+          capacityMap = {};
+          ((data && data.accounts) || []).forEach(function(a) {
+            if (!a || !a.matched_key) return;
+            var g = capacityMap[a.matched_key];
+            if (!g) g = capacityMap[a.matched_key] = { current: 0, total: 0, items: [] };
+            var active = a.schedulable && a.status === 'active';
+            var cur = a.current_concurrency || 0;
+            var tot = a.concurrency || 0;
+            if (active) { g.current += cur; g.total += tot; }
+            g.items.push({ name: a.name, current: cur, total: tot, off: !active });
+          });
+          if (accountsData.length) renderCards(accountsData);
+        })
+        .catch(function() {});
+    }
+
     function loadWeights() {
       // 权重对所有用户可见:游客拿到公开账号权重(后端按 isPublic 过滤),管理员拿全量 + detail
       var p = localStorage.getItem('glm_pwd') || '';
@@ -3713,6 +3770,7 @@
         accountsData = data; renderCards(data);
         document.getElementById('lastUpdated').textContent = '更新于 ' + new Date().toLocaleTimeString('zh-CN');
         loadWeights();   // 拉取权重渲染徽标(游客仅公开账号,管理员全量)
+        loadCapacity();  // 拉取 sub2api 容量快照渲染胶囊(仅管理员)
         // 慢账号(智云等)后台补齐:列表接口已触发抓取,这里 force=false 会优先 join inflight
         (data || []).forEach(function(acc, i) {
           if (!acc) return;
@@ -3726,6 +3784,8 @@
     loadData();
     loadExpire();
     setInterval(function(){ loadData(); }, 5 * 60 * 1000);
+    // 容量快照轻量（后端 5s 缓存）：管理员打开页面时 30s 刷新一次胶囊
+    setInterval(function(){ if (isAdmin() && accountsData.length) loadCapacity(); }, 30 * 1000);
   </script>
 </body>
 </html>
