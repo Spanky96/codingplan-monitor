@@ -603,6 +603,7 @@
       <div class="toolbar-group">
         <span class="toolbar-label">排序</span>
         <button class="toolbar-btn active" data-sort="default" onclick="setSort('default')">默认</button>
+        <button class="toolbar-btn" data-sort="dispatch" onclick="setSort('dispatch')">调度量<span class="sort-arrow" id="dispatchArrow">▼</span></button>
         <button class="toolbar-btn" data-sort="tension" onclick="setSort('tension')">紧张度<span class="sort-arrow" id="tensionArrow">▼</span></button>
         <button class="toolbar-btn" data-sort="weight" onclick="setSort('weight')">权重<span class="sort-arrow" id="weightArrow">▼</span></button>
       </div>
@@ -2095,6 +2096,24 @@
           return a.origIdx - b.origIdx;
         });
       }
+      if (_sortMode === 'dispatch-desc' || _sortMode === 'dispatch-asc') {
+        var dasc = _sortMode === 'dispatch-asc';
+        arr.sort(function(a, b) {
+          var ca = (a.acc && capacityMap[a.acc.name]) || null;
+          var cb = (b.acc && capacityMap[b.acc.name]) || null;
+          // 无容量快照的卡（未匹配 sub2api 账号 / 游客）排到最后
+          if (!ca && !cb) return a.origIdx - b.origIdx;
+          if (!ca) return 1;
+          if (!cb) return -1;
+          // 排序规则：当前调度中 → 总负载上限 → 权重（tiebreak 逐级下沉）
+          if (ca.current !== cb.current) return dasc ? (ca.current - cb.current) : (cb.current - ca.current);
+          if (ca.total !== cb.total) return dasc ? (ca.total - cb.total) : (cb.total - ca.total);
+          var wa = weightsMap[a.acc.name] != null ? weightsMap[a.acc.name] : -1;
+          var wb = weightsMap[b.acc.name] != null ? weightsMap[b.acc.name] : -1;
+          if (wa !== wb) return dasc ? (wa - wb) : (wb - wa);
+          return a.origIdx - b.origIdx;
+        });
+      }
       return arr;
     }
 
@@ -2160,6 +2179,8 @@
         _sortMode = (_sortMode === 'tension-desc') ? 'tension-asc' : 'tension-desc';
       } else if (s === 'weight') {
         _sortMode = (_sortMode === 'weight-desc') ? 'weight-asc' : 'weight-desc';
+      } else if (s === 'dispatch') {
+        _sortMode = (_sortMode === 'dispatch-desc') ? 'dispatch-asc' : 'dispatch-desc';
       } else {
         _sortMode = 'default';
       }
@@ -2167,13 +2188,16 @@
         var key = b.dataset.sort;
         var active = (key === 'default' && _sortMode === 'default')
           || (key === 'tension' && (_sortMode === 'tension-desc' || _sortMode === 'tension-asc'))
-          || (key === 'weight' && (_sortMode === 'weight-desc' || _sortMode === 'weight-asc'));
+          || (key === 'weight' && (_sortMode === 'weight-desc' || _sortMode === 'weight-asc'))
+          || (key === 'dispatch' && (_sortMode === 'dispatch-desc' || _sortMode === 'dispatch-asc'));
         b.classList.toggle('active', active);
       });
       var arrow = document.getElementById('tensionArrow');
       if (arrow) arrow.textContent = _sortMode === 'tension-asc' ? '▲' : '▼';
       var wArrow = document.getElementById('weightArrow');
       if (wArrow) wArrow.textContent = _sortMode === 'weight-asc' ? '▲' : '▼';
+      var dArrow = document.getElementById('dispatchArrow');
+      if (dArrow) dArrow.textContent = _sortMode === 'dispatch-asc' ? '▲' : '▼';
       if (accountsData.length) renderCards(accountsData);
     }
 
