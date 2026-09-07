@@ -212,7 +212,8 @@
     .card:hover { transform: translateY(-3px); box-shadow: var(--glass-shadow-hover); border-color: var(--accent-soft-bd); }
 
     .card-header { padding: 14px 20px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center; }
-    .card-header-left { display: flex; align-items: center; gap: 8px; min-width: 0; }
+    .card-header-left { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; min-width: 0; }
+    .card-title-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
     .card-header h3 { font-size: 15px; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
     .card-header-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
     .platform-tag { font-size: 10px; padding: 2px 7px; border-radius: 5px; font-weight: 600; flex-shrink: 0; letter-spacing: .3px; }
@@ -286,18 +287,15 @@
     .weight-badge.w-low { background: var(--warn-bg); color: var(--warn); border-color: var(--warn-bd); }
     .weight-badge.w-mid { background: var(--accent-soft); color: var(--accent-3); border-color: var(--accent-soft-bd); }
     .weight-badge.w-high { background: var(--ok-bg); color: var(--ok); border-color: var(--ok-bd); }
-    /* sub2api 容量胶囊：当前调度中|总容量；悬浮显示各 sub2api 账号细分 */
-    .cap-pill { position: relative; padding: 1px 9px; border-radius: 11px; font-size: 11px; font-weight: 700; border: 1px solid var(--glass-border-soft); background: var(--glass-soft); color: var(--text-soft); white-space: nowrap; flex-shrink: 0; cursor: help; user-select: none; font-variant-numeric: tabular-nums; }
+    /* sub2api 容量胶囊：当前调度中|总容量；悬浮明细用全局 fixed 气泡（#capTip），
+       避免 .card 的 overflow:hidden 裁剪 */
+    .cap-pill { padding: 1px 9px; border-radius: 11px; font-size: 11px; font-weight: 700; border: 1px solid var(--glass-border-soft); background: var(--glass-soft); color: var(--text-soft); white-space: nowrap; flex-shrink: 0; cursor: help; user-select: none; font-variant-numeric: tabular-nums; }
     .cap-pill.busy { background: var(--warn-bg); color: var(--warn); border-color: var(--warn-bd); }
     .cap-pill.full { background: var(--danger-bg); color: var(--danger); border-color: var(--danger-bd); }
-    .cap-pill::after {
-      content: attr(data-cap-tip); position: absolute; bottom: calc(100% + 6px); left: 0; z-index: 40;
-      display: none; white-space: pre-line; text-align: left;
-      background: rgba(28, 30, 36, 0.97); color: #e8eaed; border: 1px solid rgba(255,255,255,0.12);
+    #capTip { display: none; position: fixed; z-index: 9999; white-space: pre-line; text-align: left;
+      background: rgba(28, 30, 36, 0.97); color: #e8eaed; border: 1px solid rgba(255,255,255,0.14);
       padding: 8px 11px; border-radius: 9px; font-size: 12px; font-weight: 400; line-height: 1.7;
-      min-width: 200px; max-width: 340px; box-shadow: 0 8px 24px rgba(0,0,0,0.35); pointer-events: none;
-    }
-    .cap-pill:hover::after { display: block; }
+      min-width: 200px; max-width: 340px; box-shadow: 0 8px 24px rgba(0,0,0,0.4); pointer-events: none; }
     .risk-badge { padding: 1px 8px; border-radius: 11px; font-size: 11px; font-weight: 700; background: var(--danger-bg); color: var(--danger); border: 1px solid var(--danger-bd); cursor: help; white-space: nowrap; flex-shrink: 0; }
     .reset-badge { padding: 1px 8px; border-radius: 11px; font-size: 11px; font-weight: 700; background: var(--warn-bg); color: var(--warn); border: 1px solid var(--warn-bd); cursor: help; white-space: nowrap; flex-shrink: 0; }
     .resetcard-badge { padding: 1px 8px; border-radius: 11px; font-size: 11px; font-weight: 700; background: var(--ok-bg); color: var(--ok); border: 1px solid var(--ok-bd); cursor: help; white-space: nowrap; flex-shrink: 0; }
@@ -1511,8 +1509,10 @@
       var btn = isAdmin() ? '<button class="card-refresh" id="refresh-' + i + '" onclick="refreshCard(' + i + ')" title="刷新">&#x21bb;</button>' : '';
       var pTag = platformTag(platform, acc.planType);
       var wBadge = weightBadgeHTML(acc.name, i);
+      // 容量胶囊单独一行，避免与平台标签/权重徽标/用户名挤在一起
       var capBadge = capacityBadgeHTML(acc.name);
-      var headerLeft = '<div class="card-header-left">' + pTag + wBadge + capBadge + '<h3>' + esc(displayName(acc, i)) + '</h3></div>';
+      var capRow = capBadge ? '<div class="card-title-row">' + capBadge + '</div>' : '';
+      var headerLeft = '<div class="card-header-left"><div class="card-title-row">' + pTag + wBadge + '<h3>' + esc(displayName(acc, i)) + '</h3></div>' + capRow + '</div>';
 
       // 列表秒开占位:慢账号(尤其智云)先出骨架,不挡住其它卡
       if (isUsagePending(acc)) {
@@ -3601,6 +3601,34 @@
 
     // ============ sub2api 容量胶囊(管理员) ============
 
+    // 全局容量悬浮气泡：fixed 定位挂在 body 下，卡片 overflow:hidden / hover transform
+    // 都不会裁剪或位移；卡片 innerHTML 重渲染也无损（事件委托到 document）。
+    (function () {
+      var tip = document.createElement('div');
+      tip.id = 'capTip';
+      document.body.appendChild(tip);
+      function showTip(el) {
+        var text = el.getAttribute('data-cap-tip');
+        if (!text) return;
+        tip.textContent = text;
+        tip.style.display = 'block';
+        var r = el.getBoundingClientRect();
+        var top = r.top - tip.offsetHeight - 6;
+        if (top < 8) top = r.bottom + 6;   // 上方放不下放下方
+        var left = Math.min(Math.max(8, r.left), Math.max(8, window.innerWidth - tip.offsetWidth - 8));
+        tip.style.top = top + 'px';
+        tip.style.left = left + 'px';
+      }
+      function closestCap(t) { return (t && t.closest) ? t.closest('.cap-pill') : null; }
+      document.addEventListener('mouseover', function(e) {
+        var el = closestCap(e.target);
+        if (el) showTip(el); else tip.style.display = 'none';
+      });
+      document.addEventListener('mouseout', function(e) {
+        if (closestCap(e.target)) tip.style.display = 'none';
+      });
+    })();
+
     function escCapAttr(s) {
       return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
         .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -3615,7 +3643,7 @@
       var lines = cap.items.map(function(it) {
         return it.name + '：' + it.current + '/' + it.total + (it.off ? '（停调度）' : '');
       }).join('\n');
-      return '<span class="cap-pill ' + cls + '" data-cap-tip="' + escCapAttr(lines) + '" title="sub2api 当前调度中 | 总容量">'
+      return '<span class="cap-pill ' + cls + '" data-cap-tip="' + escCapAttr(lines) + '">'
         + cap.current + '|' + cap.total + '</span>';
     }
 
