@@ -211,9 +211,9 @@
     .card::before { content: ''; position: absolute; inset: 0 0 auto 0; height: 1px; background: linear-gradient(90deg, transparent, rgba(255,255,255,.75), transparent); pointer-events: none; }
     .card:hover { transform: translateY(-3px); box-shadow: var(--glass-shadow-hover); border-color: var(--accent-soft-bd); }
 
-    .card-header { padding: 14px 20px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center; }
-    .card-header-left { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; min-width: 0; }
-    .card-title-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+    .card-header { padding: 9px 20px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center; }
+    .card-header-left { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; min-width: 0; }
+    .card-title-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
     .card-header h3 { font-size: 15px; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
     .card-header-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
     .platform-tag { font-size: 10px; padding: 2px 7px; border-radius: 5px; font-weight: 600; flex-shrink: 0; letter-spacing: .3px; }
@@ -288,8 +288,8 @@
     .weight-badge.w-mid { background: var(--accent-soft); color: var(--accent-3); border-color: var(--accent-soft-bd); }
     .weight-badge.w-high { background: var(--ok-bg); color: var(--ok); border-color: var(--ok-bd); }
     /* sub2api 容量胶囊：当前调度中|总容量；悬浮明细用全局 fixed 气泡（#capTip），
-       避免 .card 的 overflow:hidden 裁剪 */
-    .cap-pill { padding: 1px 9px; border-radius: 11px; font-size: 11px; font-weight: 700; border: 1px solid var(--glass-border-soft); background: var(--glass-soft); color: var(--text-soft); white-space: nowrap; flex-shrink: 0; cursor: help; user-select: none; font-variant-numeric: tabular-nums; }
+       避免 .card 的 overflow:hidden 裁剪。idle 态用实色边框，避免与卡片背景融为一体。 */
+    .cap-pill { padding: 1px 9px; border-radius: 11px; font-size: 11px; font-weight: 700; border: 1px solid var(--line); background: var(--glass-soft); color: var(--text-soft); white-space: nowrap; flex-shrink: 0; cursor: help; user-select: none; font-variant-numeric: tabular-nums; }
     .cap-pill.busy { background: var(--warn-bg); color: var(--warn); border-color: var(--warn-bd); }
     .cap-pill.full { background: var(--danger-bg); color: var(--danger); border-color: var(--danger-bd); }
     #capTip { display: none; position: fixed; z-index: 9999; white-space: pre-line; text-align: left;
@@ -1509,10 +1509,10 @@
       var btn = isAdmin() ? '<button class="card-refresh" id="refresh-' + i + '" onclick="refreshCard(' + i + ')" title="刷新">&#x21bb;</button>' : '';
       var pTag = platformTag(platform, acc.planType);
       var wBadge = weightBadgeHTML(acc.name, i);
-      // 容量胶囊单独一行，避免与平台标签/权重徽标/用户名挤在一起
       var capBadge = capacityBadgeHTML(acc.name);
-      var capRow = capBadge ? '<div class="card-title-row">' + capBadge + '</div>' : '';
-      var headerLeft = '<div class="card-header-left"><div class="card-title-row">' + pTag + wBadge + '<h3>' + esc(displayName(acc, i)) + '</h3></div>' + capRow + '</div>';
+      // 第一行：分类标签 + 用户名；第二行：权重徽标 + 容量胶囊（都空则不占行）
+      var metaRow = (wBadge || capBadge) ? '<div class="card-title-row">' + wBadge + capBadge + '</div>' : '';
+      var headerLeft = '<div class="card-header-left"><div class="card-title-row">' + pTag + '<h3>' + esc(displayName(acc, i)) + '</h3></div>' + metaRow + '</div>';
 
       // 列表秒开占位:慢账号(尤其智云)先出骨架,不挡住其它卡
       if (isUsagePending(acc)) {
@@ -3638,8 +3638,10 @@
     // 悬浮 data-cap-tip 逐行列出指向同一权重的 sub2api 账号（如 glm5-周慧珍 #85：2/5）。
     function capacityBadgeHTML(name) {
       var cap = capacityMap[name];
-      if (!cap || !cap.total) return '';
-      var cls = cap.current >= cap.total ? 'full' : (cap.current > 0 ? 'busy' : '');
+      // 无任何匹配的 sub2api 账号才不渲染；total=0（权重为 0 / 全部停调度）
+      // 也显示 0|0，保持 UI 一致。
+      if (!cap) return '';
+      var cls = (cap.total > 0 && cap.current >= cap.total) ? 'full' : (cap.current > 0 ? 'busy' : '');
       var lines = cap.items.map(function(it) {
         return it.name + '：' + it.current + '/' + it.total + (it.off ? '（停调度）' : '');
       }).join('\n');
