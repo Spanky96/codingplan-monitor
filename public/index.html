@@ -3965,7 +3965,10 @@
 
     function activityBlockTitle(m) {
       if (!m) return '长流式请求暂无完成日志,模型未知';
-      return m.upstream_model ? (m.model + ' → ' + m.upstream_model) : m.model;
+      // 上游如实回填相同模型(未映射直发)时不显示无信息量的箭头
+      return (m.upstream_model && m.upstream_model !== m.model)
+        ? (m.model + ' → ' + m.upstream_model)
+        : m.model;
     }
 
     function escapeHtml(s) {
@@ -4053,7 +4056,7 @@
               return;
             }
             legendModels[m.model] = true;
-            if (m.upstream_model) {
+            if (m.upstream_model && m.upstream_model !== m.model) {
               (legendUpstreams[m.model] = legendUpstreams[m.model] || {})[m.upstream_model] = true;
             }
             blocksHtml += '<span class="dp-block" style="background:' + colorMap[m.model] + '" title="' + escapeHtml(activityBlockTitle(m)) + '"></span>';
