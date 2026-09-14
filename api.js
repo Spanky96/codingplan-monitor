@@ -716,12 +716,15 @@ async function fetchSub2apiUsage(account, index) {
             stats = (statsJson && statsJson.data) || null;
         } catch (statsErr) { /* 无用量统计接口时忽略 */ }
         var subs = (subsJson && Array.isArray(subsJson.data)) ? subsJson.data : [];
-        // 当前订阅:active 优先,否则按 expires_at 取最近一个(已过期仍展示用量供参考)
+        // 当前订阅:active 优先;已过期的仅 3 天内保留展示,超过则视为无订阅(卡片以余额用量为主)
         var current = subs.filter(function(s) { return s && s.status === 'active'; })[0] || null;
-        if (!current && subs.length) {
-            current = subs.slice().sort(function(a, b) {
-                return new Date(b.expires_at || 0) - new Date(a.expires_at || 0);
-            })[0];
+        if (!current) {
+            current = subs.filter(function(s) {
+                if (!s || !s.expires_at) return false;
+                return (Date.now() - new Date(s.expires_at).getTime()) <= 3 * 86400000;
+            }).sort(function(a, b) {
+                return new Date(b.expires_at) - new Date(a.expires_at);
+            })[0] || null;
         }
         var result = {
             index: index,
