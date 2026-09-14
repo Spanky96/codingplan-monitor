@@ -260,7 +260,11 @@ function yescodeWindows(d) {
 // 新数据形状 {me, subscriptions, current}(current 为后端选好的当前订阅);旧 huoli 缓存为裸数组,取 [0]。
 // 余额兜底:me.balance > 0 时订阅额度耗尽不清零;过期订阅的窗口不再作为约束(账号已转按量付费)。
 function sub2apiWindows(data) {
-    var sub = Array.isArray(data) ? data[0] : ((data && data.current) || ((data && data.subscriptions) || [])[0]);
+    // current 显式为 null(过期超 3 天已隐藏)时不回退 subs[0];仅旧缓存缺 current 键才回退
+    var sub;
+    if (Array.isArray(data)) sub = data[0];
+    else if (data && ('current' in data)) sub = data.current || null;
+    else sub = ((data && data.subscriptions) || [])[0];
     var balance = (data && data.me && typeof data.me.balance === 'number') ? data.me.balance : null;
     var hasBalance = (balance > 0);
     if (!sub) return hasBalance ? [balanceWindow(balance)] : [];

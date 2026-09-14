@@ -1358,12 +1358,14 @@
       return Math.max(dPct, w, m);
     }
 
-    // sub2api 数据解包:新形状 {me, subscriptions, current, stats};旧 huoli 缓存为裸数组
+    // sub2api 数据解包:新形状 {me, subscriptions, current, stats};旧 huoli 缓存为裸数组。
+    // 注意 current 可能为 null(过期超 3 天已隐藏)——仅在旧缓存缺 current 键时才回退 subs[0]
     function sub2apiUnpack(d) {
       if (Array.isArray(d)) return { me: null, subs: d, sub: d[0] || null, stats: null };
       d = d || {};
       var subs = d.subscriptions || [];
-      return { me: d.me || null, subs: subs, sub: d.current || subs[0] || null, stats: d.stats || null };
+      var sub = ('current' in d) ? (d.current || null) : (subs[0] || null);
+      return { me: d.me || null, subs: subs, sub: sub, stats: d.stats || null };
     }
 
     // token 数格式化:1234567 → 1.2M
