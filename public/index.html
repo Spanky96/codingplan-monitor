@@ -2426,6 +2426,14 @@
           + '<span class="info-label">实时速率</span><span class="info-value">RPM ' + (stD.rpm || 0) + ' · TPM ' + fmtTokens(stD.tpm) + '</span>'
           + '<span class="info-label">平均耗时</span><span class="info-value">' + (stD.average_duration_ms != null ? Math.round(stD.average_duration_ms) + ' ms' : '-') + '</span>'
           + '</div></div>';
+        var byPlat = (stD.by_platform || []).filter(function(p) { return p && (p.total_requests || p.today_requests); });
+        if (byPlat.length) {
+          html += '<div class="info-section"><div class="info-section-title">分平台统计</div><div class="info-grid">'
+            + byPlat.map(function(p) {
+                return '<span class="info-label">' + esc(p.platform) + '</span><span class="info-value" style="font-size:12px">累计 ' + (p.total_requests || 0) + ' 次 · ' + fmtTokens(p.total_tokens) + ' · 实付 $' + (+p.total_actual_cost || 0).toFixed(2) + '<br>今日 ' + (p.today_requests || 0) + ' 次 · ' + fmtTokens(p.today_tokens) + ' · 实付 $' + (+p.today_actual_cost || 0).toFixed(2) + '</span>';
+              }).join('')
+            + '</div></div>';
+        }
       }
 
       if (sub) {

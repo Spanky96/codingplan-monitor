@@ -712,7 +712,7 @@ async function fetchSub2apiUsage(account, index) {
         // usage/dashboard/stats = 今日/累计 token 与费用;旧版部署可能无此接口,软失败不影响主数据
         var stats = null;
         try {
-            var statsJson = await sub2apiGet(account, index, baseUrl, '/api/v1/usage/dashboard/stats', headers);
+            var statsJson = await sub2apiGet(account, index, baseUrl, '/api/v1/usage/dashboard/stats?timezone=Asia%2FShanghai', headers);
             stats = (statsJson && statsJson.data) || null;
         } catch (statsErr) { /* 无用量统计接口时忽略 */ }
         var subs = (subsJson && Array.isArray(subsJson.data)) ? subsJson.data : [];
