@@ -4015,8 +4015,8 @@
           var models = u.recent_models || [];
           if (models.length) {
             models.slice(0, 4).forEach(function(m) {
-              chips += '<span class="dp-model-chip" title="' + escapeHtml(m.model) + ' ×' + m.count + '">'
-                + escapeHtml(m.model) + (m.count > 1 ? ' <b>×' + m.count + '</b>' : '') + '</span>';
+              chips += '<span class="dp-model-chip" title="' + escapeHtml(m.model) + ' · 近2分钟完成 ' + m.count + ' 次">'
+                + escapeHtml(m.model) + '</span>';
             });
             if (models.length > 4) chips += '<span class="dp-model-chip">+' + (models.length - 4) + '</span>';
           } else if ((u.current_in_use || 0) > 0) {
