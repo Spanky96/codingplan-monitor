@@ -3224,7 +3224,9 @@
         + '<div class="form-group"><label class="form-label" style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="f_team_edition"' + (a.teamEdition ? ' checked' : '') + ' style="width:16px;height:16px;cursor:pointer"> 团队版（接口 URL 加 type=2）</label></div>'
         + '</div>'
         + '<div id="f_yescode_fields" style="display:' + yesDisp + '">'
-        + '<div class="form-group"><label class="form-label">Cookie</label><textarea class="form-input" id="f_cookie" placeholder="完整 Cookie，用于访问 co.yes.vg">' + esc(a.cookie||'') + '</textarea></div>'
+        + '<div class="form-group"><label class="form-label">Cookie（可不填）</label><textarea class="form-input" id="f_cookie" placeholder="完整 Cookie，用于访问 co.yes.vg；官方有效期已缩短为 24h，配置账密后会自动登录刷新">' + esc(a.cookie||'') + '</textarea></div>'
+        + '<div class="form-row"><div class="form-group"><label class="form-label">登录账号（推荐）</label><input class="form-input" id="f_yescode_username" placeholder="邮箱/用户名，Cookie 失效时自动登录" value="' + esc(a.yescode_username||'') + '" autocomplete="off"></div>'
+        + '<div class="form-group"><label class="form-label">登录密码（推荐）</label><input class="form-input" type="password" id="f_yescode_password" placeholder="与账号同时填写才启用自动重登" value="' + esc(a.yescode_password||'') + '" autocomplete="new-password"></div></div>'
         + '</div>'
         + '<div id="f_huoli_fields" style="display:' + huoliDisp + '">'
         + '<div class="form-group"><label class="form-label">Authorization Token</label><textarea class="form-input" id="f_huoli_auth" placeholder="Bearer eyJ...，用于访问 huolilink.com">' + esc(a.authorization||'') + '</textarea></div>'
@@ -3338,7 +3340,13 @@
         onPlatformChange();
         var cookie = extractCookie(t);
         if (cookie) { document.getElementById('f_cookie').value = cookie; }
-        else { alert('未能解析出 cookie。\n\n请在浏览器 DevTools Network 面板右键请求 →\nCopy → Copy as Node.js fetch（或 Copy as cURL），\n这两种格式才会包含 Cookie。'); }
+        // 登录接口 fetch 可解析出 username/password（官方 Cookie 有效期仅 24h，推荐直接配账密自动续期）
+        var ycBodyMatch = t.match(/"body"\s*:\s*"({[^"]+})"/);
+        if (ycBodyMatch) { try { var yb = JSON.parse(ycBodyMatch[1].replace(/\\"/g,'"').replace(/\\\\/g,'\\')); if (yb.username) document.getElementById('f_yescode_username').value = yb.username; if (yb.password) document.getElementById('f_yescode_password').value = yb.password; } catch(e){} }
+        if (!ycBodyMatch) { try { var yb2 = t.match(/"username"\s*:\s*"([^"]+)"[^}]*"password"\s*:\s*"([^"]+)"/); if (yb2) { document.getElementById('f_yescode_username').value = yb2[1]; document.getElementById('f_yescode_password').value = yb2[2]; } } catch(e){} }
+        if (!cookie && !document.getElementById('f_yescode_username').value) {
+          alert('未能解析出 cookie 或登录账密。\n\n配置账密：复制登录接口（auth/login）请求 → Copy as fetch 粘贴；\n配置 Cookie：DevTools Network 右键请求 → Copy as cURL（fetch 格式不含 Cookie）。');
+        }
         return;
       }
 
@@ -3412,7 +3420,15 @@
       };
       if (platform === 'yescode') {
         body.cookie = document.getElementById('f_cookie').value.trim();
-        if (!body.name || !body.cookie) { alert('账号名称和 Cookie 不能为空'); return; }
+        body.yescode_username = document.getElementById('f_yescode_username').value.trim();
+        body.yescode_password = document.getElementById('f_yescode_password').value;
+        if (!body.name) { alert('账号名称不能为空'); return; }
+        // 官方 Cookie 有效期仅 24h：Cookie 与账密至少配一样，配了账密即可自动续期
+        if (!body.cookie && !(body.yescode_username && body.yescode_password)) { alert('Cookie 与 登录账号/密码 至少填写一项；推荐填账密，Cookie 失效后自动重登刷新'); return; }
+        // 账密需成对：只填其一也允许保存，但不会触发自动重登
+        if ((body.yescode_username && !body.yescode_password) || (!body.yescode_username && body.yescode_password)) {
+          if (!confirm('登录账号/密码需同时填写才会在 Cookie 失效时自动重登。当前只填了一项，仍要保存吗？')) return;
+        }
       } else if (platform === 'huoli') {
         body.authorization = document.getElementById('f_huoli_auth').value.trim();
         body.huoli_email = document.getElementById('f_huoli_email').value.trim();
