@@ -252,8 +252,16 @@
     .rank-name { font-size: 12.5px; font-weight: 550; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
     .rank-val { font-size: 12px; font-weight: 650; color: var(--text); margin-left: auto; white-space: nowrap; font-variant-numeric: tabular-nums; }
     .rank-cost { font-size: 10.5px; color: var(--text-faint); margin-left: 6px; font-weight: 400; white-space: nowrap; }
-    .rank-bar { height: 4px; border-radius: 2px; background: var(--glass-soft); margin-top: 5px; overflow: hidden; }
-    .rank-bar-fill { height: 100%; border-radius: 2px; background: var(--accent); opacity: .75; }
+    .rank-bar { display: flex; gap: 2px; height: 5px; margin-top: 5px; }
+    .rank-bar-seg { height: 100%; border-radius: 2px; min-width: 2px; flex-shrink: 0; }
+    .rank-ext { font-size: 10px; color: var(--text-mute); background: var(--glass-soft); border: 1px solid var(--glass-border-soft);
+      border-radius: 7px; padding: 1px 5px; margin-left: 5px; font-weight: 400; white-space: nowrap; }
+    .activity-refresh { margin-left: auto; border: 1px solid var(--glass-border-soft); background: var(--glass-soft); color: var(--text-mute);
+      width: 20px; height: 20px; border-radius: 6px; cursor: pointer; font-size: 12px; line-height: 1;
+      display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .activity-refresh:hover { color: var(--text); }
+    .activity-refresh.spinning { animation: activity-spin .8s linear infinite; }
+    @keyframes activity-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
     .activity-more { display: block; width: 100%; margin-top: 10px; padding: 6px 0; border: 1px solid var(--glass-border-soft);
       border-radius: 9px; background: var(--glass-soft); color: var(--text-soft); font-size: 12px; cursor: pointer; }
     .activity-more:hover { color: var(--text); border-color: var(--accent-soft-bd); }
@@ -689,7 +697,9 @@
             <div class="activity-sub">实时调度 <span class="activity-sub-extra" id="activityDispatchSummary"></span></div>
             <div id="activityDispatchList"></div>
             <div class="dp-legend" id="activityLegend" style="display:none"></div>
-            <div class="activity-sub">今日 Token <span class="activity-sub-extra" id="activityTokenSummary"></span></div>
+            <div class="activity-sub">今日 Token <span class="activity-sub-extra" id="activityTokenSummary"></span>
+              <button class="activity-refresh" id="activityUsageRefreshBtn" onclick="loadActivityUsage(true)" title="立即刷新榜单(常规 5 分钟一次)">&#x21bb;</button>
+            </div>
             <div id="activityRankList"></div>
             <button class="activity-more" id="activityMoreBtn" onclick="toggleActivityRankExpand()" style="display:none"></button>
           </div>
@@ -788,8 +798,10 @@
     var weightsMap = {};        // name → 最终权重(管理员,卡片左上角徽标)
     var weightsDetail = {};     // name → 明细(base/strategy/configValue/defaultWeight)
     var capacityMap = {};       // name → {current,total,items[]} sub2api 容量聚合(按权重键)
-    var activityData = null;    // 中转站用户实时活动快照(管理员右侧面板)
-    var _activityError = false; // 最近一次活动快照拉取是否失败(失败保留旧数据展示)
+    var activityDispatchData = null;  // 中转站调度快照(占用/排队 + 近跑模型,15s 轮询)
+    var activityUsageData = null;     // 中转站今日用量榜单(站内+外部+模型明细,5min 轮询)
+    var _activityDispatchError = false;   // 最近一次调度快照拉取失败(保留旧数据)
+    var _activityUsageError = false;      // 最近一次榜单拉取失败
     var _activityRankExpanded = false;   // 今日 Token 排行是否展开全部
     var _activityCollapsed = localStorage.getItem('usage_activity_collapsed') === 'true';
     var _weightEditIndex = -1;
@@ -3264,7 +3276,8 @@
             var next = _pendingAuth;
             _pendingAuth = null;
             activityApplyVisibility();   // 登录成功后显示实时活动面板
-            loadActivity();
+            loadActivityDispatch();
+            loadActivityUsage();
             if (next) { next(); }
           } else {
             document.getElementById('pwdError').textContent = '密码错误';
@@ -3922,7 +3935,7 @@
       _activityCollapsed = !_activityCollapsed;
       localStorage.setItem('usage_activity_collapsed', _activityCollapsed ? 'true' : 'false');
       activityApplyVisibility();
-      if (!_activityCollapsed) loadActivity();   // 展开立即刷新一次
+      if (!_activityCollapsed) loadActivityDispatch();   // 展开立即刷新一次
     }
 
     function toggleActivityRankExpand() {
@@ -3939,25 +3952,50 @@
     var ACTIVITY_MODEL_COLORS = ['#3b5bdb', '#e03131', '#9c36b5', '#0c8599', '#2f9e44', '#e67700', '#d6336c', '#1971c2'];
     var ACTIVITY_MODEL_GRAY = '#94a3b8';
 
-    // 按模型名固定顺序分配颜色(排序后取色,刷新间稳定,不随出现顺序漂移)
-    function activityModelColorMap(models) {
+    // 色块颜色 = 实际调用的模型(upstream 优先,未映射回退请求模型):
+    // glm-5.3 直连与 glm-5.3 → glm-5.3-flash 转发是两个模型,两种颜色
+    function activityEffectiveModel(m) {
+      return m.upstream_model || m.model;
+    }
+
+    // 全局模型集 = 调度实际模型 ∪ 榜单模型明细,按模型名排序后固定取色,
+    // 同一模型在色块/图例/堆叠条中颜色始终一致
+    function activityColorMap() {
+      var models = {};
+      (((activityDispatchData || {}).users) || []).forEach(function(u) {
+        (u.recent_models || []).forEach(function(m) { if (m && m.model) models[activityEffectiveModel(m)] = true; });
+      });
+      (((activityUsageData || {}).users) || []).forEach(function(u) {
+        (u.models || []).forEach(function(m) { if (m && m.model) models[m.model] = true; });
+      });
       var map = {};
-      models.slice().sort().forEach(function(m, i) {
+      Object.keys(models).sort().forEach(function(m, i) {
         map[m] = i < ACTIVITY_MODEL_COLORS.length ? ACTIVITY_MODEL_COLORS[i] : ACTIVITY_MODEL_GRAY;
       });
       return map;
     }
 
-    // 把「近2分钟完成请求的 (模型,次数)」近似摊到当前占用的调度格子上:
-    // 按最近活跃优先取满 current_in_use 格;近期无完成日志的格子标记未知(长流式)。
+    // 把「窗口内完成请求的 (模型,次数)」近似摊到当前占用的调度格子上:
+    // pass1 不同实际模型各占一格(近期优先),pass2 按完成次数补足剩余格子;
+    // 窗口内无完成日志的格子为未知(灰)。
     function activityBlocksFor(u) {
       var n = u.current_in_use || 0;
       if (n <= 0) return [];
-      var slots = [];
-      (u.recent_models || []).forEach(function(m) {
-        if (slots.length >= n || !m.model) return;
-        var take = Math.min(Math.max(m.count || 1, 1), n - slots.length);
-        for (var i = 0; i < take; i++) slots.push(m);
+      var pairs = (u.recent_models || []).filter(function(m) { return m && m.model; });
+      var slots = [], seenEff = {};
+      pairs.forEach(function(m) {
+        if (slots.length >= n) return;
+        var eff = activityEffectiveModel(m);
+        if (seenEff[eff]) return;
+        seenEff[eff] = true;
+        slots.push(m);
+      });
+      pairs.forEach(function(m) {
+        if (slots.length >= n) return;
+        var used = 0;
+        slots.forEach(function(s) { if (s === m) used++; });
+        var extra = Math.min(Math.max((m.count || 1) - used, 0), n - slots.length);
+        for (var i = 0; i < extra; i++) slots.push(m);
       });
       while (slots.length < n) slots.push(null);
       return slots;
@@ -3965,10 +4003,10 @@
 
     function activityBlockTitle(m) {
       if (!m) return '长流式请求暂无完成日志,模型未知';
-      // 上游如实回填相同模型(未映射直发)时不显示无信息量的箭头
+      // 发生转发时悬浮展示「请求模型 → 实际模型」,否则只展示模型名
       return (m.upstream_model && m.upstream_model !== m.model)
         ? (m.model + ' → ' + m.upstream_model)
-        : m.model;
+        : activityEffectiveModel(m);
     }
 
     function escapeHtml(s) {
@@ -3977,144 +4015,192 @@
       });
     }
 
-    function loadActivity() {
+    // ============ 数据加载(调度 15s 高频 / 榜单 5min 低频 + 手动) ============
+
+    function loadActivityDispatch() {
       var p = localStorage.getItem('glm_pwd') || '';
-      if (!p) { activityData = null; return; }
+      if (!p) { activityDispatchData = null; return; }
       fetch(API_PREFIX + '/api/relay/activity?password=' + encodeURIComponent(p))
         .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
         .then(function(data) {
-          activityData = data; _activityError = false;
-          renderActivityPanel();
+          activityDispatchData = data; _activityDispatchError = false;
+          renderActivityDispatch();
         })
         .catch(function() {
-          _activityError = true;
-          renderActivityPanel();   // 保留旧数据 + 标红时间戳
+          _activityDispatchError = true;
+          renderActivityDispatch();   // 保留旧数据 + 标红时间戳
         });
     }
 
+    function loadActivityUsage(manual) {
+      var p = localStorage.getItem('glm_pwd') || '';
+      if (!p) { activityUsageData = null; return; }
+      var btn = document.getElementById('activityUsageRefreshBtn');
+      if (manual && btn) btn.classList.add('spinning');
+      fetch(API_PREFIX + '/api/relay/usage?password=' + encodeURIComponent(p) + (manual ? '&force=1' : ''))
+        .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+        .then(function(data) {
+          activityUsageData = data; _activityUsageError = false;
+          renderActivityUsage();
+        })
+        .catch(function() {
+          _activityUsageError = true;
+          renderActivityUsage();
+        })
+        .finally(function() { if (btn) btn.classList.remove('spinning'); });
+    }
+
     function renderActivityPanel() {
+      renderActivityDispatch();
+      renderActivityUsage();
+    }
+
+    function renderActivityDispatch() {
       if (!isAdmin()) return;
       var dispatchList = document.getElementById('activityDispatchList');
-      var rankList = document.getElementById('activityRankList');
+      var legend = document.getElementById('activityLegend');
       var timeEl = document.getElementById('activityTime');
-      if (!dispatchList || !rankList) return;
+      var summaryEl = document.getElementById('activityDispatchSummary');
+      if (!dispatchList || !legend) return;
 
-      timeEl.classList.toggle('stale', !!_activityError);
-      timeEl.title = _activityError ? '拉取失败,展示最近一次数据' : '';
+      timeEl.classList.toggle('stale', !!_activityDispatchError);
+      timeEl.title = _activityDispatchError ? '拉取失败,展示最近一次数据' : '';
 
-      if (!activityData) {
-        dispatchList.innerHTML = _activityError
+      if (!activityDispatchData) {
+        dispatchList.innerHTML = _activityDispatchError
           ? '<div class="activity-error">中转站连接失败,稍后自动重试</div>'
           : '<div class="activity-empty">加载中...</div>';
-        rankList.innerHTML = '';
-        document.getElementById('activityDispatchSummary').textContent = '';
-        document.getElementById('activityTokenSummary').textContent = '';
-        document.getElementById('activityMoreBtn').style.display = 'none';
+        legend.style.display = 'none';
+        summaryEl.textContent = '';
         return;
       }
-      if (activityData.generated_at) {
-        timeEl.textContent = new Date(activityData.generated_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      if (activityDispatchData.generated_at) {
+        timeEl.textContent = new Date(activityDispatchData.generated_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
       }
-      var users = activityData.users || [];
+      var users = activityDispatchData.users || [];   // 后端已按占用降序
 
-      // ---- 实时调度:有占用/排队的用户,占用降序 ----
-      var dispatchUsers = [];
       var totalInUse = 0, totalWait = 0;
       users.forEach(function(u) {
-        var inUse = u.current_in_use || 0, wait = u.waiting_in_queue || 0;
-        if (inUse <= 0 && wait <= 0) return;
-        totalInUse += inUse; totalWait += wait;
-        dispatchUsers.push(u);
+        totalInUse += u.current_in_use || 0;
+        totalWait += u.waiting_in_queue || 0;
       });
-      dispatchUsers.sort(function(a, b) {
-        return (b.current_in_use - a.current_in_use) || (b.waiting_in_queue - a.waiting_in_queue);
-      });
-      document.getElementById('activityDispatchSummary').textContent =
-        '总调度 ' + totalInUse + (totalWait > 0 ? ' · 排队 ' + totalWait : '');
-      if (!dispatchUsers.length) {
+      summaryEl.textContent = users.length
+        ? ('总调度 ' + totalInUse + (totalWait > 0 ? ' · 排队 ' + totalWait : ''))
+        : '';
+
+      if (!users.length) {
         dispatchList.innerHTML = '<div class="activity-empty">当前没有在跑的调度</div>';
-        document.getElementById('activityLegend').style.display = 'none';
-      } else {
-        // 收集出现过的模型,统一分配颜色(排序固定,图例与色块一致)
-        var seenModels = {};
-        dispatchUsers.forEach(function(u) {
-          activityBlocksFor(u).forEach(function(m) { if (m) seenModels[m.model] = true; });
-        });
-        var colorMap = activityModelColorMap(Object.keys(seenModels));
-
-        var html = '';
-        var legendModels = {};   // model → Set(upstream)
-        var legendUpstreams = {};
-        var hasUnknown = false;
-        dispatchUsers.forEach(function(u) {
-          var blocks = activityBlocksFor(u);
-          var blocksHtml = '';
-          blocks.forEach(function(m) {
-            if (!m) {
-              hasUnknown = true;
-              blocksHtml += '<span class="dp-block unknown" title="' + escapeHtml(activityBlockTitle(null)) + '"></span>';
-              return;
-            }
-            legendModels[m.model] = true;
-            if (m.upstream_model && m.upstream_model !== m.model) {
-              (legendUpstreams[m.model] = legendUpstreams[m.model] || {})[m.upstream_model] = true;
-            }
-            blocksHtml += '<span class="dp-block" style="background:' + colorMap[m.model] + '" title="' + escapeHtml(activityBlockTitle(m)) + '"></span>';
-          });
-          html += '<div class="dp-row">'
-            + '<span class="dp-name" title="' + escapeHtml(activityDisplayName(u)) + '">' + escapeHtml(activityDisplayName(u)) + '</span>'
-            + '<span class="dp-blocks">' + blocksHtml + '</span>'
-            + ((u.waiting_in_queue || 0) > 0 ? '<span class="dp-wait" title="排队中请求">等 ' + u.waiting_in_queue + '</span>' : '')
-            + '</div>';
-        });
-        dispatchList.innerHTML = html;
-
-        // 图例:色块 → 模型;该模型全部转发到同一上游时直接标注映射
-        var legend = document.getElementById('activityLegend');
-        var legendHtml = '';
-        Object.keys(legendModels).sort().forEach(function(model) {
-          var ups = legendUpstreams[model] ? Object.keys(legendUpstreams[model]) : [];
-          var label = model + (ups.length === 1 ? ' → ' + ups[0] : '');
-          legendHtml += '<span class="dp-legend-item" title="' + escapeHtml(label) + '">'
-            + '<i style="background:' + colorMap[model] + '"></i>'
-            + '<span>' + escapeHtml(label) + '</span></span>';
-        });
-        if (hasUnknown) {
-          legendHtml += '<span class="dp-legend-item" title="长流式请求暂无完成日志,模型未知">'
-            + '<i style="background:' + ACTIVITY_MODEL_GRAY + '"></i><span>未知</span></span>';
-        }
-        legend.innerHTML = legendHtml;
-        legend.style.display = legendHtml ? '' : 'none';
+        legend.style.display = 'none';
+        return;
       }
 
-      // ---- 今日 Token 排行:默认前 5,可展开全部 ----
-      var rankUsers = users.filter(function(u) { return u.today && (u.today.total_tokens || 0) > 0; });
-      rankUsers.sort(function(a, b) { return (b.today.total_tokens || 0) - (a.today.total_tokens || 0); });
-      document.getElementById('activityTokenSummary').textContent = rankUsers.length ? rankUsers.length + ' 人有消费' : '';
-      if (!rankUsers.length) {
-        rankList.innerHTML = '<div class="activity-empty">今日暂无用量</div>';
-      } else {
-        var maxTok = rankUsers[0].today.total_tokens || 1;
-        var shown = _activityRankExpanded ? rankUsers : rankUsers.slice(0, 5);
-        var rhtml = '';
-        shown.forEach(function(u, i) {
-          var pct = Math.max(3, Math.round((u.today.total_tokens / maxTok) * 100));
-          rhtml += '<div class="rank-row">'
-            + '<div class="rank-line">'
-            + '<span class="rank-no' + (i < 3 ? ' top' : '') + '">' + (i + 1) + '</span>'
-            + '<span class="rank-name" title="' + escapeHtml(activityDisplayName(u)) + '">' + escapeHtml(activityDisplayName(u)) + '</span>'
-            + '<span class="rank-val">' + fmtTokens(u.today.total_tokens)
-            + '<span class="rank-cost">$' + (u.today.actual_cost || 0).toFixed(2) + '</span></span>'
-            + '</div>'
-            + '<div class="rank-bar"><div class="rank-bar-fill" style="width:' + pct + '%"></div></div>'
-            + '</div>';
+      var colorMap = activityColorMap();
+      var html = '';
+      var legendModels = {};
+      var hasUnknown = false;
+      users.forEach(function(u) {
+        var blocksHtml = '';
+        activityBlocksFor(u).forEach(function(m) {
+          if (!m) {
+            hasUnknown = true;
+            blocksHtml += '<span class="dp-block unknown" data-tooltip="' + escapeHtml(activityBlockTitle(null)) + '"></span>';
+            return;
+          }
+          var eff = activityEffectiveModel(m);
+          legendModels[eff] = true;
+          blocksHtml += '<span class="dp-block" style="background:' + colorMap[eff] + '" data-tooltip="' + escapeHtml(activityBlockTitle(m)) + '"></span>';
         });
-        rankList.innerHTML = rhtml;
+        html += '<div class="dp-row">'
+          + '<span class="dp-name" data-tooltip="' + escapeHtml(activityDisplayName(u)) + '">' + escapeHtml(activityDisplayName(u)) + '</span>'
+          + '<span class="dp-blocks">' + blocksHtml + '</span>'
+          + ((u.waiting_in_queue || 0) > 0 ? '<span class="dp-wait" data-tooltip="排队中请求">等 ' + u.waiting_in_queue + '</span>' : '')
+          + '</div>';
+      });
+      dispatchList.innerHTML = html;
+
+      // 图例:纯色块 + 实际模型名(无悬浮交互)
+      var legendHtml = '';
+      Object.keys(legendModels).sort().forEach(function(model) {
+        legendHtml += '<span class="dp-legend-item"><i style="background:' + colorMap[model] + '"></i><span>' + escapeHtml(model) + '</span></span>';
+      });
+      if (hasUnknown) {
+        legendHtml += '<span class="dp-legend-item"><i style="background:' + ACTIVITY_MODEL_GRAY + '"></i><span>未知</span></span>';
       }
+      legend.innerHTML = legendHtml;
+      legend.style.display = legendHtml ? '' : 'none';
+    }
+
+    function renderActivityUsage() {
+      if (!isAdmin()) return;
+      var rankList = document.getElementById('activityRankList');
+      var summaryEl = document.getElementById('activityTokenSummary');
       var moreBtn = document.getElementById('activityMoreBtn');
-      if (rankUsers.length > 5) {
+      if (!rankList) return;
+
+      if (!activityUsageData) {
+        rankList.innerHTML = _activityUsageError
+          ? '<div class="activity-error">榜单拉取失败,可点右上 ↻ 重试</div>'
+          : '<div class="activity-empty">加载中...</div>';
+        summaryEl.textContent = '';
+        moreBtn.style.display = 'none';
+        return;
+      }
+
+      var users = (activityUsageData.users || []).filter(function(u) { return u.today && (u.today.total_tokens || 0) > 0; });
+      users.sort(function(a, b) { return (b.today.total_tokens || 0) - (a.today.total_tokens || 0); });
+
+      var hasExternal = users.some(function(u) { return (u.today.external_tokens || 0) > 0; });
+      summaryEl.textContent = users.length
+        ? (users.length + ' 人有消费' + (hasExternal ? ' · 含外部' : ''))
+        : '';
+
+      if (!users.length) {
+        rankList.innerHTML = '<div class="activity-empty">今日暂无用量</div>';
+        moreBtn.style.display = 'none';
+        return;
+      }
+
+      var colorMap = activityColorMap();
+      var maxTok = users[0].today.total_tokens || 1;
+      var shown = _activityRankExpanded ? users : users.slice(0, 5);
+      var rhtml = '';
+      shown.forEach(function(u, i) {
+        var segs = (u.models || []).filter(function(m) { return m && m.model && (m.total_tokens || 0) > 0; });
+        // 模型过多时保留前 6 段,其余合并为浅灰「其他」
+        var restTokens = 0;
+        if (segs.length > 6) {
+          for (var k = 6; k < segs.length; k++) restTokens += segs[k].total_tokens || 0;
+          segs = segs.slice(0, 6);
+        }
+        var segsHtml = '';
+        segs.forEach(function(m) {
+          var pct = Math.max(1.5, Math.round((m.total_tokens / maxTok) * 1000) / 10);
+          segsHtml += '<span class="rank-bar-seg" style="width:' + Math.min(pct, 100) + '%;background:' + colorMap[m.model] + '"'
+            + ' data-tooltip="' + escapeHtml(m.model) + ' ' + fmtTokens(m.total_tokens) + '"></span>';
+        });
+        if (restTokens > 0) {
+          var restPct = Math.max(1.5, Math.round((restTokens / maxTok) * 1000) / 10);
+          segsHtml += '<span class="rank-bar-seg" style="width:' + Math.min(restPct, 100) + '%;background:' + ACTIVITY_MODEL_GRAY + '"'
+            + ' data-tooltip="其他模型 ' + fmtTokens(restTokens) + '"></span>';
+        }
+        var extBadge = (u.today.external_tokens || 0) > 0
+          ? '<span class="rank-ext" data-tooltip="含外部资源用量 ' + fmtTokens(u.today.external_tokens) + '">外 ' + fmtTokens(u.today.external_tokens) + '</span>'
+          : '';
+        rhtml += '<div class="rank-row">'
+          + '<div class="rank-line">'
+          + '<span class="rank-no' + (i < 3 ? ' top' : '') + '">' + (i + 1) + '</span>'
+          + '<span class="rank-name" data-tooltip="' + escapeHtml(activityDisplayName(u)) + '">' + escapeHtml(activityDisplayName(u)) + '</span>' + extBadge
+          + '<span class="rank-val">' + fmtTokens(u.today.total_tokens)
+          + '<span class="rank-cost">$' + (u.today.actual_cost || 0).toFixed(2) + '</span></span>'
+          + '</div>'
+          + '<div class="rank-bar">' + segsHtml + '</div>'
+          + '</div>';
+      });
+      rankList.innerHTML = rhtml;
+
+      if (users.length > 5) {
         moreBtn.style.display = '';
-        moreBtn.textContent = _activityRankExpanded ? '收起' : '更多 ' + (rankUsers.length - 5) + ' 人';
+        moreBtn.textContent = _activityRankExpanded ? '收起' : '更多 ' + (users.length - 5) + ' 人';
       } else {
         moreBtn.style.display = 'none';
       }
@@ -4264,12 +4350,17 @@
     setInterval(function(){ loadData(); }, 5 * 60 * 1000);
     // 容量快照轻量（后端 5s 缓存）：管理员打开页面时 30s 刷新一次胶囊
     setInterval(function(){ if (isAdmin() && accountsData.length) loadCapacity(); }, 30 * 1000);
-    // 实时活动面板（后端 3s 缓存）：管理员且面板展开时 5s 轮询;页面隐藏时暂停
+    // 实时活动面板:调度快照 15s 高频轮询(后端 10s 缓存);
+    // 今日榜单 5 分钟一次 + 标题行 ↻ 手动刷新;页面隐藏时暂停
     activityApplyVisibility();
-    if (isAdmin()) loadActivity();
-    setInterval(function(){ if (isAdmin() && !_activityCollapsed && !document.hidden) loadActivity(); }, 5 * 1000);
+    if (isAdmin()) { loadActivityDispatch(); loadActivityUsage(); }
+    setInterval(function(){ if (isAdmin() && !_activityCollapsed && !document.hidden) loadActivityDispatch(); }, 15 * 1000);
+    setInterval(function(){ if (isAdmin() && !document.hidden) loadActivityUsage(); }, 5 * 60 * 1000);
     document.addEventListener('visibilitychange', function() {
-      if (!document.hidden && isAdmin() && !_activityCollapsed) loadActivity();
+      if (!document.hidden && isAdmin()) {
+        if (!_activityCollapsed) loadActivityDispatch();
+        loadActivityUsage();
+      }
     });
   </script>
 </body>

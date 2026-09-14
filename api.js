@@ -1573,21 +1573,24 @@ module.exports = function(app) {
         } catch (err) { res.status(500).json({ error: err.message }); }
     });
 
-    // ---- 用户实时活动快照（代理拉取 + 3s 内存缓存）----
-    // 供监控页管理员右侧「实时调度 / 今日 Token」面板:聚合中转站全部用户的
-    // 今日用量、实时占用调度数与近跑模型。数据来自中转站内网开放端点
-    // /api/user-activity-snapshot(可用 RELAY_SNAPSHOT_TOKEN 开启门禁)。
+    // ---- 用户实时活动快照(代理拉取 + 内存缓存,调度/用量两个端点)----
+    // 调度快照(高频,15s 轮询):当前有占用/排队用户 + 近跑模型;
+    // 用量榜单(低频,5 分钟轮询 + 手动刷新):今日站内+外部合并 + 按模型明细。
+    // 数据来自中转站内网开放端点(可用 RELAY_SNAPSHOT_TOKEN 开启门禁)。
     var _relayActivityCache = { at: 0, data: null };
+    function relaySnapshotUrl(path) {
+        var url = SUB2API_BASE.replace(/\/+$/, '') + path;
+        if (RELAY_SNAPSHOT_TOKEN) url += '?token=' + encodeURIComponent(RELAY_SNAPSHOT_TOKEN);
+        return url;
+    }
     app.get('/api/relay/activity', function(req, res) {
         try {
             if (req.query.password !== PASSWORD) return res.status(401).json({ error: 'unauthorized' });
             var now = Date.now();
-            if (_relayActivityCache.data && now - _relayActivityCache.at < 3000) {
+            if (_relayActivityCache.data && now - _relayActivityCache.at < 10000) {
                 return res.json(_relayActivityCache.data);
             }
-            var url = SUB2API_BASE.replace(/\/+$/, '') + '/api/user-activity-snapshot';
-            if (RELAY_SNAPSHOT_TOKEN) url += '?token=' + encodeURIComponent(RELAY_SNAPSHOT_TOKEN);
-            httpGetJSON(url, 8000).then(function(envelope) {
+            httpGetJSON(relaySnapshotUrl('/api/user-activity-snapshot'), 8000).then(function(envelope) {
                 // sub2api 统一信封 {code:0, message, data:{generated_at, users:[...]}}
                 var data = (envelope && envelope.code === 0 && envelope.data) ? envelope.data : null;
                 if (!data || !Array.isArray(data.users)) {
@@ -1597,6 +1600,27 @@ module.exports = function(app) {
                 res.json(data);
             }).catch(function(err) {
                 res.status(502).json({ error: 'relay activity snapshot fetch failed: ' + err.message });
+            });
+        } catch (err) { res.status(500).json({ error: err.message }); }
+    });
+
+    var _relayUsageCache = { at: 0, data: null };
+    app.get('/api/relay/usage', function(req, res) {
+        try {
+            if (req.query.password !== PASSWORD) return res.status(401).json({ error: 'unauthorized' });
+            var now = Date.now();
+            if (req.query.force !== '1' && _relayUsageCache.data && now - _relayUsageCache.at < 4 * 60 * 1000) {
+                return res.json(_relayUsageCache.data);
+            }
+            httpGetJSON(relaySnapshotUrl('/api/user-usage-snapshot'), 15000).then(function(envelope) {
+                var data = (envelope && envelope.code === 0 && envelope.data) ? envelope.data : null;
+                if (!data || !Array.isArray(data.users)) {
+                    return res.status(502).json({ error: 'unexpected relay usage snapshot shape' });
+                }
+                _relayUsageCache = { at: Date.now(), data: data };
+                res.json(data);
+            }).catch(function(err) {
+                res.status(502).json({ error: 'relay usage snapshot fetch failed: ' + err.message });
             });
         } catch (err) { res.status(500).json({ error: err.message }); }
     });
