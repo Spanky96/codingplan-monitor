@@ -1465,6 +1465,36 @@ module.exports = function(app) {
         } catch (err) { res.status(500).json({ error: err.message }); }
     });
 
+    // ============ 凭证导出接口(为中转站等内部系统同步最新登录态,需管理密码) ============
+    // 背景:yescode 等平台官方 token 有效期缩短为 24h,本项目已支持账密自动重登并持续
+    // 刷新凭证;下游(如 lwsub2api 外部渠道)按账号名精确匹配拉取,避免各自维护登录。
+    // GET /api/credentials?password=<管理密码>&platform=yescode → { "账号名": "凭证" }
+    var CREDENTIAL_FIELDS = {
+        yescode: 'cookie',
+        sub2api: 'authorization',
+        glm: 'authorization',
+        huoli: 'authorization',
+        volc: 'cookie',
+        qwen: 'cookie',
+        minimax: 'cookie',
+        telecomjs: 'satoken'
+    };
+    app.get('/api/credentials', function(req, res) {
+        try {
+            if (req.query.password !== PASSWORD) return res.status(401).json({ error: 'unauthorized' });
+            var platform = req.query.platform || 'yescode';
+            var field = CREDENTIAL_FIELDS[platform];
+            if (!field) return res.status(400).json({ error: '不支持的平台: ' + platform });
+            var out = {};
+            readAccounts().forEach(function(acc) {
+                if (!acc || (acc.platform || 'glm') !== platform) return;
+                var cred = (acc[field] || '').trim();
+                if (cred) out[acc.name] = cred;
+            });
+            res.json(out);
+        } catch (err) { res.status(500).json({ error: err.message }); }
+    });
+
     // ============ 权重接口(为中转站提供 token 分配权重,纯读缓存 + 默认兜底) ============
     app.get('/api/weights', function(req, res) {
         try {
