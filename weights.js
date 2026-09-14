@@ -118,6 +118,40 @@ function pctOf(limit) {
         : (parseFloat(limit.percentage) || 0);
 }
 
+// ============ 余额兜底(yescode / sub2api) ============
+// 订阅额度耗尽但账号还有可用余额(按量付费/积分继续可用)时,不应整账号权重清零:
+// 已耗尽窗口降为极紧张分 1(exhausted=false,绕开 aggregate 与 /api/weights 两层清零),
+// 并按余额量级附加一个「余额」窗口(无周期语义,usedPct 恒 0)。
+// 余额量级 → 1~6 分
+function balanceScore(usd) {
+    if (usd >= 100) return 6;
+    if (usd >= 50) return 5;
+    if (usd >= 20) return 4;
+    if (usd >= 10) return 3;
+    if (usd >= 5) return 2;
+    return 1;
+}
+
+function balanceWindow(balanceUsd) {
+    return {
+        label: '余额',
+        score: balanceScore(balanceUsd),
+        usedPct: 0,
+        theoPct: -1,
+        ratio: null,
+        exhausted: false,
+        noData: false
+    };
+}
+
+// 有余额时:耗尽窗口降级不清零 + 附加余额窗口;无余额返回原窗口(保留耗尽→0 行为)
+function withBalanceFloor(ws, balanceUsd) {
+    if (!(balanceUsd > 0)) return ws;
+    return ws.map(function(w) {
+        return w.exhausted ? Object.assign({}, w, { score: 1, exhausted: false }) : w;
+    }).concat([balanceWindow(balanceUsd)]);
+}
+
 function findWindow(windows, label) {
     for (var i = 0; i < windows.length; i++) {
         if (windows[i].label === label) return windows[i];
@@ -217,14 +251,27 @@ function yescodeWindows(d) {
     if (plan.monthly_spend_limit > 0) {
         ws.push(makeWindow('本月', ((d.current_month_spend || 0) / plan.monthly_spend_limit) * 100, theoPctFromStart(d.last_month_reset, THIRTY_DAYS_MS)));
     }
-    return ws;
+    // 余额兜底:订阅额度耗尽但还有按量余额/推荐积分(官方支持自动切换 PAYG)时不清零
+    var money = (d.pay_as_you_go_balance || 0) + (d.credit_balance || 0);
+    return withBalanceFloor(ws, money);
 }
 
 // sub2api(含旧 huoli):今日/本周/本月,起点法(*_window_start)。
 // 新数据形状 {me, subscriptions, current}(current 为后端选好的当前订阅);旧 huoli 缓存为裸数组,取 [0]。
+// 余额兜底:me.balance > 0 时订阅额度耗尽不清零;过期订阅的窗口不再作为约束(账号已转按量付费)。
 function sub2apiWindows(data) {
     var sub = Array.isArray(data) ? data[0] : ((data && data.current) || ((data && data.subscriptions) || [])[0]);
-    if (!sub) return [];
+    var balance = (data && data.me && typeof data.me.balance === 'number') ? data.me.balance : null;
+    var hasBalance = (balance > 0);
+    if (!sub) return hasBalance ? [balanceWindow(balance)] : [];
+    if (sub.status === 'expired') {
+        // 无余额时保留过期卡的耗尽信号 → 权重 0(账号确实不可用)
+        return hasBalance ? [balanceWindow(balance)] : sub2apiSubWindows(sub);
+    }
+    return withBalanceFloor(sub2apiSubWindows(sub), hasBalance ? balance : 0);
+}
+
+function sub2apiSubWindows(sub) {
     var grp = sub.group || {};
     var ws = [];
     if (grp.daily_limit_usd > 0) {
@@ -500,6 +547,7 @@ module.exports = {
     theoPctFromStart: theoPctFromStart,
     getGLMResetRecommendation: getGLMResetRecommendation,
     scoreAccount: scoreAccount,
+    balanceScore: balanceScore,
     scoreTelecomAccount: scoreTelecomAccount,
     telecomCapacityScore: telecomCapacityScore,
     codingPressure: codingPressure,
