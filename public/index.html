@@ -220,6 +220,7 @@
     .platform-glm { background: rgba(14,165,233,.16); color: #0369a1; border: 1px solid rgba(14,165,233,.3); }
     .platform-yescode { background: rgba(22,163,74,.16); color: #15803d; border: 1px solid rgba(22,163,74,.3); }
     .platform-huoli { background: rgba(217,119,6,.16); color: #b45309; border: 1px solid rgba(217,119,6,.3); }
+    .platform-sub2api { background: rgba(217,119,6,.16); color: #b45309; border: 1px solid rgba(217,119,6,.3); }
     .platform-volc { background: rgba(13,148,136,.16); color: #0f766e; border: 1px solid rgba(13,148,136,.3); }
     .platform-volcc { background: rgba(124,58,237,.16); color: #6d28d9; border: 1px solid rgba(124,58,237,.3); }
     .platform-telecomjs { background: rgba(225,29,72,.15); color: #be123c; border: 1px solid rgba(225,29,72,.3); }
@@ -228,6 +229,7 @@
     :root.dark .platform-glm { background: rgba(56,189,248,.16); color: #7dd3fc; border-color: rgba(56,189,248,.3); }
     :root.dark .platform-yescode { background: rgba(74,222,128,.16); color: #86efac; border-color: rgba(74,222,128,.3); }
     :root.dark .platform-huoli { background: rgba(251,191,36,.16); color: #fcd34d; border-color: rgba(251,191,36,.3); }
+    :root.dark .platform-sub2api { background: rgba(251,191,36,.16); color: #fcd34d; border-color: rgba(251,191,36,.3); }
     :root.dark .platform-volc { background: rgba(45,212,191,.16); color: #5eead4; border-color: rgba(45,212,191,.3); }
     :root.dark .platform-volcc { background: rgba(167,139,250,.16); color: #c4b5fd; border-color: rgba(167,139,250,.3); }
     :root.dark .platform-telecomjs { background: rgba(251,113,133,.16); color: #fda4af; border-color: rgba(251,113,133,.3); }
@@ -915,6 +917,7 @@
     // 隐私模式：账号名称 → 站点名 + 站点内序号（按全局顺序，1 起）
     function platformLabel(platform) {
       if (platform === 'yescode') return 'YesCode';
+      if (platform === 'sub2api') return 'Sub2API';
       if (platform === 'huoli') return '火狸';
       if (platform === 'volc') return '火山';
       if (platform === 'telecomjs') return '智云';
@@ -1165,8 +1168,9 @@
         + (reset ? '<div style="font-size:11px;color:var(--text-faint);margin-top:3px">' + reset + '</div>' : '') + '</div>';
     }
 
-    function platformTag(platform, planType) {
+    function platformTag(platform, planType, alias) {
       if (platform === 'yescode') return '<span class="platform-tag platform-yescode">YesCode</span>';
+      if (platform === 'sub2api') return '<span class="platform-tag platform-sub2api">' + esc(alias || 'Sub2API') + '</span>';
       if (platform === 'huoli') return '<span class="platform-tag platform-huoli">火狸</span>';
       if (platform === 'volc') return planType === 'coding'
         ? '<span class="platform-tag platform-volcc">火山C</span>'
@@ -1354,6 +1358,14 @@
       return Math.max(dPct, w, m);
     }
 
+    // sub2api 数据解包:新形状 {me, subscriptions, current};旧 huoli 缓存为裸数组
+    function sub2apiUnpack(d) {
+      if (Array.isArray(d)) return { me: null, subs: d, sub: d[0] || null };
+      d = d || {};
+      var subs = d.subscriptions || [];
+      return { me: d.me || null, subs: subs, sub: d.current || subs[0] || null };
+    }
+
     function telecomMetrics(d, cachedAt) {
       d = d || {};
       var balance = +(d.balance || 0);
@@ -1508,7 +1520,7 @@
     function renderCardHTML(i, acc) {
       var platform = acc.platform || 'glm';
       var btn = isAdmin() ? '<button class="card-refresh" id="refresh-' + i + '" onclick="refreshCard(' + i + ')" title="刷新">&#x21bb;</button>' : '';
-      var pTag = platformTag(platform, acc.planType);
+      var pTag = platformTag(platform, acc.planType, acc.alias);
       var wBadge = weightBadgeHTML(acc.name, i);
       var capBadge = capacityBadgeHTML(acc.name);
       // 第一行：分类标签 + 用户名；第二行：权重徽标 + 容量胶囊（都空则不占行）
@@ -1579,26 +1591,32 @@
           + '<button class="detail-btn" onclick="showDetail(' + i + ')">详情</button></div></div>';
       }
 
-      if (platform === 'huoli') {
-        var subs = acc.data || [];
-        var sub = subs[0] || {};
-        var grp = sub.group || {};
-        var dailyUsed = sub.daily_usage_usd || 0;
+      if (platform === 'sub2api' || platform === 'huoli') {
+        var s2a = sub2apiUnpack(acc.data);
+        var me = s2a.me, sub = s2a.sub, grp = (sub && sub.group) || {};
+        var dailyUsed = (sub && sub.daily_usage_usd) || 0;
         var dailyLimit = grp.daily_limit_usd || 0;
-        var weeklyUsed = sub.weekly_usage_usd || 0;
+        var weeklyUsed = (sub && sub.weekly_usage_usd) || 0;
         var weeklyLimit = grp.weekly_limit_usd || 0;
-        var monthlyUsed = sub.monthly_usage_usd || 0;
+        var monthlyUsed = (sub && sub.monthly_usage_usd) || 0;
         var monthlyLimit = grp.monthly_limit_usd || 0;
-        var bodyHtml = renderSpendRow('今日消费', dailyUsed, dailyLimit, sub.daily_window_start, 86400000)
-          + renderSpendRow('本周消费', weeklyUsed, weeklyLimit, sub.weekly_window_start, 7 * 86400000)
-          + renderSpendRow('本月消费', monthlyUsed, monthlyLimit, sub.monthly_window_start, 30 * 86400000);
+        // 中转站重点看余额+今日用量:今日行始终展示(有订阅时),周/月仅在有额度时展示
+        var bodyHtml = '';
+        if (sub) {
+          bodyHtml = renderSpendRow('今日消费', dailyUsed, dailyLimit, sub.daily_window_start, 86400000);
+          if (weeklyLimit > 0) bodyHtml += renderSpendRow('本周消费', weeklyUsed, weeklyLimit, sub.weekly_window_start, 7 * 86400000);
+          if (monthlyLimit > 0) bodyHtml += renderSpendRow('本月消费', monthlyUsed, monthlyLimit, sub.monthly_window_start, 30 * 86400000);
+        } else {
+          bodyHtml = '<div class="limit-row"><div class="limit-label"><span class="limit-name">订阅</span><span class="limit-value">暂无订阅 · 按量付费</span></div></div>';
+        }
         var dPctH = dailyLimit > 0 ? Math.min(100, (dailyUsed / dailyLimit) * 100) : 0;
         var wPctH = weeklyLimit > 0 ? Math.min(100, (weeklyUsed / weeklyLimit) * 100) : 0;
         var mPctH = monthlyLimit > 0 ? Math.min(100, (monthlyUsed / monthlyLimit) * 100) : 0;
         var mpH = Math.max(dPctH, wPctH, mPctH);
-        var planBadgeH = '<span class="level-badge">' + esc(grp.name || '-') + '</span>';
+        var planBadgeH = sub ? '<span class="level-badge">' + esc(grp.name || '-') + '</span>' : '';
+        var balanceBadgeH = (me && me.balance != null) ? '<span class="level-badge level-badge-ok">余额 $' + (+me.balance).toFixed(2) + '</span>' : '';
         var expHtmlH = '';
-        if (sub.expires_at) {
+        if (sub && sub.expires_at) {
           var expDateH = new Date(sub.expires_at);
           var daysLeftH = Math.ceil((expDateH - Date.now()) / 86400000);
           var expClsH = daysLeftH <= 10 ? 'expire-danger' : '';
@@ -1609,7 +1627,7 @@
         return '<div class="card" id="card-' + i + '"><div class="card-header">' + headerLeft
           + '<div class="card-header-right">' + btn + '<span class="card-status ' + getStatusClass(mpH) + '">' + getStatusText(mpH) + '</span></div></div>'
           + '<div class="card-body">' + bodyHtml + '</div>' + expHtmlH
-          + '<div class="card-footer"><div class="card-footer-left">' + planBadgeH + cache + '</div>'
+          + '<div class="card-footer"><div class="card-footer-left">' + balanceBadgeH + planBadgeH + cache + '</div>'
           + '<button class="detail-btn" onclick="showDetail(' + i + ')">详情</button></div></div>';
       }
 
@@ -1840,14 +1858,14 @@
         return rings;
       }
 
-      if (plat === 'huoli') {
-        var sub = (acc.data || [])[0] || {}, grp = sub.group || {};
+      if (plat === 'sub2api' || plat === 'huoli') {
+        var s2aR = sub2apiUnpack(acc.data), sub = s2aR.sub || {}, grp = sub.group || {};
         var dU = sub.daily_usage_usd || 0, dL = grp.daily_limit_usd || 0;
         push('今日', dL > 0 ? (dU / dL) * 100 : 0, '$' + dU.toFixed(1) + '/$' + dL.toFixed(1), { theoPct: theoPctFromStart(sub.daily_window_start, 86400000), title: '今日消费 $' + dU.toFixed(2) + ' / $' + dL.toFixed(2) });
         var wU = sub.weekly_usage_usd || 0, wL = grp.weekly_limit_usd || 0;
-        push('本周', wL > 0 ? (wU / wL) * 100 : 0, '$' + wU.toFixed(1) + '/$' + wL.toFixed(1), { theoPct: theoPctFromStart(sub.weekly_window_start, 7 * 86400000), title: '本周消费 $' + wU.toFixed(2) + ' / $' + wL.toFixed(2) });
+        if (wL > 0) push('本周', (wU / wL) * 100, '$' + wU.toFixed(1) + '/$' + wL.toFixed(1), { theoPct: theoPctFromStart(sub.weekly_window_start, 7 * 86400000), title: '本周消费 $' + wU.toFixed(2) + ' / $' + wL.toFixed(2) });
         var mU = sub.monthly_usage_usd || 0, mL = grp.monthly_limit_usd || 0;
-        push('本月', mL > 0 ? (mU / mL) * 100 : 0, '$' + mU.toFixed(1) + '/$' + mL.toFixed(1), { theoPct: theoPctFromStart(sub.monthly_window_start, 30 * 86400000), title: '本月消费 $' + mU.toFixed(2) + ' / $' + mL.toFixed(2) });
+        if (mL > 0) push('本月', (mU / mL) * 100, '$' + mU.toFixed(1) + '/$' + mL.toFixed(1), { theoPct: theoPctFromStart(sub.monthly_window_start, 30 * 86400000), title: '本月消费 $' + mU.toFixed(2) + ' / $' + mL.toFixed(2) });
         return rings;
       }
 
@@ -1929,8 +1947,8 @@
         if (exp && exp.success && exp.expireTime) { expTime = exp.expireTime.replace(/-/g, '/'); txt = esc(exp.expireTime); }
       } else if (platform === 'yescode') {
         if (acc.data && acc.data.subscription_expiry) { expTime = acc.data.subscription_expiry; txt = esc(new Date(expTime).toLocaleDateString('zh-CN')); }
-      } else if (platform === 'huoli') {
-        var s = (acc.data || [])[0];
+      } else if (platform === 'sub2api' || platform === 'huoli') {
+        var s = sub2apiUnpack(acc.data).sub;
         if (s && s.expires_at) { expTime = s.expires_at; txt = esc(new Date(expTime).toLocaleDateString('zh-CN')); }
       } else if (platform === 'volc') {
         var sv = acc.data && acc.data.subscription;
@@ -1958,9 +1976,13 @@
         if (d.balance != null) b += '<span class="level-badge level-badge-ok">余额 $' + (+d.balance).toFixed(0) + '</span>';
         return b;
       }
-      if (platform === 'huoli') {
-        var grp = ((acc.data || [])[0] || {}).group || {};
-        return '<span class="level-badge">' + esc(grp.name || '-') + '</span>';
+      if (platform === 'sub2api' || platform === 'huoli') {
+        var s2aB = sub2apiUnpack(acc.data);
+        var grp = ((s2aB.sub || {}).group) || {};
+        var b2a = '';
+        if (s2aB.me && s2aB.me.balance != null) b2a += '<span class="level-badge level-badge-ok">余额 $' + (+s2aB.me.balance).toFixed(2) + '</span>';
+        if (s2aB.sub) b2a += '<span class="level-badge">' + esc(grp.name || '-') + '</span>';
+        return b2a || '<span class="level-badge">-</span>';
       }
       if (platform === 'volc') {
         var usage = (acc.data && acc.data.usage) || {}, sub = (acc.data && acc.data.subscription) || null;
@@ -1998,7 +2020,7 @@
     function renderListRowHTML(i, acc) {
       var platform = acc.platform || 'glm';
       var refresh = isAdmin() ? '<button class="card-refresh list-row-refresh" id="refresh-' + i + '" onclick="event.stopPropagation(); refreshCard(' + i + ')" title="刷新">&#x21bb;</button>' : '';
-      var pTag = platformTag(platform, acc.planType);
+      var pTag = platformTag(platform, acc.planType, acc.alias);
       var name = esc(displayName(acc, i));
 
       var leftBlock, middle, right;
@@ -2052,9 +2074,8 @@
       if (plat === 'minimax') {
         return minimaxMaxPct(acc.data && acc.data.usage);
       }
-      if (plat === 'huoli') {
-        var subs = acc.data || [];
-        var sub = subs[0] || {};
+      if (plat === 'sub2api' || plat === 'huoli') {
+        var sub = sub2apiUnpack(acc.data).sub || {};
         var grp = sub.group || {};
         var dPct = (grp.daily_limit_usd || 0) > 0 ? Math.min(100, ((sub.daily_usage_usd || 0) / grp.daily_limit_usd) * 100) : 0;
         var wPct = (grp.weekly_limit_usd || 0) > 0 ? Math.min(100, ((sub.weekly_usage_usd || 0) / grp.weekly_limit_usd) * 100) : 0;
@@ -2118,7 +2139,7 @@
     }
 
     // 按固定顺序展示用户实际拥有的站点，没添加的类型不显示
-    var PLATFORM_ORDER = ['glm', 'yescode', 'huoli', 'volc', 'telecomjs', 'qwen', 'minimax'];
+    var PLATFORM_ORDER = ['glm', 'yescode', 'sub2api', 'huoli', 'volc', 'telecomjs', 'qwen', 'minimax'];
     function renderPlatformFilters(data) {
       var box = document.getElementById('platformFilters');
       if (!box) return;
@@ -2347,10 +2368,10 @@
       document.getElementById('modalBody').innerHTML = html;
     }
 
-    function renderHuoliDetail(index, acc) {
-      var subs = acc.data || [];
-      var sub = subs[0] || {};
-      var grp = sub.group || {};
+    function renderSub2apiDetail(index, acc) {
+      var s2a = sub2apiUnpack(acc.data);
+      var me = s2a.me, sub = s2a.sub || {}, grp = sub.group || {};
+      var baseUrl = acc.baseUrl || acc.base_url || '';
       var dailyUsed = sub.daily_usage_usd || 0;
       var dailyLimit = grp.daily_limit_usd || 0;
       var weeklyUsed = sub.weekly_usage_usd || 0;
@@ -2364,16 +2385,28 @@
         + '<span class="info-label">备注</span><span class="info-value">' + esc(acc.notes||'-') + '</span>'
         + '</div></div>';
 
-      html += '<div class="info-section"><div class="info-section-title">订阅信息</div><div class="info-grid">'
-        + '<span class="info-label">套餐名称</span><span class="info-value">' + esc(grp.name||'-') + (grp.description ? ' <span style="color:var(--text-faint)">· ' + esc(grp.description) + '</span>' : '') + '</span>'
-        + '<span class="info-label">平台</span><span class="info-value">' + esc(grp.platform||'-') + '</span>'
-        + '<span class="info-label">倍率</span><span class="info-value">' + (grp.rate_multiplier != null ? grp.rate_multiplier + 'x' : '-') + '</span>'
-        + '<span class="info-label">状态</span><span class="info-value">' + esc(sub.status||'-') + '</span>'
-        + '<span class="info-label">开始时间</span><span class="info-value">' + esc(fmtYesCodeDate(sub.starts_at)) + '</span>'
-        + '<span class="info-label">到期时间</span><span class="info-value">' + esc(fmtYesCodeDate(sub.expires_at)) + '</span>'
-        + '<span class="info-label">支持模型</span><span class="info-value">' + ((grp.supported_models||[]).join(', ') || '-') + '</span>'
-        + '<span class="info-label">官网</span><span class="info-value"><a href="https://huolilink.com/" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none">https://huolilink.com/ ↗</a></span>'
+      html += '<div class="info-section"><div class="info-section-title">站点与账户</div><div class="info-grid">'
+        + '<span class="info-label">站点别名</span><span class="info-value">' + esc(acc.alias || platformLabel(acc.platform || 'sub2api')) + '</span>'
+        + '<span class="info-label">站点地址</span><span class="info-value">' + (baseUrl ? '<a href="' + esc(baseUrl) + '/" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none">' + esc(baseUrl) + ' ↗</a>' : '-') + '</span>'
+        + '<span class="info-label">账号</span><span class="info-value">' + esc((me && (me.email || me.username)) || '-') + '</span>'
+        + '<span class="info-label">余额</span><span class="info-value">' + ((me && me.balance != null) ? '$' + (+me.balance).toFixed(2) : '-') + '</span>'
+        + '<span class="info-label">冻结余额</span><span class="info-value">' + ((me && me.frozen_balance != null) ? '$' + (+me.frozen_balance).toFixed(2) : '-') + '</span>'
+        + '<span class="info-label">累计充值</span><span class="info-value">' + ((me && me.total_recharged != null) ? '$' + (+me.total_recharged).toFixed(2) : '-') + '</span>'
+        + '<span class="info-label">并发</span><span class="info-value">' + ((me && me.concurrency != null) ? me.concurrency : '-') + '</span>'
+        + '<span class="info-label">账户状态</span><span class="info-value">' + esc((me && me.status) || '-') + '</span>'
         + '</div></div>';
+
+      if (sub) {
+        html += '<div class="info-section"><div class="info-section-title">订阅信息</div><div class="info-grid">'
+          + '<span class="info-label">套餐名称</span><span class="info-value">' + esc(grp.name||'-') + (grp.description ? ' <span style="color:var(--text-faint)">· ' + esc(grp.description) + '</span>' : '') + '</span>'
+          + '<span class="info-label">平台</span><span class="info-value">' + esc(grp.platform||'-') + '</span>'
+          + '<span class="info-label">倍率</span><span class="info-value">' + (grp.rate_multiplier != null ? grp.rate_multiplier + 'x' : '-') + '</span>'
+          + '<span class="info-label">状态</span><span class="info-value">' + esc(sub.status||'-') + '</span>'
+          + '<span class="info-label">开始时间</span><span class="info-value">' + esc(fmtYesCodeDate(sub.starts_at)) + '</span>'
+          + '<span class="info-label">到期时间</span><span class="info-value">' + esc(fmtYesCodeDate(sub.expires_at)) + '</span>'
+          + '<span class="info-label">支持模型</span><span class="info-value">' + ((grp.supported_models||[]).join(', ') || '-') + '</span>'
+          + '</div></div>';
+      }
 
       var dailyPct = dailyLimit > 0 ? Math.min(100, (dailyUsed / dailyLimit) * 100) : 0;
       var weeklyPct = weeklyLimit > 0 ? Math.min(100, (weeklyUsed / weeklyLimit) * 100) : 0;
@@ -2386,16 +2419,20 @@
         + '<div class="limit-row"><div class="limit-label"><span class="limit-name">今日已消费</span><span class="limit-value">$' + dailyUsed.toFixed(2) + ' / $' + dailyLimit.toFixed(2) + ' (' + dailyPct.toFixed(1) + '%)</span></div>'
         + '<div class="limit-bar"><div class="limit-fill ' + getColorClass(dailyPct) + '" style="width:' + dailyPct + '%"></div></div>'
         + (dailyNext ? '<div style="font-size:11px;color:var(--text-faint);margin-top:3px">每日额度重置时间：' + fmtYesCodeDate(dailyNext) + '</div>' : '')
-        + '</div>'
-        + '<div class="limit-row"><div class="limit-label"><span class="limit-name">本周已消费</span><span class="limit-value">$' + weeklyUsed.toFixed(2) + ' / $' + weeklyLimit.toFixed(2) + ' (' + weeklyPct.toFixed(1) + '%)</span></div>'
-        + '<div class="limit-bar"><div class="limit-fill ' + getColorClass(weeklyPct) + '" style="width:' + weeklyPct + '%"></div></div>'
-        + (weeklyNext ? '<div style="font-size:11px;color:var(--text-faint);margin-top:3px">周配额重置时间：' + fmtYesCodeDate(weeklyNext) + '</div>' : '')
-        + '</div>'
-        + '<div class="limit-row"><div class="limit-label"><span class="limit-name">本月已消费</span><span class="limit-value">$' + monthlyUsed.toFixed(2) + ' / $' + monthlyLimit.toFixed(2) + ' (' + monthlyPct.toFixed(1) + '%)</span></div>'
-        + '<div class="limit-bar"><div class="limit-fill ' + getColorClass(monthlyPct) + '" style="width:' + monthlyPct + '%"></div></div>'
-        + (monthlyNext ? '<div style="font-size:11px;color:var(--text-faint);margin-top:3px">月度配额重置时间：' + fmtYesCodeDate(monthlyNext) + '</div>' : '')
-        + '</div>'
         + '</div>';
+      if (weeklyLimit > 0) {
+        html += '<div class="limit-row"><div class="limit-label"><span class="limit-name">本周已消费</span><span class="limit-value">$' + weeklyUsed.toFixed(2) + ' / $' + weeklyLimit.toFixed(2) + ' (' + weeklyPct.toFixed(1) + '%)</span></div>'
+          + '<div class="limit-bar"><div class="limit-fill ' + getColorClass(weeklyPct) + '" style="width:' + weeklyPct + '%"></div></div>'
+          + (weeklyNext ? '<div style="font-size:11px;color:var(--text-faint);margin-top:3px">周配额重置时间：' + fmtYesCodeDate(weeklyNext) + '</div>' : '')
+          + '</div>';
+      }
+      if (monthlyLimit > 0) {
+        html += '<div class="limit-row"><div class="limit-label"><span class="limit-name">本月已消费</span><span class="limit-value">$' + monthlyUsed.toFixed(2) + ' / $' + monthlyLimit.toFixed(2) + ' (' + monthlyPct.toFixed(1) + '%)</span></div>'
+          + '<div class="limit-bar"><div class="limit-fill ' + getColorClass(monthlyPct) + '" style="width:' + monthlyPct + '%"></div></div>'
+          + (monthlyNext ? '<div style="font-size:11px;color:var(--text-faint);margin-top:3px">月度配额重置时间：' + fmtYesCodeDate(monthlyNext) + '</div>' : '')
+          + '</div>';
+      }
+      html += '</div>';
 
       document.getElementById('modalBody').innerHTML = html;
     }
@@ -2599,8 +2636,8 @@
         return;
       }
 
-      if ((acc.platform || 'glm') === 'huoli') {
-        renderHuoliDetail(index, acc);
+      if ((acc.platform || 'glm') === 'sub2api' || (acc.platform || 'glm') === 'huoli') {
+        renderSub2apiDetail(index, acc);
         document.getElementById('modalOverlay').classList.add('active');
         return;
       }
@@ -3128,7 +3165,7 @@
           if (!accounts.length) html += '<div style="text-align:center;padding:24px;color:var(--text-mute);font-size:13px">暂无账号</div>';
           accounts.forEach(function(a, i) {
             html += '<div class="acct-item" draggable="true" data-idx="'+i+'"><div class="drag-handle" title="拖动排序">' + _svgGrip + '</div>'
-              + '<div class="acct-info"><div class="acct-name">' + platformTag(a.platform || 'glm') + ' ' + esc(a.name||'未命名') + '</div>'
+              + '<div class="acct-info"><div class="acct-name">' + platformTag(a.platform || 'glm', null, a.alias) + ' ' + esc(a.name||'未命名') + '</div>'
               + '<div class="acct-meta">' + esc(a.responsiblePerson||'') + (a.phone?' &middot; '+esc(a.phone):'') + '</div></div>'
               + '<div class="acct-actions"><button class="btn-sm" onclick="editAccount('+i+')">编辑</button><button class="btn-sm danger" onclick="deleteAccount('+i+')">删除</button></div></div>';
           });
@@ -3191,23 +3228,25 @@
     }
 
     function renderForm(a) {
-      var platform = a.platform || 'glm';
+      var origPlatform = a.platform || 'glm';
+      // 旧 huoli 账号即 sub2api 部署,编辑时归入 sub2api(默认回填 huolilink)
+      var platform = origPlatform === 'huoli' ? 'sub2api' : origPlatform;
       var glmDisp = platform === 'glm' ? '' : 'none';
       var yesDisp = platform === 'yescode' ? '' : 'none';
-      var huoliDisp = platform === 'huoli' ? '' : 'none';
+      var sub2apiDisp = platform === 'sub2api' ? '' : 'none';
       var volcDisp = platform === 'volc' ? '' : 'none';
       var telecomDisp = platform === 'telecomjs' ? '' : 'none';
       var qwenDisp = platform === 'qwen' ? '' : 'none';
       var minimaxDisp = platform === 'minimax' ? '' : 'none';
       document.getElementById('mgmtBody').innerHTML = ''
         + '<div class="import-section"><div class="import-toggle" onclick="this.nextElementSibling.classList.toggle(\'open\')">&#9660; 快速导入（粘贴 fetch 命令）</div>'
-        + '<div class="import-body"><textarea class="form-input" id="f_fetch" placeholder="粘贴 fetch / cURL 命令，自动识别智谱 / YesCode / 火狸 / 火山 / 智云 / 千问 / MiniMax"></textarea>'
+        + '<div class="import-body"><textarea class="form-input" id="f_fetch" placeholder="粘贴 fetch / cURL 命令，自动识别智谱 / YesCode / Sub2API 中转站 / 火山 / 智云 / 千问 / MiniMax"></textarea>'
         + '<div class="import-actions"><button class="btn-primary" style="padding:5px 16px;font-size:12px" onclick="parseFetch()">解析并填充</button></div></div></div>'
         + '<div class="form-row">'
         + '<div class="form-group"><label class="form-label">站点</label><select class="form-input" id="f_platform" onchange="onPlatformChange()">'
         + '<option value="glm"' + (platform==='glm'?' selected':'') + '>智谱</option>'
         + '<option value="yescode"' + (platform==='yescode'?' selected':'') + '>YesCode</option>'
-        + '<option value="huoli"' + (platform==='huoli'?' selected':'') + '>火狸</option>'
+        + '<option value="sub2api"' + (platform==='sub2api'?' selected':'') + '>Sub2API 中转站</option>'
         + '<option value="volc"' + (platform==='volc'?' selected':'') + '>火山</option>'
         + '<option value="telecomjs"' + (platform==='telecomjs'?' selected':'') + '>智云</option>'
         + '<option value="qwen"' + (platform==='qwen'?' selected':'') + '>千问</option>'
@@ -3228,10 +3267,12 @@
         + '<div class="form-row"><div class="form-group"><label class="form-label">登录账号（推荐）</label><input class="form-input" id="f_yescode_username" placeholder="邮箱/用户名，Cookie 失效时自动登录" value="' + esc(a.yescode_username||'') + '" autocomplete="off"></div>'
         + '<div class="form-group"><label class="form-label">登录密码（推荐）</label><input class="form-input" type="password" id="f_yescode_password" placeholder="与账号同时填写才启用自动重登" value="' + esc(a.yescode_password||'') + '" autocomplete="new-password"></div></div>'
         + '</div>'
-        + '<div id="f_huoli_fields" style="display:' + huoliDisp + '">'
-        + '<div class="form-group"><label class="form-label">Authorization Token</label><textarea class="form-input" id="f_huoli_auth" placeholder="Bearer eyJ...，用于访问 huolilink.com">' + esc(a.authorization||'') + '</textarea></div>'
-        + '<div class="form-row"><div class="form-group"><label class="form-label">登录邮箱</label><input class="form-input" id="f_huoli_email" placeholder="用于 Token 过期时自动登录" value="' + esc(a.huoli_email||'') + '"></div>'
-        + '<div class="form-group"><label class="form-label">登录密码</label><input class="form-input" type="password" id="f_huoli_password" placeholder="用于 Token 过期时自动登录" value="' + esc(a.huoli_password||'') + '"></div></div>'
+        + '<div id="f_sub2api_fields" style="display:' + sub2apiDisp + '">'
+        + '<div class="form-row"><div class="form-group"><label class="form-label">站点别名</label><input class="form-input" id="f_sub2api_alias" placeholder="如 SUPER·NB，卡片平台角标显示用" value="' + esc(a.alias||'') + '"></div>'
+        + '<div class="form-group"><label class="form-label">站点地址</label><input class="form-input" id="f_sub2api_base" placeholder="https://super-nb.me" value="' + esc(a.base_url || (origPlatform === 'huoli' ? 'https://huolilink.com' : '')) + '"></div></div>'
+        + '<div class="form-group"><label class="form-label">Authorization Token（可不填）</label><textarea class="form-input" id="f_sub2api_auth" placeholder="Bearer eyJ...；官方有效期仅 24h，配置账密后会自动登录刷新">' + esc(a.authorization||'') + '</textarea></div>'
+        + '<div class="form-row"><div class="form-group"><label class="form-label">登录邮箱（推荐）</label><input class="form-input" id="f_sub2api_email" placeholder="用于 Token 过期时自动登录" value="' + esc(a.sub2api_email||a.huoli_email||'') + '"></div>'
+        + '<div class="form-group"><label class="form-label">登录密码（推荐）</label><input class="form-input" type="password" id="f_sub2api_password" placeholder="与邮箱同时填写才启用自动重登" value="' + esc(a.sub2api_password||a.huoli_password||'') + '" autocomplete="new-password"></div></div>'
         + '</div>'
         + '<div id="f_volc_fields" style="display:' + volcDisp + '">'
         + '<div class="form-group"><label class="form-label">套餐类型</label><div style="display:flex;gap:18px;align-items:center;flex-wrap:wrap">'
@@ -3265,7 +3306,7 @@
       var p = document.getElementById('f_platform').value;
       document.getElementById('f_glm_fields').style.display = p === 'glm' ? '' : 'none';
       document.getElementById('f_yescode_fields').style.display = p === 'yescode' ? '' : 'none';
-      document.getElementById('f_huoli_fields').style.display = p === 'huoli' ? '' : 'none';
+      document.getElementById('f_sub2api_fields').style.display = p === 'sub2api' ? '' : 'none';
       document.getElementById('f_volc_fields').style.display = p === 'volc' ? '' : 'none';
       document.getElementById('f_telecom_fields').style.display = p === 'telecomjs' ? '' : 'none';
       document.getElementById('f_qwen_fields').style.display = p === 'qwen' ? '' : 'none';
@@ -3299,7 +3340,7 @@
     function parseFetch() {
       var t = document.getElementById('f_fetch').value; if (!t.trim()) return;
       var isYescode = /yes\.vg/i.test(t);
-      var isHuoli = /huolilink\.com/i.test(t);
+      var isSub2api = /\/api\/v1\/(auth\/login|auth\/me|subscriptions)/i.test(t);
       var isVolc = /volcengine\.com|console\.volcengine/i.test(t);
       var isTelecom = /token\.telecomjs\.com|card-with-time-range|satoken/i.test(t);
       var isGlm = /bigmodel\.cn|bigmodel-organization|bigmodel-project/i.test(t);
@@ -3335,7 +3376,7 @@
         return;
       }
 
-      if (isYescode && !isGlm && !isHuoli) {
+      if (isYescode && !isGlm) {
         document.getElementById('f_platform').value = 'yescode';
         onPlatformChange();
         var cookie = extractCookie(t);
@@ -3350,16 +3391,22 @@
         return;
       }
 
-      if (isHuoli && !isGlm && !isYescode) {
-        document.getElementById('f_platform').value = 'huoli';
+      if (isSub2api && !isGlm && !isYescode) {
+        document.getElementById('f_platform').value = 'sub2api';
         onPlatformChange();
+        // 站点地址取 fetch URL 的 origin
+        var s2Base = t.match(/https?:\/\/[^\/"'\s]+\/api\/v1\//);
+        if (s2Base) { document.getElementById('f_sub2api_base').value = s2Base[0].replace(/\/api\/v1\/$/, ''); }
         var auth = extractHeader(t, 'authorization');
-        if (auth) { document.getElementById('f_huoli_auth').value = auth; }
+        if (auth) { document.getElementById('f_sub2api_auth').value = auth; }
         // 尝试从 body 中解析 email/password（登录接口）
         var bodyMatch = t.match(/"body"\s*:\s*"({[^"]+})"/);
-        if (bodyMatch) { try { var b = JSON.parse(bodyMatch[1].replace(/\\"/g,'"').replace(/\\\\/g,'\\')); if (b.email) document.getElementById('f_huoli_email').value = b.email; if (b.password) document.getElementById('f_huoli_password').value = b.password; } catch(e){} }
-        if (!bodyMatch) { try { var b2 = t.match(/"email"\s*:\s*"([^"]+)"[^}]*"password"\s*:\s*"([^"]+)"/); if (b2) { document.getElementById('f_huoli_email').value = b2[1]; document.getElementById('f_huoli_password').value = b2[2]; } } catch(e){} }
-        if (!auth) { alert('未能解析出 Authorization Token。\n\n请在浏览器 DevTools Network 面板右键请求 →\nCopy → Copy as Node.js fetch（或 Copy as cURL），\n这两种格式才会包含 Authorization。\n\n邮箱和密码会自动从登录接口解析。'); }
+        if (bodyMatch) { try { var b = JSON.parse(bodyMatch[1].replace(/\\"/g,'"').replace(/\\\\/g,'\\')); if (b.email) document.getElementById('f_sub2api_email').value = b.email; if (b.password) document.getElementById('f_sub2api_password').value = b.password; } catch(e){} }
+        if (!bodyMatch) { try { var b2 = t.match(/"email"\s*:\s*"([^"]+)"[^}]*"password"\s*:\s*"([^"]+)"/); if (b2) { document.getElementById('f_sub2api_email').value = b2[1]; document.getElementById('f_sub2api_password').value = b2[2]; } } catch(e){} }
+        if (!s2Base) { alert('未能解析出站点地址，请手动填写 BaseUrl。'); }
+        else if (!auth && !document.getElementById('f_sub2api_email').value) {
+          alert('未能解析出 Authorization 或登录账密。\n\n推荐复制登录接口（auth/login）请求 → Copy as fetch 粘贴，\n邮箱密码会自动解析；Token 失效后自动重登续期。');
+        }
         return;
       }
 
@@ -3429,11 +3476,19 @@
         if ((body.yescode_username && !body.yescode_password) || (!body.yescode_username && body.yescode_password)) {
           if (!confirm('登录账号/密码需同时填写才会在 Cookie 失效时自动重登。当前只填了一项，仍要保存吗？')) return;
         }
-      } else if (platform === 'huoli') {
-        body.authorization = document.getElementById('f_huoli_auth').value.trim();
-        body.huoli_email = document.getElementById('f_huoli_email').value.trim();
-        body.huoli_password = document.getElementById('f_huoli_password').value.trim();
-        if (!body.name || !body.authorization) { alert('账号名称和 Token 不能为空'); return; }
+      } else if (platform === 'sub2api') {
+        body.alias = document.getElementById('f_sub2api_alias').value.trim();
+        body.base_url = document.getElementById('f_sub2api_base').value.trim().replace(/\/+$/, '');
+        body.authorization = document.getElementById('f_sub2api_auth').value.trim();
+        body.sub2api_email = document.getElementById('f_sub2api_email').value.trim();
+        body.sub2api_password = document.getElementById('f_sub2api_password').value;
+        if (!body.name) { alert('账号名称不能为空'); return; }
+        if (!body.base_url || !/^https?:\/\//.test(body.base_url)) { alert('站点地址必填，需以 http(s):// 开头'); return; }
+        // token 24h 过期:token 与账密至少配一样,配了账密即可自动续期
+        if (!body.authorization && !(body.sub2api_email && body.sub2api_password)) { alert('Authorization Token 与 登录邮箱/密码 至少填写一项；推荐填账密，Token 失效后自动重登刷新'); return; }
+        if ((body.sub2api_email && !body.sub2api_password) || (!body.sub2api_email && body.sub2api_password)) {
+          if (!confirm('登录邮箱/密码需同时填写才会在 Token 失效时自动重登。当前只填了一项，仍要保存吗？')) return;
+        }
       } else if (platform === 'volc') {
         body.cookie = document.getElementById('f_volc_cookie').value.trim();
         body.csrf = document.getElementById('f_volc_csrf').value.trim();

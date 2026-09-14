@@ -644,60 +644,91 @@ async function fetchYesCodeUsage(account, index) {
     }
 }
 
-// ============ 火狸 账号 ============
+// ============ Sub2API 中转站 账号 ============
+// 火狸(huolilink.com) 本质是 sub2api 部署,泛化为任意 sub2api 站点:
+// 账号配 base_url + 登录账密,access_token 24h 过期后自动重登续期(旧 huoli 账号无 base_url 时回退 huolilink)。
 
-async function loginHuoli(email, password) {
-    var json = await httpsRequest('POST', 'https://huolilink.com/api/v1/auth/login', {
+function sub2apiBaseUrl(account) {
+    return (account.base_url || 'https://huolilink.com').replace(/\/+$/, '');
+}
+
+// 账密字段:sub2api 账号用 sub2api_email/password,旧 huoli 账号回退 huoli_email/password
+function sub2apiCreds(account) {
+    var email = account.sub2api_email || account.huoli_email || '';
+    var password = account.sub2api_password || account.huoli_password || '';
+    return (email && password) ? { email: email, password: password } : null;
+}
+
+async function loginSub2api(baseUrl, email, password) {
+    var json = await httpsRequest('POST', baseUrl + '/api/v1/auth/login', {
         'accept': 'application/json, text/plain, */*',
         'accept-language': 'zh',
         'content-type': 'application/json'
-    }, { email: email, password: password, user_type: 'personal' });
+    }, { email: email, password: password });
     if (json.code !== 0 || !json.data || !json.data.access_token) {
-        throw new Error('火狸登录失败: ' + (json.message || '未知错误'));
+        throw new Error('Sub2API 登录失败: ' + (json.message || '未知错误'));
     }
     return 'Bearer ' + json.data.access_token;
 }
 
-function saveHuoliToken(index, newAuth) {
+function saveSub2apiToken(index, newAuth) {
     try {
         var accounts = readAccounts();
-        if (accounts[index] && accounts[index].platform === 'huoli') {
+        if (accounts[index] && (accounts[index].platform === 'sub2api' || accounts[index].platform === 'huoli')) {
             accounts[index].authorization = newAuth;
             writeAccounts(accounts);
         }
     } catch (e) { /* ignore write errors */ }
 }
 
-async function fetchHuoliUsage(account, index) {
+// sub2api GET,401(或无 token)且有账密时自动重登后重试。
+// 每次调用都从 account 取最新 token(前一次调用重登后已回写 account.authorization),避免携带过期 token 重复登录。
+async function sub2apiGet(account, index, baseUrl, path, headers) {
+    var h = Object.assign({}, headers, { authorization: account.authorization || (headers && headers.authorization) || '' });
     try {
+        return await httpsGet(baseUrl + path, h);
+    } catch (authErr) {
+        var creds = sub2apiCreds(account);
+        var isAuthErr = authErr.message && authErr.message.indexOf('HTTP 401') >= 0;
+        if (!creds || (!isAuthErr && account.authorization)) throw authErr;
+        var newAuth = await loginSub2api(baseUrl, creds.email, creds.password);
+        saveSub2apiToken(index, newAuth);
+        // 本进程内后续请求立即用新 token（accounts.json 也可能被其他写覆盖，以内存更新为准）
+        account.authorization = newAuth;
+        return await httpsGet(baseUrl + path, Object.assign({}, h, { authorization: newAuth }));
+    }
+}
+
+async function fetchSub2apiUsage(account, index) {
+    try {
+        var baseUrl = sub2apiBaseUrl(account);
         var headers = {
             'accept': 'application/json, text/plain, */*',
             'authorization': account.authorization || ''
         };
-        var json;
-        try {
-            json = await httpsGet('https://huolilink.com/api/v1/subscriptions/active?timezone=Asia%2FShanghai', headers);
-        } catch (authErr) {
-            // 如果是 401 且有 email/password，自动重新登录
-            if (authErr.message && authErr.message.indexOf('HTTP 401') >= 0 && account.huoli_email && account.huoli_password) {
-                var newAuth = await loginHuoli(account.huoli_email, account.huoli_password);
-                saveHuoliToken(index, newAuth);
-                headers.authorization = newAuth;
-                json = await httpsGet('https://huolilink.com/api/v1/subscriptions/active?timezone=Asia%2FShanghai', headers);
-            } else {
-                throw authErr;
-            }
+        // auth/me = 余额/账户信息;subscriptions = 订阅与窗口用量
+        var meJson = await sub2apiGet(account, index, baseUrl, '/api/v1/auth/me?timezone=Asia%2FShanghai', headers);
+        var subsJson = await sub2apiGet(account, index, baseUrl, '/api/v1/subscriptions?timezone=Asia%2FShanghai', headers);
+        var subs = (subsJson && Array.isArray(subsJson.data)) ? subsJson.data : [];
+        // 当前订阅:active 优先,否则按 expires_at 取最近一个(已过期仍展示用量供参考)
+        var current = subs.filter(function(s) { return s && s.status === 'active'; })[0] || null;
+        if (!current && subs.length) {
+            current = subs.slice().sort(function(a, b) {
+                return new Date(b.expires_at || 0) - new Date(a.expires_at || 0);
+            })[0];
         }
         var result = {
             index: index,
             name: account.name,
-            platform: 'huoli',
+            platform: account.platform || 'sub2api',
             responsiblePerson: account.responsiblePerson,
             phone: account.phone,
             notes: account.notes,
             teamEdition: account.teamEdition || undefined,
             isPublic: account.isPublic,
-            data: json.data || json,
+            alias: account.alias || undefined,
+            baseUrl: baseUrl,
+            data: { me: (meJson && meJson.data) || null, subscriptions: subs, current: current },
             success: true,
             cachedAt: Date.now()
         };
@@ -707,12 +738,14 @@ async function fetchHuoliUsage(account, index) {
         return {
             index: index,
             name: account.name,
-            platform: 'huoli',
+            platform: account.platform || 'sub2api',
             responsiblePerson: account.responsiblePerson,
             phone: account.phone,
             notes: account.notes,
             teamEdition: account.teamEdition || undefined,
             isPublic: account.isPublic,
+            alias: account.alias || undefined,
+            baseUrl: sub2apiBaseUrl(account),
             error: err.message,
             success: false
         };
@@ -1328,8 +1361,8 @@ async function fetchAccountUsage(account, index) {
     if (platform === 'yescode') {
         return fetchYesCodeUsage(account, index);
     }
-    if (platform === 'huoli') {
-        return fetchHuoliUsage(account, index);
+    if (platform === 'sub2api' || platform === 'huoli') {
+        return fetchSub2apiUsage(account, index);
     }
     if (platform === 'volc') {
         return fetchVolcUsage(account, index);
@@ -1886,7 +1919,7 @@ module.exports = function(app) {
                 return res.json({ data: mmChart });
             }
             if ((account.platform || 'glm') !== 'glm') {
-                var platName = account.platform === 'huoli' ? '火狸' : (account.platform === 'volc' ? '火山' : (account.platform === 'telecomjs' ? '智云' : (account.platform === 'qwen' ? '千问' : (account.platform === 'minimax' ? 'MiniMax' : 'YesCode'))));
+                var platName = account.platform === 'sub2api' ? 'Sub2API' : (account.platform === 'huoli' ? '火狸' : (account.platform === 'volc' ? '火山' : (account.platform === 'telecomjs' ? '智云' : (account.platform === 'qwen' ? '千问' : (account.platform === 'minimax' ? 'MiniMax' : 'YesCode')))));
                 return res.json({ error: platName + ' 暂不支持用量曲线' });
             }
             var period = req.query.period || '7d';
@@ -1954,6 +1987,10 @@ module.exports._fetchGLMUsage = fetchGLMUsage;
 module.exports._yescodeLogin = yescodeLogin;
 module.exports._fetchYesCodeUsage = fetchYesCodeUsage;
 module.exports._hasYescodeLoginCredentials = hasYescodeLoginCredentials;
+module.exports._loginSub2api = loginSub2api;
+module.exports._fetchSub2apiUsage = fetchSub2apiUsage;
+module.exports._sub2apiCreds = sub2apiCreds;
+module.exports._sub2apiBaseUrl = sub2apiBaseUrl;
 module.exports._withGlmAuthRetry = withGlmAuthRetry;
 module.exports._parseMinimaxSubscription = parseMinimaxSubscription;
 module.exports._parseMinimaxSubscribeInfo = parseMinimaxSubscribeInfo;

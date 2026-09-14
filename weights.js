@@ -220,9 +220,10 @@ function yescodeWindows(d) {
     return ws;
 }
 
-// huoli:data 为数组,取 data[0];今日/本周/本月,起点法(*_window_start)。月度用量字段对齐前端 index.html:1236
-function huoliWindows(data) {
-    var sub = Array.isArray(data) ? data[0] : data;
+// sub2api(含旧 huoli):今日/本周/本月,起点法(*_window_start)。
+// 新数据形状 {me, subscriptions, current}(current 为后端选好的当前订阅);旧 huoli 缓存为裸数组,取 [0]。
+function sub2apiWindows(data) {
+    var sub = Array.isArray(data) ? data[0] : ((data && data.current) || ((data && data.subscriptions) || [])[0]);
     if (!sub) return [];
     var grp = sub.group || {};
     var ws = [];
@@ -364,7 +365,7 @@ function scoreAccount(cachedResult) {
     var windows;
     if (platform === 'glm') windows = glmWindows(cachedResult.data);
     else if (platform === 'yescode') windows = yescodeWindows(cachedResult.data);
-    else if (platform === 'huoli') windows = huoliWindows(cachedResult.data);
+    else if (platform === 'sub2api' || platform === 'huoli') windows = sub2apiWindows(cachedResult.data);
     else if (platform === 'volc') windows = volcWindows(cachedResult.data, cachedResult.planType);
     else if (platform === 'qwen') windows = qwenWindows(cachedResult.data);
     else if (platform === 'minimax') windows = minimaxWindows(cachedResult.data);
