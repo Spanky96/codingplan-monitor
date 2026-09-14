@@ -12,6 +12,7 @@ var glmAccountsFile = config.accountsFile;
 var PASSWORD = config.adminPassword;
 var weights = require('./weights');
 var SUB2API_BASE = config.sub2apiBaseUrl;
+var RELAY_SNAPSHOT_TOKEN = config.relaySnapshotToken;
 var CACHE_TTL = 5 * 60 * 1000;
 var CACHE_FILE = process.env.USAGE_CACHE_FILE
     ? path.resolve(process.env.USAGE_CACHE_FILE)
@@ -1568,6 +1569,34 @@ module.exports = function(app) {
                 res.json(data);
             }).catch(function(err) {
                 res.status(502).json({ error: 'sub2api snapshot fetch failed: ' + err.message });
+            });
+        } catch (err) { res.status(500).json({ error: err.message }); }
+    });
+
+    // ---- 用户实时活动快照（代理拉取 + 3s 内存缓存）----
+    // 供监控页管理员右侧「实时调度 / 今日 Token」面板:聚合中转站全部用户的
+    // 今日用量、实时占用调度数与近跑模型。数据来自中转站内网开放端点
+    // /api/user-activity-snapshot(可用 RELAY_SNAPSHOT_TOKEN 开启门禁)。
+    var _relayActivityCache = { at: 0, data: null };
+    app.get('/api/relay/activity', function(req, res) {
+        try {
+            if (req.query.password !== PASSWORD) return res.status(401).json({ error: 'unauthorized' });
+            var now = Date.now();
+            if (_relayActivityCache.data && now - _relayActivityCache.at < 3000) {
+                return res.json(_relayActivityCache.data);
+            }
+            var url = SUB2API_BASE.replace(/\/+$/, '') + '/api/user-activity-snapshot';
+            if (RELAY_SNAPSHOT_TOKEN) url += '?token=' + encodeURIComponent(RELAY_SNAPSHOT_TOKEN);
+            httpGetJSON(url, 8000).then(function(envelope) {
+                // sub2api 统一信封 {code:0, message, data:{generated_at, users:[...]}}
+                var data = (envelope && envelope.code === 0 && envelope.data) ? envelope.data : null;
+                if (!data || !Array.isArray(data.users)) {
+                    return res.status(502).json({ error: 'unexpected relay activity snapshot shape' });
+                }
+                _relayActivityCache = { at: Date.now(), data: data };
+                res.json(data);
+            }).catch(function(err) {
+                res.status(502).json({ error: 'relay activity snapshot fetch failed: ' + err.message });
             });
         } catch (err) { res.status(500).json({ error: err.message }); }
     });

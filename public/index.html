@@ -204,6 +204,63 @@
     .toolbar-count { margin-left: auto; font-size: 12px; color: var(--text-mute); }
     .card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }
 
+    /* ===== 管理员右侧:中转站实时活动面板 ===== */
+    .main-layout { display: flex; gap: 16px; align-items: flex-start; }
+    .main-col { flex: 1; min-width: 0; }
+    .activity-panel { width: 300px; flex-shrink: 0; position: sticky; top: 12px; display: flex; flex-direction: column; gap: 10px; }
+    .activity-panel.collapsed .activity-card { display: none; }
+    .activity-card { display: flex; flex-direction: column; min-height: 0; max-height: calc(100vh - 24px);
+      background: var(--glass); backdrop-filter: blur(var(--blur)) saturate(150%); -webkit-backdrop-filter: blur(var(--blur)) saturate(150%);
+      border: 1px solid var(--glass-border); border-radius: var(--radius); box-shadow: var(--glass-shadow); overflow: hidden; }
+    .activity-head { display: flex; align-items: center; gap: 8px; padding: 12px 14px 10px; border-bottom: 1px solid var(--glass-border-soft); }
+    .activity-title { font-size: 14px; font-weight: 650; color: var(--text); white-space: nowrap; }
+    .activity-time { font-size: 11px; color: var(--text-faint); margin-left: auto; white-space: nowrap; }
+    .activity-time.stale { color: #f5222d; }
+    .activity-fold { border: 1px solid var(--glass-border-soft); background: var(--glass-soft); color: var(--text-mute);
+      width: 22px; height: 22px; border-radius: 7px; cursor: pointer; font-size: 13px; line-height: 1; display: inline-flex; align-items: center; justify-content: center; }
+    .activity-fold:hover { color: var(--text); }
+    .activity-expand-tab { writing-mode: vertical-rl; letter-spacing: 4px; padding: 14px 6px; border-radius: var(--radius-sm);
+      background: var(--glass); border: 1px solid var(--glass-border); box-shadow: var(--glass-shadow); color: var(--text-soft);
+      font-size: 12px; cursor: pointer; align-self: flex-start; }
+    .activity-expand-tab:hover { color: var(--text); border-color: var(--accent-soft-bd); }
+    .activity-scroll { overflow-y: auto; padding: 12px 14px 14px; }
+    .activity-sub { font-size: 12px; font-weight: 600; color: var(--text-soft); margin: 2px 0 8px; display: flex; align-items: baseline; gap: 6px; }
+    .activity-sub + .activity-sub, #activityRankList + .activity-sub { margin-top: 14px; }
+    .activity-sub-extra { font-size: 11px; font-weight: 400; color: var(--text-faint); }
+    .activity-empty { font-size: 12px; color: var(--text-faint); padding: 6px 0 2px; }
+    .activity-error { font-size: 12px; color: #f5222d; padding: 6px 0 2px; }
+    .dp-row { display: flex; align-items: center; gap: 8px; padding: 7px 0; border-bottom: 1px dashed var(--glass-border-soft); }
+    .dp-row:last-child { border-bottom: none; }
+    .dp-name { font-size: 13px; font-weight: 550; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+    .dp-load { font-size: 11px; font-weight: 600; border-radius: 9px; padding: 2px 8px; white-space: nowrap; flex-shrink: 0; }
+    .dp-load-ok { background: rgba(82,196,26,.14); color: #52c41a; }
+    .dp-load-warn { background: rgba(250,140,22,.16); color: #fa8c16; }
+    .dp-load-full { background: rgba(245,34,45,.14); color: #f5222d; }
+    .dp-wait { font-size: 11px; color: #f5222d; background: rgba(245,34,45,.1); border-radius: 9px; padding: 2px 7px; white-space: nowrap; flex-shrink: 0; }
+    .dp-models { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; }
+    .dp-model-chip { font-size: 10.5px; color: var(--text-soft); background: var(--glass-soft); border: 1px solid var(--glass-border-soft);
+      border-radius: 8px; padding: 1.5px 7px; white-space: nowrap; }
+    .dp-model-chip b { font-weight: 650; color: var(--text); }
+    .rank-row { padding: 6px 0 7px; }
+    .rank-row + .rank-row { border-top: 1px dashed var(--glass-border-soft); }
+    .rank-line { display: flex; align-items: baseline; gap: 7px; }
+    .rank-no { font-size: 11px; font-weight: 700; color: var(--text-faint); width: 14px; flex-shrink: 0; font-style: italic; }
+    .rank-no.top { color: var(--accent); }
+    .rank-name { font-size: 12.5px; font-weight: 550; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+    .rank-val { font-size: 12px; font-weight: 650; color: var(--text); margin-left: auto; white-space: nowrap; font-variant-numeric: tabular-nums; }
+    .rank-cost { font-size: 10.5px; color: var(--text-faint); margin-left: 6px; font-weight: 400; white-space: nowrap; }
+    .rank-bar { height: 4px; border-radius: 2px; background: var(--glass-soft); margin-top: 5px; overflow: hidden; }
+    .rank-bar-fill { height: 100%; border-radius: 2px; background: var(--accent); opacity: .75; }
+    .activity-more { display: block; width: 100%; margin-top: 10px; padding: 6px 0; border: 1px solid var(--glass-border-soft);
+      border-radius: 9px; background: var(--glass-soft); color: var(--text-soft); font-size: 12px; cursor: pointer; }
+    .activity-more:hover { color: var(--text); border-color: var(--accent-soft-bd); }
+    :root.dark .dp-load-ok { background: rgba(82,196,26,.18); color: #95de64; }
+    :root.dark .dp-load-warn { background: rgba(250,140,22,.2); color: #ffc069; }
+    :root.dark .dp-load-full, :root.dark .dp-wait { background: rgba(245,34,45,.2); color: #ff7875; }
+    :root.claude .dp-load-ok { background: rgba(90,125,70,.16); color: #5c7a4e; }
+    :root.claude .dp-load-warn { background: rgba(160,110,50,.16); color: #a06e32; }
+    :root.claude .dp-load-full, :root.claude .dp-wait { background: rgba(160,60,50,.14); color: #a03c32; }
+
     /* ===== 卡片 ===== */
     .card { position: relative; background: var(--glass); backdrop-filter: blur(var(--blur)) saturate(150%); -webkit-backdrop-filter: blur(var(--blur)) saturate(150%);
       border: 1px solid var(--glass-border); border-radius: var(--radius); box-shadow: var(--glass-shadow); overflow: hidden;
@@ -504,6 +561,14 @@
     .list-row-expire.expire-danger { color: var(--danger); font-weight: 600; }
     .list-row-error { color: var(--danger); font-size: 13px; }
 
+    /* 窄屏:右侧实时面板改为整宽堆叠在卡片下方(sticky 取消) */
+    @media (max-width: 1100px) {
+      .main-layout { flex-direction: column; }
+      .activity-panel { width: 100%; position: static; }
+      .activity-card { max-height: 420px; }
+      .activity-expand-tab { writing-mode: horizontal-tb; letter-spacing: 2px; width: 100%; padding: 8px 0; }
+    }
+
     @media (max-width: 768px) {
       .header { padding: 14px 16px; }
       .header h1 { font-size: 17px; }
@@ -596,22 +661,46 @@
     </div>
   </div>
   <div class="container">
-    <div class="toolbar" id="toolbar">
-      <div class="toolbar-group" id="platformFilterGroup">
-        <span class="toolbar-label">站点</span>
-        <button class="toolbar-btn active" data-filter="all" onclick="setFilter('all')">全部</button>
-        <span id="platformFilters"></span>
+    <div class="main-layout">
+      <div class="main-col">
+        <div class="toolbar" id="toolbar">
+          <div class="toolbar-group" id="platformFilterGroup">
+            <span class="toolbar-label">站点</span>
+            <button class="toolbar-btn active" data-filter="all" onclick="setFilter('all')">全部</button>
+            <span id="platformFilters"></span>
+          </div>
+          <div class="toolbar-group">
+            <span class="toolbar-label">排序</span>
+            <button class="toolbar-btn active" data-sort="default" onclick="setSort('default')">默认</button>
+            <button class="toolbar-btn" data-sort="dispatch" onclick="setSort('dispatch')">调度量<span class="sort-arrow" id="dispatchArrow">▼</span></button>
+            <button class="toolbar-btn" data-sort="tension" onclick="setSort('tension')">紧张度<span class="sort-arrow" id="tensionArrow">▼</span></button>
+            <button class="toolbar-btn" data-sort="weight" onclick="setSort('weight')">权重<span class="sort-arrow" id="weightArrow">▼</span></button>
+          </div>
+          <span class="toolbar-count" id="toolbarCount"></span>
+        </div>
+        <div class="card-grid" id="cardGrid"></div>
       </div>
-      <div class="toolbar-group">
-        <span class="toolbar-label">排序</span>
-        <button class="toolbar-btn active" data-sort="default" onclick="setSort('default')">默认</button>
-        <button class="toolbar-btn" data-sort="dispatch" onclick="setSort('dispatch')">调度量<span class="sort-arrow" id="dispatchArrow">▼</span></button>
-        <button class="toolbar-btn" data-sort="tension" onclick="setSort('tension')">紧张度<span class="sort-arrow" id="tensionArrow">▼</span></button>
-        <button class="toolbar-btn" data-sort="weight" onclick="setSort('weight')">权重<span class="sort-arrow" id="weightArrow">▼</span></button>
-      </div>
-      <span class="toolbar-count" id="toolbarCount"></span>
+      <!-- 管理员专属:中转站用户实时调度 + 今日Token 排行(默认隐藏,登录后显示) -->
+      <aside class="activity-panel" id="activityPanel" style="display:none">
+        <div class="activity-card">
+          <div class="activity-head">
+            <span class="activity-title">中转站实时</span>
+            <span class="activity-time" id="activityTime"></span>
+            <button class="activity-fold" id="activityFoldBtn" onclick="toggleActivityPanel()" title="收起面板">‹</button>
+          </div>
+          <div class="activity-scroll" id="activityScroll">
+            <div class="activity-sub">实时调度 <span class="activity-sub-extra" id="activityDispatchSummary"></span></div>
+            <div id="activityDispatchList"></div>
+            <div class="activity-sub">今日 Token <span class="activity-sub-extra" id="activityTokenSummary"></span></div>
+            <div id="activityRankList"></div>
+            <button class="activity-more" id="activityMoreBtn" onclick="toggleActivityRankExpand()" style="display:none"></button>
+          </div>
+        </div>
+        <button class="activity-expand-tab" id="activityExpandTab" onclick="toggleActivityPanel()" title="展开实时面板" style="display:none">
+          <span>实时调度</span>
+        </button>
+      </aside>
     </div>
-    <div class="card-grid" id="cardGrid"></div>
   </div>
 
   <div class="badge-tooltip" id="badgeTooltip" role="tooltip"></div>
@@ -701,6 +790,10 @@
     var weightsMap = {};        // name → 最终权重(管理员,卡片左上角徽标)
     var weightsDetail = {};     // name → 明细(base/strategy/configValue/defaultWeight)
     var capacityMap = {};       // name → {current,total,items[]} sub2api 容量聚合(按权重键)
+    var activityData = null;    // 中转站用户实时活动快照(管理员右侧面板)
+    var _activityError = false; // 最近一次活动快照拉取是否失败(失败保留旧数据展示)
+    var _activityRankExpanded = false;   // 今日 Token 排行是否展开全部
+    var _activityCollapsed = localStorage.getItem('usage_activity_collapsed') === 'true';
     var _weightEditIndex = -1;
     var _weightEditName = null;
     var UNIT_LABELS = { 3: '每5小时', 5: 'MCP月额度', 6: '每周' };
@@ -3172,6 +3265,8 @@
             closeModal('pwdOverlay');
             var next = _pendingAuth;
             _pendingAuth = null;
+            activityApplyVisibility();   // 登录成功后显示实时活动面板
+            loadActivity();
             if (next) { next(); }
           } else {
             document.getElementById('pwdError').textContent = '密码错误';
@@ -3812,6 +3907,165 @@
         .catch(function() {});
     }
 
+    // ============ 中转站实时活动面板(管理员) ============
+
+    function activityApplyVisibility() {
+      var panel = document.getElementById('activityPanel');
+      if (!panel) return;
+      var show = isAdmin();
+      panel.style.display = show ? '' : 'none';
+      if (!show) return;
+      panel.classList.toggle('collapsed', _activityCollapsed);
+      var tab = document.getElementById('activityExpandTab');
+      if (tab) tab.style.display = _activityCollapsed ? '' : 'none';
+    }
+
+    function toggleActivityPanel() {
+      _activityCollapsed = !_activityCollapsed;
+      localStorage.setItem('usage_activity_collapsed', _activityCollapsed ? 'true' : 'false');
+      activityApplyVisibility();
+      if (!_activityCollapsed) loadActivity();   // 展开立即刷新一次
+    }
+
+    function toggleActivityRankExpand() {
+      _activityRankExpanded = !_activityRankExpanded;
+      renderActivityPanel();
+    }
+
+    function activityDisplayName(u) {
+      if (_privacyMode) return '用户' + u.user_id;   // 隐私模式同样遮蔽中转站用户名
+      return u.username || String(u.email || '').split('@')[0] || ('用户' + u.user_id);
+    }
+
+    function activityLoadClass(u) {
+      var inUse = u.current_in_use || 0;
+      var max = u.max_capacity || 0;
+      if ((u.waiting_in_queue || 0) > 0) return 'dp-load-full';
+      if (max <= 0) return inUse > 0 ? 'dp-load-warn' : 'dp-load-ok';
+      var pct = inUse / max;
+      return pct >= 1 ? 'dp-load-full' : pct >= 0.7 ? 'dp-load-warn' : 'dp-load-ok';
+    }
+
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, function(c) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+      });
+    }
+
+    function loadActivity() {
+      var p = localStorage.getItem('glm_pwd') || '';
+      if (!p) { activityData = null; return; }
+      fetch(API_PREFIX + '/api/relay/activity?password=' + encodeURIComponent(p))
+        .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+        .then(function(data) {
+          activityData = data; _activityError = false;
+          renderActivityPanel();
+        })
+        .catch(function() {
+          _activityError = true;
+          renderActivityPanel();   // 保留旧数据 + 标红时间戳
+        });
+    }
+
+    function renderActivityPanel() {
+      if (!isAdmin()) return;
+      var dispatchList = document.getElementById('activityDispatchList');
+      var rankList = document.getElementById('activityRankList');
+      var timeEl = document.getElementById('activityTime');
+      if (!dispatchList || !rankList) return;
+
+      timeEl.classList.toggle('stale', !!_activityError);
+      timeEl.title = _activityError ? '拉取失败,展示最近一次数据' : '';
+
+      if (!activityData) {
+        dispatchList.innerHTML = _activityError
+          ? '<div class="activity-error">中转站连接失败,稍后自动重试</div>'
+          : '<div class="activity-empty">加载中...</div>';
+        rankList.innerHTML = '';
+        document.getElementById('activityDispatchSummary').textContent = '';
+        document.getElementById('activityTokenSummary').textContent = '';
+        document.getElementById('activityMoreBtn').style.display = 'none';
+        return;
+      }
+      if (activityData.generated_at) {
+        timeEl.textContent = new Date(activityData.generated_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      }
+      var users = activityData.users || [];
+
+      // ---- 实时调度:有占用/排队的用户,占用降序 ----
+      var dispatchUsers = [];
+      var totalInUse = 0, totalWait = 0;
+      users.forEach(function(u) {
+        var inUse = u.current_in_use || 0, wait = u.waiting_in_queue || 0;
+        if (inUse <= 0 && wait <= 0) return;
+        totalInUse += inUse; totalWait += wait;
+        dispatchUsers.push(u);
+      });
+      dispatchUsers.sort(function(a, b) {
+        return (b.current_in_use - a.current_in_use) || (b.waiting_in_queue - a.waiting_in_queue);
+      });
+      document.getElementById('activityDispatchSummary').textContent =
+        '总调度 ' + totalInUse + (totalWait > 0 ? ' · 排队 ' + totalWait : '');
+      if (!dispatchUsers.length) {
+        dispatchList.innerHTML = '<div class="activity-empty">当前没有在跑的调度</div>';
+      } else {
+        var html = '';
+        dispatchUsers.forEach(function(u) {
+          var chips = '';
+          var models = u.recent_models || [];
+          if (models.length) {
+            models.slice(0, 4).forEach(function(m) {
+              chips += '<span class="dp-model-chip" title="' + escapeHtml(m.model) + ' ×' + m.count + '">'
+                + escapeHtml(m.model) + (m.count > 1 ? ' <b>×' + m.count + '</b>' : '') + '</span>';
+            });
+            if (models.length > 4) chips += '<span class="dp-model-chip">+' + (models.length - 4) + '</span>';
+          } else if ((u.current_in_use || 0) > 0) {
+            chips = '<span class="dp-model-chip" title="长流式请求暂无完成日志,模型未知">…</span>';
+          }
+          html += '<div class="dp-row"><div style="display:flex;align-items:center;gap:8px;min-width:0">'
+            + '<span class="dp-name" title="' + escapeHtml(activityDisplayName(u)) + '">' + escapeHtml(activityDisplayName(u)) + '</span>'
+            + '<span class="dp-load ' + activityLoadClass(u) + '">' + (u.current_in_use || 0) + '/' + (u.max_capacity || 0) + '</span>'
+            + ((u.waiting_in_queue || 0) > 0 ? '<span class="dp-wait" title="排队中请求">等 ' + u.waiting_in_queue + '</span>' : '')
+            + '</div>'
+            + (chips ? '<div class="dp-models">' + chips + '</div>' : '')
+            + '</div>';
+        });
+        dispatchList.innerHTML = html;
+      }
+
+      // ---- 今日 Token 排行:默认前 5,可展开全部 ----
+      var rankUsers = users.filter(function(u) { return u.today && (u.today.total_tokens || 0) > 0; });
+      rankUsers.sort(function(a, b) { return (b.today.total_tokens || 0) - (a.today.total_tokens || 0); });
+      document.getElementById('activityTokenSummary').textContent = rankUsers.length ? rankUsers.length + ' 人有消费' : '';
+      if (!rankUsers.length) {
+        rankList.innerHTML = '<div class="activity-empty">今日暂无用量</div>';
+      } else {
+        var maxTok = rankUsers[0].today.total_tokens || 1;
+        var shown = _activityRankExpanded ? rankUsers : rankUsers.slice(0, 5);
+        var rhtml = '';
+        shown.forEach(function(u, i) {
+          var pct = Math.max(3, Math.round((u.today.total_tokens / maxTok) * 100));
+          rhtml += '<div class="rank-row">'
+            + '<div class="rank-line">'
+            + '<span class="rank-no' + (i < 3 ? ' top' : '') + '">' + (i + 1) + '</span>'
+            + '<span class="rank-name" title="' + escapeHtml(activityDisplayName(u)) + '">' + escapeHtml(activityDisplayName(u)) + '</span>'
+            + '<span class="rank-val">' + fmtTokens(u.today.total_tokens)
+            + '<span class="rank-cost">$' + (u.today.actual_cost || 0).toFixed(2) + '</span></span>'
+            + '</div>'
+            + '<div class="rank-bar"><div class="rank-bar-fill" style="width:' + pct + '%"></div></div>'
+            + '</div>';
+        });
+        rankList.innerHTML = rhtml;
+      }
+      var moreBtn = document.getElementById('activityMoreBtn');
+      if (rankUsers.length > 5) {
+        moreBtn.style.display = '';
+        moreBtn.textContent = _activityRankExpanded ? '收起' : '更多 ' + (rankUsers.length - 5) + ' 人';
+      } else {
+        moreBtn.style.display = 'none';
+      }
+    }
+
     function loadWeights() {
       // 权重对所有用户可见:游客拿到公开账号权重(后端按 isPublic 过滤),管理员拿全量 + detail
       var p = localStorage.getItem('glm_pwd') || '';
@@ -3956,6 +4210,13 @@
     setInterval(function(){ loadData(); }, 5 * 60 * 1000);
     // 容量快照轻量（后端 5s 缓存）：管理员打开页面时 30s 刷新一次胶囊
     setInterval(function(){ if (isAdmin() && accountsData.length) loadCapacity(); }, 30 * 1000);
+    // 实时活动面板（后端 3s 缓存）：管理员且面板展开时 5s 轮询;页面隐藏时暂停
+    activityApplyVisibility();
+    if (isAdmin()) loadActivity();
+    setInterval(function(){ if (isAdmin() && !_activityCollapsed && !document.hidden) loadActivity(); }, 5 * 1000);
+    document.addEventListener('visibilitychange', function() {
+      if (!document.hidden && isAdmin() && !_activityCollapsed) loadActivity();
+    });
   </script>
 </body>
 </html>

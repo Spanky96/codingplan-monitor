@@ -47,6 +47,8 @@ npm start
 | `ACCOUNTS_FILE` | `./accounts.json` | 账号数据文件路径(Docker 持久化用,本地留空) |
 | `NODE_ENV` | `development` | 运行环境 |
 | `TELECOMJS_CHROME_PATH` | 自动发现 | 智云抓取所用 Chrome/Chromium 可执行文件路径 |
+| `SUB2API_BASE_URL` | `http://192.168.0.20:8090` | sub2api 中转站地址(容量胶囊 / 实时活动面板代理拉取用) |
+| `RELAY_SNAPSHOT_TOKEN` | 空 | 中转站用户活动快照门禁,与中转站 `ACTIVITY_SNAPSHOT_TOKEN` 一致;留空表示中转站未开启门禁 |
 
 `.env` 示例:
 
@@ -121,6 +123,7 @@ docker compose down           # 停止并移除容器(./data 账号数据保留)
 | GET  | `/api/model-usage/:index?period=today\|7d\|30d` | - | 智谱用量曲线 |
 | GET  | `/api/expire[/:index]` | - | 订阅到期时间(24 小时缓存) |
 | GET  | `/api/weights` | 可选密码 | 公开账号 token 分配权重(0~10,纯读缓存) |
+| GET  | `/api/relay/activity` | ✅ | 中转站用户实时活动快照(今日 Token / 实时调度占用 / 近跑模型,代理中转站 `/api/user-activity-snapshot`,3s 缓存) |
 
 鉴权接口通过请求头 `X-Auth-Password` 传递管理密码。
 
@@ -165,6 +168,7 @@ docker compose down           # 停止并移除容器(./data 账号数据保留)
 ## 前端功能
 
 - 卡片视图:各账号额度进度、紧张度(实际用量 vs 理论进度)、重置时间、订阅到期倒计时;Sub2API 卡片以余额 + 今日用量为主(余额徽章 / 今日Token / 今日费用),过期超 3 天的订阅自动隐藏
+- **中转站实时面板(管理员)**:右侧常驻栏实时展示中转站全部用户 —— ①实时调度排行(当前占用 `3/5` 胶囊按负载着色、近 2 分钟完成请求的模型徽章、排队数,5s 轮询);②今日 Token 排行(默认前 5,点「更多」展开全部,含费用与相对比例条)。数据经 `/api/relay/activity` 代理中转站内网端点 `/api/user-activity-snapshot`;可折叠(状态记忆),隐私模式下遮蔽用户名,窄屏自动堆叠到卡片下方;拉取失败保留最近数据并标红时间戳
 - 智谱个人账号重置提醒:周用量达到 60%、未耗尽、明显超出理论进度，且预计会在官方重置前至少停用 1 天时标记「需要重置」；仅排除已勾选「团队版」(type=2) 的账号与任一额度已耗尽的账号（不以 JWT `user_type=ENTERPRISE` 判定，个人订阅号的 JWT 也可能是 ENTERPRISE）
 - 站点筛选(全部 / 智谱 / YesCode / Sub2API / 火山 / 智云 / 千问 / MiniMax,Sub2API 角标显示站点别名)+ 紧张度排序
 - 详情弹窗:负责人信息、余额、消费周期、API Key 表格、用量曲线(echarts)
