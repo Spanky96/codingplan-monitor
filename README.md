@@ -1,6 +1,6 @@
 # GLM 用量监控
 
-多账号 API 用量监控面板,支持 **智谱 GLM(bigmodel.cn)**、**YesCode(co.yes.vg)**、**火狸(huolilink.com)**、**火山(AgentPlan / CodingPlan 同一登录会话)**、**智云(token.telecomjs.com)**、**MiniMax(platform.minimaxi.com)** 等账号,以卡片 + 用量曲线的形式集中展示额度消耗、余额、订阅到期、API Key 管理。
+多账号 API 用量监控面板,支持 **智谱 GLM(bigmodel.cn)**、**YesCode(co.yes.vg)**、**Sub2API 中转站(任意 sub2api 部署站点)**、**火山(AgentPlan / CodingPlan 同一登录会话)**、**智云(token.telecomjs.com)**、**千问(platform.qianwenai.com)**、**MiniMax(platform.minimaxi.com)** 等账号,以卡片 + 用量曲线的形式集中展示额度消耗、余额、订阅到期、API Key 管理。
 
 ## 效果展示
 
@@ -97,8 +97,8 @@ docker compose down           # 停止并移除容器(./data 账号数据保留)
 | 平台 | 必填凭证 | 抓取方式 |
 |------|----------|----------|
 | 智谱 GLM | `authorization`(JWT)、`organization`、`project`；可选 `glm_username` + `glm_password` | bigmodel.cn 任意请求头中的 `authorization` / `bigmodel-organization` / `bigmodel-project`；填了账号密码时 token 过期（401/403/405）会自动重新登录并回写 JWT |
-| YesCode | `cookie` | co.yes.vg 请求中的完整 `Cookie` |
-| 火狸 | `authorization`(Bearer)、可选 `huoli_email` + `huoli_password` | huolilink.com 请求头中的 `Authorization`;填了邮箱密码时 token 过期会自动重新登录 |
+| YesCode | `cookie` 与 `yescode_username` + `yescode_password` 至少一项(推荐账密) | co.yes.vg 请求中的完整 `Cookie`,或登录接口(auth/login)的 fetch(自动解析账密)。官方 Cookie 有效期仅 24h,配了账密后失效自动重登并回写,无需再手动抓 Cookie |
+| Sub2API 中转站 | `base_url`；`authorization` 与 `sub2api_email` + `sub2api_password` 至少一项(推荐账密)；可选 `alias` 站点别名 | 任意 sub2api 部署站点(如 super-nb.me / ai98pro.xyz)。粘贴登录接口或控制台请求的 fetch/cURL,自动识别站点并解析账密。并行抓取 `auth/me`(余额)、`subscriptions`(订阅)、`usage/dashboard/stats`(今日/累计 Token 与费用);卡片以余额 + 今日用量为主,过期超 3 天的订阅自动隐藏。token 24h 失效自动重登。旧火狸账号自动兼容(回退 huolilink.com 与 `huoli_*` 字段) |
 | 火山(AgentPlan=火山A / CodingPlan=火山C) | `cookie`、`csrf`、可选 `web_id`、`planType` | console.volcengine.com 请求(用 cURL 复制带出完整 Cookie);添加账号时选套餐类型:AgentPlan 抓 `GetAgentPlanAFPUsage`,CodingPlan 抓 `GetCodingPlanUsage`。两者同一登录会话,Cookie/CSRF 共用 |
 | 智云 | `satoken`、`phone` | 可手动填写 token.telecomjs.com 请求头中的 `Satoken`;认证失效时卡片会提供重新登录入口，用户核对账号登记手机号后使用官方二维码扫码登录，成功后自动回写。扫码页会自动勾选「一周内自动登录」（若未勾选）。后端通过 Chrome 执行页面及瑞数脚本并查询余额 |
 | MiniMax | `cookie`、可选 `group_id` | platform.minimaxi.com 任意请求的完整 Cookie(含 `_token` 登录态);`group_id` 取请求头 `x-group-id`,留空时自动取 Cookie 中的 `minimax_group_id_v2`。套餐名称与到期时间从消息盒子(`message_category=4` 权益发放通知)解析;5h 限额 / 周限额(均百分比)与视频赠送 / 视频周赠(均计数)从 `remains_percent` 接口解析 |
@@ -141,10 +141,11 @@ docker compose down           # 停止并移除容器(./data 账号数据保留)
 
 **计算流程**:
 1. **CodingPlan base(0~6)**:各平台按 5 小时、周、月等有效窗口的实际消耗速度与理论进度评分，取最紧张窗口；任一有效窗口耗尽则为 0
-2. **智云 base**:`(账户余额 + 赠金) ÷ 近7日有消费日期的日均消费` 得到预计可用天数，按 `<7 / <14 / <30 / <60 / <90 / ≥90 天` 映射为容量分 `1~6`；再乘 CodingPlan 压力系数 `1 + (6 - CodingPlan平均基础分) / 6`，最后按中国时间 `14:00~18:00` 乘 `2`，其他时段乘 `0.5`。余额为 0 时恒为 0；有余额但暂无历史消费时容量分为 6
-3. **策略**(在 base 上叠加,默认 B 倍率 ×1)
-4. **兜底**:base 为 null 时直接用默认权重
-5. **钳制**:最终结果统一 `clamp [0, 10]` 并保留 1 位小数
+2. **余额兜底(YesCode / Sub2API)**:订阅额度耗尽但账号仍有可用余额(按量付费/推荐积分)时不整账号清零——耗尽窗口降为 1 分,并按余额量级(`≥$100/50/20/10/5` → `6/5/4/3/2`,其余 1)附加「余额」窗口;Sub2API 已过期的订阅不再作为约束,纯按余额打分。无余额且耗尽仍为 0
+3. **智云 base**:`(账户余额 + 赠金) ÷ 近7日有消费日期的日均消费` 得到预计可用天数，按 `<7 / <14 / <30 / <60 / <90 / ≥90 天` 映射为容量分 `1~6`；再乘 CodingPlan 压力系数 `1 + (6 - CodingPlan平均基础分) / 6`，最后按中国时间 `14:00~18:00` 乘 `2`，其他时段乘 `0.5`。余额为 0 时恒为 0；有余额但暂无历史消费时容量分为 6
+4. **策略**(在 base 上叠加,默认 B 倍率 ×1)
+5. **兜底**:base 为 null 时直接用默认权重
+6. **钳制**:最终结果统一 `clamp [0, 10]` 并保留 1 位小数
 
 **权重策略**(每账号可配,管理员):
 
@@ -163,9 +164,9 @@ docker compose down           # 停止并移除容器(./data 账号数据保留)
 
 ## 前端功能
 
-- 卡片视图:各账号额度进度、紧张度(实际用量 vs 理论进度)、重置时间、订阅到期倒计时
+- 卡片视图:各账号额度进度、紧张度(实际用量 vs 理论进度)、重置时间、订阅到期倒计时;Sub2API 卡片以余额 + 今日用量为主(余额徽章 / 今日Token / 今日费用),过期超 3 天的订阅自动隐藏
 - 智谱个人账号重置提醒:周用量达到 60%、未耗尽、明显超出理论进度，且预计会在官方重置前至少停用 1 天时标记「需要重置」；仅排除已勾选「团队版」(type=2) 的账号与任一额度已耗尽的账号（不以 JWT `user_type=ENTERPRISE` 判定，个人订阅号的 JWT 也可能是 ENTERPRISE）
-- 站点筛选(全部 / 智谱 / YesCode / 火狸 / 火山 / 智云 / 千问 / MiniMax)+ 紧张度排序
+- 站点筛选(全部 / 智谱 / YesCode / Sub2API / 火山 / 智云 / 千问 / MiniMax,Sub2API 角标显示站点别名)+ 紧张度排序
 - 详情弹窗:负责人信息、余额、消费周期、API Key 表格、用量曲线(echarts)
 - 深色模式(从按钮处径向扩散动画)+ 隐私模式(隐藏账号名)
 - 账号管理:拖拽排序、粘贴 fetch/cURL 快速导入
@@ -173,5 +174,5 @@ docker compose down           # 停止并移除容器(./data 账号数据保留)
 ## 注意事项
 
 - `accounts.json` 与 `.env` 均含明文凭证 / 密码,切勿提交到公开仓库(均已加入 `.gitignore`);`accounts.json` 删除后重启会自动重建空文件。
-- 所有对 bigmodel.cn / co.yes.vg / huolilink.com 的请求由服务端代理转发,浏览器不直接持有凭证。
-- 凭证(JWT / Cookie / Token)会过期,失败时面板显示「请求失败」;智谱若配了登录账号密码会在 401/403/405 时自动重登并回写 JWT,否则需重新抓 token;YesCode 需重抓 Cookie;火狸若配了邮箱密码会自动续登;火山需重抓 Cookie/CSRF;智云认证失败时可从卡片核对手机号并重新登录，自动更新 Satoken；扫码时后端会尽量勾选天翼「一周内自动登录」;MiniMax 需重抓 Cookie。
+- 所有对 bigmodel.cn / co.yes.vg / 各 sub2api 站点的请求由服务端代理转发,浏览器不直接持有凭证。
+- 凭证(JWT / Cookie / Token)会过期,失败时面板显示「请求失败」;智谱若配了登录账号密码会在 401/403/405 时自动重登并回写 JWT,否则需重新抓 token;YesCode 官方 Cookie 有效期仅 24h,配了账密会自动重登续期;Sub2API token 同为 24h,配了账密自动续登;火山需重抓 Cookie/CSRF;智云认证失败时可从卡片核对手机号并重新登录，自动更新 Satoken；扫码时后端会尽量勾选天翼「一周内自动登录」;MiniMax 需重抓 Cookie。
