@@ -709,6 +709,12 @@ async function fetchSub2apiUsage(account, index) {
         // auth/me = 余额/账户信息;subscriptions = 订阅与窗口用量
         var meJson = await sub2apiGet(account, index, baseUrl, '/api/v1/auth/me?timezone=Asia%2FShanghai', headers);
         var subsJson = await sub2apiGet(account, index, baseUrl, '/api/v1/subscriptions?timezone=Asia%2FShanghai', headers);
+        // usage/dashboard/stats = 今日/累计 token 与费用;旧版部署可能无此接口,软失败不影响主数据
+        var stats = null;
+        try {
+            var statsJson = await sub2apiGet(account, index, baseUrl, '/api/v1/usage/dashboard/stats', headers);
+            stats = (statsJson && statsJson.data) || null;
+        } catch (statsErr) { /* 无用量统计接口时忽略 */ }
         var subs = (subsJson && Array.isArray(subsJson.data)) ? subsJson.data : [];
         // 当前订阅:active 优先,否则按 expires_at 取最近一个(已过期仍展示用量供参考)
         var current = subs.filter(function(s) { return s && s.status === 'active'; })[0] || null;
@@ -728,7 +734,7 @@ async function fetchSub2apiUsage(account, index) {
             isPublic: account.isPublic,
             alias: account.alias || undefined,
             baseUrl: baseUrl,
-            data: { me: (meJson && meJson.data) || null, subscriptions: subs, current: current },
+            data: { me: (meJson && meJson.data) || null, subscriptions: subs, current: current, stats: stats },
             success: true,
             cachedAt: Date.now()
         };

@@ -1358,12 +1358,21 @@
       return Math.max(dPct, w, m);
     }
 
-    // sub2api 数据解包:新形状 {me, subscriptions, current};旧 huoli 缓存为裸数组
+    // sub2api 数据解包:新形状 {me, subscriptions, current, stats};旧 huoli 缓存为裸数组
     function sub2apiUnpack(d) {
-      if (Array.isArray(d)) return { me: null, subs: d, sub: d[0] || null };
+      if (Array.isArray(d)) return { me: null, subs: d, sub: d[0] || null, stats: null };
       d = d || {};
       var subs = d.subscriptions || [];
-      return { me: d.me || null, subs: subs, sub: d.current || subs[0] || null };
+      return { me: d.me || null, subs: subs, sub: d.current || subs[0] || null, stats: d.stats || null };
+    }
+
+    // token 数格式化:1234567 → 1.2M
+    function fmtTokens(n) {
+      n = +n || 0;
+      if (n >= 1e9) return (n / 1e9).toFixed(2) + 'B';
+      if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M';
+      if (n >= 1e3) return (n / 1e3).toFixed(1) + 'K';
+      return String(n);
     }
 
     function telecomMetrics(d, cachedAt) {
@@ -1600,13 +1609,21 @@
         var weeklyLimit = grp.weekly_limit_usd || 0;
         var monthlyUsed = (sub && sub.monthly_usage_usd) || 0;
         var monthlyLimit = grp.monthly_limit_usd || 0;
-        // 中转站重点看余额+今日用量:今日行始终展示(有订阅时),周/月仅在有额度时展示
+        // 中转站重点看余额+今日用量:今日消费/今日Token/今日费用三件套,周/月仅在有额度时展示
+        var st = s2a.stats;
         var bodyHtml = '';
         if (sub) {
           bodyHtml = renderSpendRow('今日消费', dailyUsed, dailyLimit, sub.daily_window_start, 86400000);
-          if (weeklyLimit > 0) bodyHtml += renderSpendRow('本周消费', weeklyUsed, weeklyLimit, sub.weekly_window_start, 7 * 86400000);
-          if (monthlyLimit > 0) bodyHtml += renderSpendRow('本月消费', monthlyUsed, monthlyLimit, sub.monthly_window_start, 30 * 86400000);
-        } else {
+        }
+        if (st) {
+          bodyHtml += '<div class="limit-row"><div class="limit-label"><span class="limit-name">今日Token</span><span class="limit-value">' + fmtTokens(st.today_tokens) + '</span></div>'
+            + '<div style="font-size:11px;color:var(--text-faint);margin-top:3px">输入 ' + fmtTokens(st.today_input_tokens) + ' · 输出 ' + fmtTokens(st.today_output_tokens) + ' · 缓存读 ' + fmtTokens(st.today_cache_read_tokens) + ' · 请求 ' + (st.today_requests || 0) + ' 次</div></div>';
+          bodyHtml += '<div class="limit-row"><div class="limit-label"><span class="limit-name">今日费用</span><span class="limit-value">$' + (+st.today_cost || 0).toFixed(2) + ' / 实付 $' + (+st.today_actual_cost || 0).toFixed(2) + '</span></div>'
+            + '<div style="font-size:11px;color:var(--text-faint);margin-top:3px">官方价折算 / 计费倍率后实付</div></div>';
+        }
+        if (sub && weeklyLimit > 0) bodyHtml += renderSpendRow('本周消费', weeklyUsed, weeklyLimit, sub.weekly_window_start, 7 * 86400000);
+        if (sub && monthlyLimit > 0) bodyHtml += renderSpendRow('本月消费', monthlyUsed, monthlyLimit, sub.monthly_window_start, 30 * 86400000);
+        if (!bodyHtml) {
           bodyHtml = '<div class="limit-row"><div class="limit-label"><span class="limit-name">订阅</span><span class="limit-value">暂无订阅 · 按量付费</span></div></div>';
         }
         var dPctH = dailyLimit > 0 ? Math.min(100, (dailyUsed / dailyLimit) * 100) : 0;
@@ -2395,6 +2412,21 @@
         + '<span class="info-label">并发</span><span class="info-value">' + ((me && me.concurrency != null) ? me.concurrency : '-') + '</span>'
         + '<span class="info-label">账户状态</span><span class="info-value">' + esc((me && me.status) || '-') + '</span>'
         + '</div></div>';
+
+      if (s2a.stats) {
+        var stD = s2a.stats;
+        html += '<div class="info-section"><div class="info-section-title">用量统计</div><div class="info-grid">'
+          + '<span class="info-label">今日请求</span><span class="info-value">' + (stD.today_requests || 0) + ' 次</span>'
+          + '<span class="info-label">今日Token</span><span class="info-value">' + fmtTokens(stD.today_tokens) + '</span>'
+          + '<span class="info-label">今日明细</span><span class="info-value" style="font-size:12px">输入 ' + fmtTokens(stD.today_input_tokens) + ' · 输出 ' + fmtTokens(stD.today_output_tokens) + ' · 缓存写 ' + fmtTokens(stD.today_cache_creation_tokens) + ' · 缓存读 ' + fmtTokens(stD.today_cache_read_tokens) + '</span>'
+          + '<span class="info-label">今日费用</span><span class="info-value">$' + (+stD.today_cost || 0).toFixed(4) + ' / 实付 $' + (+stD.today_actual_cost || 0).toFixed(4) + '</span>'
+          + '<span class="info-label">累计请求</span><span class="info-value">' + (stD.total_requests || 0) + ' 次</span>'
+          + '<span class="info-label">累计Token</span><span class="info-value">' + fmtTokens(stD.total_tokens) + '</span>'
+          + '<span class="info-label">累计费用</span><span class="info-value">$' + (+stD.total_cost || 0).toFixed(2) + ' / 实付 $' + (+stD.total_actual_cost || 0).toFixed(2) + '</span>'
+          + '<span class="info-label">实时速率</span><span class="info-value">RPM ' + (stD.rpm || 0) + ' · TPM ' + fmtTokens(stD.tpm) + '</span>'
+          + '<span class="info-label">平均耗时</span><span class="info-value">' + (stD.average_duration_ms != null ? Math.round(stD.average_duration_ms) + ' ms' : '-') + '</span>'
+          + '</div></div>';
+      }
 
       if (sub) {
         html += '<div class="info-section"><div class="info-section-title">订阅信息</div><div class="info-grid">'
