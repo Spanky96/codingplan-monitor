@@ -854,6 +854,8 @@
       // 详情图表若已打开,按新主题配色重绘
       var cont = _detailIndex >= 0 ? document.getElementById('chartContainer-' + _detailIndex) : null;
       if (cont && cont._chartLoaded && _chartPeriod[_detailIndex]) loadUsageChart(_detailIndex, _chartPeriod[_detailIndex]);
+      // 中转站面板模型色随主题切换色阶(槽位不变,仅色值换档)
+      if (FEATURES.relayEnabled && isAdmin() && typeof renderActivityPanel === 'function') renderActivityPanel();
     }
 
     function syncThemePicker() {
@@ -3955,9 +3957,61 @@
       return u.username || String(u.email || '').split('@')[0] || ('用户' + u.user_id);
     }
 
-    // 模型色板:与 Token 用量曲线同源的 8 色;超出或未知模型用中性灰
-    var ACTIVITY_MODEL_COLORS = ['#3b5bdb', '#e03131', '#9c36b5', '#0c8599', '#2f9e44', '#e67700', '#d6336c', '#1971c2'];
+    // 模型色板:亮/暗各一套(同 8 个色相、按表面色分档,dataviz 六项校验通过;
+    // claude 主题复用亮色版,奶油色表面同样通过)。灰色仅用于「未知模型」
+    // 与槽位耗尽后的新模型
+    var ACTIVITY_COLORS_LIGHT = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#4a3aa7', '#e34948'];
+    var ACTIVITY_COLORS_DARK = ['#3987e5', '#d95926', '#199e70', '#c98500', '#d55181', '#008300', '#9085e9', '#e66767'];
     var ACTIVITY_MODEL_GRAY = '#94a3b8';
+    // 模型名 → 色板槽位的持久分配表(localStorage),键名与页面其他本地键同风格
+    var ACTIVITY_SLOTS_KEY = 'usage_activity_model_slots_v1';
+
+    function activityPalette() {
+      return document.documentElement.classList.contains('dark')
+        ? ACTIVITY_COLORS_DARK
+        : ACTIVITY_COLORS_LIGHT;
+    }
+
+    // FNV-1a:模型名稳定哈希,同一名字在任何浏览器/任何时刻算出同一偏好槽
+    function activityNameHash(s) {
+      var h = 2166136261;
+      s = String(s);
+      for (var i = 0; i < s.length; i++) {
+        h ^= s.charCodeAt(i);
+        h = Math.imul(h, 16777619) >>> 0;
+      }
+      return h >>> 0;
+    }
+
+    /* 模型颜色 = 槽位解析,而非按当前集合排序定位:
+     * 首次出现的模型按名字哈希拿偏好槽,被占则按固定顺序找空槽,分配结果
+     * 持久化 —— 之后无论快照里出现/消失哪些其他模型,颜色都不再漂移
+     * (旧实现按排序位次取色,集合一变全体换色)。哈希冲突的模型必然分到
+     * 不同槽,直连/转发(glm-5.3 vs glm-5.3-flash)依旧异色;历史累计超
+     * 8 种后新模型折叠为灰(不入表,槽位保留给既有模型)。 */
+    function activityModelColor(name) {
+      var map = {};
+      try { map = JSON.parse(localStorage.getItem(ACTIVITY_SLOTS_KEY)) || {}; } catch (e) { map = {}; }
+      if (!map || typeof map !== 'object') map = {};
+      var pal = activityPalette();
+      if (Object.prototype.hasOwnProperty.call(map, name)) {
+        return map[name] >= 0 && map[name] < pal.length ? pal[map[name]] : ACTIVITY_MODEL_GRAY;
+      }
+      var used = {};
+      Object.keys(map).forEach(function(k) { used[map[k]] = true; });
+      var slot = -1;
+      var preferred = activityNameHash(name) % pal.length;
+      if (!used[preferred]) slot = preferred;
+      else {
+        for (var i = 0; i < pal.length; i++) {
+          if (!used[i]) { slot = i; break; }
+        }
+      }
+      if (slot < 0) return ACTIVITY_MODEL_GRAY;   // 槽位耗尽:灰色,不写入分配表
+      map[name] = slot;
+      try { localStorage.setItem(ACTIVITY_SLOTS_KEY, JSON.stringify(map)); } catch (e) { /* 忽略写入失败 */ }
+      return pal[slot];
+    }
 
     // 色块颜色 = 实际调用的模型(upstream 优先,未映射回退请求模型):
     // glm-5.3 直连与 glm-5.3 → glm-5.3-flash 转发是两个模型,两种颜色
@@ -3965,8 +4019,8 @@
       return m.upstream_model || m.model;
     }
 
-    // 全局模型集 = 调度实际模型 ∪ 榜单模型明细,按模型名排序后固定取色,
-    // 同一模型在色块/图例/堆叠条中颜色始终一致
+    // 全局模型集 = 调度实际模型 ∪ 榜单模型明细;颜色由 activityModelColor
+    // 按模型名稳定分配,同一模型在色块/图例/堆叠条中颜色始终一致
     function activityColorMap() {
       var models = {};
       (((activityDispatchData || {}).users) || []).forEach(function(u) {
@@ -3976,8 +4030,8 @@
         (u.models || []).forEach(function(m) { if (m && m.model) models[m.model] = true; });
       });
       var map = {};
-      Object.keys(models).sort().forEach(function(m, i) {
-        map[m] = i < ACTIVITY_MODEL_COLORS.length ? ACTIVITY_MODEL_COLORS[i] : ACTIVITY_MODEL_GRAY;
+      Object.keys(models).sort().forEach(function(m) {
+        map[m] = activityModelColor(m);
       });
       return map;
     }
