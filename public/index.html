@@ -618,13 +618,16 @@
   </style>
   <script src="js/echart/echarts.min.js"></script>
   <script>
-    // 子路径部署适配:页面挂在路径前缀下(如 https://host:8887/glm/)时,
+    // 子路径部署适配:页面挂在路径前缀下(如 https://host/glm/)时,
     // 同源后端 API 请求需要带上相同前缀;直接挂根路径则前缀为空,行为不变。
     var API_PREFIX = (function () {
       var parts = location.pathname.split('/');
       if (parts.length < 3 || !parts[1]) return '';
       return '/' + parts[1];
     })();
+    // 可选集成功能开关(启动时从 /api/features 拉取;拉取失败按未启用处理,
+    // 安全默认:中转站面板/容量胶囊不渲染、不轮询)
+    var FEATURES = { relayEnabled: false };
     // 首帧前应用主题,避免闪烁;兼容旧键 usage_dark(true → dark)
     (function(){
       var t = localStorage.getItem('usage_theme');
@@ -3275,9 +3278,11 @@
             closeModal('pwdOverlay');
             var next = _pendingAuth;
             _pendingAuth = null;
-            activityApplyVisibility();   // 登录成功后显示实时活动面板
-            loadActivityDispatch();
-            loadActivityUsage();
+            if (FEATURES.relayEnabled) {
+              activityApplyVisibility();   // 登录成功后显示实时活动面板(配置了中转站才启用)
+              loadActivityDispatch();
+              loadActivityUsage();
+            }
             if (next) { next(); }
           } else {
             document.getElementById('pwdError').textContent = '密码错误';
@@ -3893,6 +3898,8 @@
     }
 
     function loadCapacity() {
+      // 服务端未配置 SUB2API_BASE_URL 时整体禁用(不请求、不渲染胶囊)
+      if (!FEATURES.relayEnabled) { capacityMap = {}; return; }
       // 仅管理员展示（暴露内部账号名）；失败静默：没有快照就不渲染胶囊
       var p = localStorage.getItem('glm_pwd') || '';
       if (!p) { capacityMap = {}; return; }
@@ -3923,7 +3930,7 @@
     function activityApplyVisibility() {
       var panel = document.getElementById('activityPanel');
       if (!panel) return;
-      var show = isAdmin();
+      var show = isAdmin() && FEATURES.relayEnabled;   // 服务端未配置中转站则整体隐藏
       panel.style.display = show ? '' : 'none';
       if (!show) return;
       panel.classList.toggle('collapsed', _activityCollapsed);
@@ -4351,13 +4358,22 @@
     // 容量快照轻量（后端 5s 缓存）：管理员打开页面时 30s 刷新一次胶囊
     setInterval(function(){ if (isAdmin() && accountsData.length) loadCapacity(); }, 30 * 1000);
     // 实时活动面板:调度快照 15s 高频轮询(后端 10s 缓存);
-    // 今日榜单 5 分钟一次 + 标题行 ↻ 手动刷新;页面隐藏时暂停
-    activityApplyVisibility();
-    if (isAdmin()) { loadActivityDispatch(); loadActivityUsage(); }
-    setInterval(function(){ if (isAdmin() && !_activityCollapsed && !document.hidden) loadActivityDispatch(); }, 15 * 1000);
-    setInterval(function(){ if (isAdmin() && !document.hidden) loadActivityUsage(); }, 5 * 60 * 1000);
+    // 今日榜单 5 分钟一次 + 标题行 ↻ 手动刷新;页面隐藏时暂停。
+    // 先拉功能开关再启动:SUB2API_BASE_URL 未配置时面板不渲染、不轮询
+    fetch(API_PREFIX + '/api/features')
+      .then(function(r) { return r.ok ? r.json() : null; })
+      .then(function(f) {
+        if (f && typeof f.relayEnabled === 'boolean') FEATURES.relayEnabled = f.relayEnabled;
+      })
+      .catch(function() {})   // 拉取失败按未启用处理(安全默认)
+      .finally(function() {
+        activityApplyVisibility();
+        if (FEATURES.relayEnabled && isAdmin()) { loadActivityDispatch(); loadActivityUsage(); }
+      });
+    setInterval(function(){ if (FEATURES.relayEnabled && isAdmin() && !_activityCollapsed && !document.hidden) loadActivityDispatch(); }, 15 * 1000);
+    setInterval(function(){ if (FEATURES.relayEnabled && isAdmin() && !document.hidden) loadActivityUsage(); }, 5 * 60 * 1000);
     document.addEventListener('visibilitychange', function() {
-      if (!document.hidden && isAdmin()) {
+      if (!document.hidden && FEATURES.relayEnabled && isAdmin()) {
         if (!_activityCollapsed) loadActivityDispatch();
         loadActivityUsage();
       }

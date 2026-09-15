@@ -48,17 +48,46 @@ function toast(msg, isError) {
 
 /* ================= 配置(localStorage) ================= */
 var LS_KEY = 'minimax_api_key_v1';
-// 网关地址固定为 sub2api 中转站公网入口(只读,不提供修改)
-var API_URL = 'https://lwai.05info.com:8887/v1';
+// 网关地址不硬编码:由服务端 MODELS_GATEWAY_URL 经 /api/features 注入(只读展示)。
+// 未配置时页面整体禁用;拉取失败同样按未配置处理(安全默认)
+var API_URL = '';
+
+// 子路径部署适配(与 index.html 同款):页面挂在路径前缀下时同源 API 带前缀
+var API_PREFIX = (function () {
+  var parts = location.pathname.split('/');
+  if (parts.length < 3 || !parts[1]) return '';
+  return '/' + parts[1];
+})();
 
 function loadConfig() {
+  fetch(API_PREFIX + '/api/features')
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (f) {
+      API_URL = (f && f.modelsGatewayUrl) || '';
+      applyGatewayState();
+    })
+    .catch(function () { applyGatewayState(); });
+}
+
+/* 按网关配置状态渲染配置栏:已配置走原有 Key 加载流程;未配置禁用输入与保存 */
+function applyGatewayState() {
+  var configured = !!API_URL;
   $('api_url').value = API_URL;
+  $('api_url').placeholder = configured ? '' : '服务端未配置 MODELS_GATEWAY_URL';
+  $('api_key').disabled = !configured;
+  $('btn_save_config').disabled = !configured;
+  if (!configured) {
+    setModelGate('(网关未配置:需在服务端 .env 设置 MODELS_GATEWAY_URL)', true);
+    showConfigStatus('网关未配置,模型调用不可用', true);
+    return;
+  }
   // Key 只来自用户保存;不内置任何默认密钥(避免硬编码泄露,
   // 并保证「清除配置」后刷新仍为空,需重新输入)
   $('api_key').value = localStorage.getItem(LS_KEY) || '';
   loadModels();
 }
 function saveConfig() {
+  if (!API_URL) return showConfigStatus('网关未配置,无法保存', true);
   var key = $('api_key').value.trim();
   if (!key) return showConfigStatus('请填写 API Key', true);
   localStorage.setItem(LS_KEY, key);
@@ -95,6 +124,7 @@ function readApiUrl() { return API_URL; }
 function readApiKey() { return $('api_key').value.trim(); }
 function apiBase() { return API_URL; }
 function apiKey() {
+  if (!API_URL) { showError('服务端未配置网关(MODELS_GATEWAY_URL),模型调用不可用'); throw new Error('no gateway'); }
   var k = readApiKey();
   if (!k) { showError('请先填写 API Key'); throw new Error('no key'); }
   return k;
@@ -110,6 +140,7 @@ function setModelGate(hint, disabled) {
 /* 第一步:用户设置 Key 后,经 GET {API_URL}/models 拉取该 Key 分组内
  * 可调用的上游模型(sub2api 按账号模型映射返回),再渲染可选模型。 */
 function loadModels() {
+  if (!API_URL) { setModelGate('(网关未配置)', true); return; }
   var key = readApiKey();
   if (!key) {
     setModelGate('(请先在上方设置 API Key)', true);

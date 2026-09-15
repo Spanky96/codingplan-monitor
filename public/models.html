@@ -20,11 +20,11 @@
 
 <div class="container">
 
-  <!-- 配置栏:API Key(网关地址固定) -->
+  <!-- 配置栏:API Key(网关地址由服务端 MODELS_GATEWAY_URL 注入,只读) -->
   <div class="card config-bar">
     <div class="field grow">
-      <label for="api_url">API URL(固定中转站)</label>
-      <input id="api_url" type="text" value="https://lwai.05info.com:8887/v1" readonly autocomplete="off" spellcheck="false" style="background:rgba(127,127,127,.08);cursor:not-allowed">
+      <label for="api_url">API URL(服务端配置)</label>
+      <input id="api_url" type="text" placeholder="服务端未配置 MODELS_GATEWAY_URL" readonly autocomplete="off" spellcheck="false" style="background:rgba(127,127,127,.08);cursor:not-allowed">
     </div>
     <div class="field grow">
       <label for="api_key">API Key(中转站控制台获取;仅保存在浏览器本地,可随时「清除配置」抹掉)</label>

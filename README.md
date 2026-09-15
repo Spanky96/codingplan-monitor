@@ -47,8 +47,11 @@ npm start
 | `ACCOUNTS_FILE` | `./accounts.json` | 账号数据文件路径(Docker 持久化用,本地留空) |
 | `NODE_ENV` | `development` | 运行环境 |
 | `TELECOMJS_CHROME_PATH` | 自动发现 | 智云抓取所用 Chrome/Chromium 可执行文件路径 |
-| `SUB2API_BASE_URL` | `http://192.168.0.20:8090` | sub2api 中转站地址(容量胶囊 / 实时活动面板代理拉取用) |
+| `SUB2API_BASE_URL` | 空(不启用) | sub2api 中转站地址;配置后启用容量胶囊与实时调度/今日Token 面板(需中转站具备 weight-snapshot / user-activity-snapshot / user-usage-snapshot 快照端点,lwsub2api 分支提供) |
 | `RELAY_SNAPSHOT_TOKEN` | 空 | 中转站用户活动快照门禁,与中转站 `ACTIVITY_SNAPSHOT_TOKEN` 一致;留空表示中转站未开启门禁 |
+| `MODELS_GATEWAY_URL` | 空(不启用) | 模型调用页(`models.html`)网关地址(OpenAI 兼容入口,含 `/v1`);配置后页面可用,留空禁用 |
+| `CREDENTIALS_EXPORT` | 空(关闭) | 凭证导出接口 `/api/credentials` 开关(供中转站外部渠道同步登录态),接受 `1/true/yes`;留空则路由不注册 |
+| `MINIMAX_PROXY_UPSTREAM` | 空(关闭) | MiniMax 反向代理 `/minimax/*` 上游地址(兼容保留,模型调用页已直连网关);留空则代理返回 404 |
 
 `.env` 示例:
 
@@ -112,6 +115,7 @@ docker compose down           # 停止并移除容器(./data 账号数据保留)
 | 方法 | 路径 | 鉴权 | 说明 |
 |------|------|------|------|
 | POST | `/api/auth` | - | 校验管理密码 |
+| GET  | `/api/features` | - | 功能开关上报(`relayEnabled` / `modelsGatewayUrl`),前端据此决定可选集成功能是否渲染 |
 | GET  | `/api/usage` | - | 全部账号用量(秒回:新鲜缓存直接返回,缺失/强刷时先返回旧数据或 loading 骨架并后台抓取;前端再按卡补齐) |
 | GET  | `/api/usage/:index` | - | 单账号用量(可 join 列表触发的进行中抓取) |
 | GET  | `/api/keys/:index` | - | 智谱账号 API Key 列表 |
@@ -123,8 +127,9 @@ docker compose down           # 停止并移除容器(./data 账号数据保留)
 | GET  | `/api/model-usage/:index?period=today\|7d\|30d` | - | 智谱用量曲线 |
 | GET  | `/api/expire[/:index]` | - | 订阅到期时间(24 小时缓存) |
 | GET  | `/api/weights` | 可选密码 | 公开账号 token 分配权重(0~10,纯读缓存) |
-| GET  | `/api/relay/activity` | ✅ | 中转站实时调度快照(占用/排队 + 近跑模型,代理中转站 `/api/user-activity-snapshot`,10s 缓存) |
-| GET  | `/api/relay/usage` | ✅ | 中转站今日用量榜单(站内 + 外部资源合并、按模型明细,代理 `/api/user-usage-snapshot`,4 分钟缓存,`force=1` 旁路) |
+| GET  | `/api/relay/activity` | ✅ | 中转站实时调度快照(占用/排队 + 近跑模型,代理中转站 `/api/user-activity-snapshot`,10s 缓存);`SUB2API_BASE_URL` 未配置时返回 404 |
+| GET  | `/api/relay/usage` | ✅ | 中转站今日用量榜单(站内 + 外部资源合并、按模型明细,代理 `/api/user-usage-snapshot`,4 分钟缓存,`force=1` 旁路);`SUB2API_BASE_URL` 未配置时返回 404 |
+| GET  | `/api/credentials` | ✅ | 凭证导出(按平台返回 `{账号名: 凭证}`,供中转站外部渠道同步登录态);**默认关闭**,`.env` 配置 `CREDENTIALS_EXPORT=1` 后才注册 |
 
 鉴权接口通过请求头 `X-Auth-Password` 传递管理密码。
 
@@ -169,7 +174,8 @@ docker compose down           # 停止并移除容器(./data 账号数据保留)
 ## 前端功能
 
 - 卡片视图:各账号额度进度、紧张度(实际用量 vs 理论进度)、重置时间、订阅到期倒计时;Sub2API 卡片以余额 + 今日用量为主(余额徽章 / 今日Token / 今日费用),过期超 3 天的订阅自动隐藏
-- **中转站实时面板(管理员)**:右侧常驻栏展示中转站全部用户 —— ①实时调度(每个在跑调度一个色块,颜色按**实际调用模型**分配——`glm-5.3` 直连与 `glm-5.3 → glm-5.3-flash` 转发为两种颜色,悬浮显示映射,下方图例;15s 轮询);②今日 Token 排行(默认前 5,点「更多」展开全部;进度条按模型**多色堆叠**;站内 + `/admin/external-resources` 外部资源用量合并成完整榜单,外部部分带「外 N」徽标;5 分钟刷新一次,标题行 ↻ 手动刷新)。可折叠(状态记忆,折叠时卡片区占满),隐私模式下遮蔽用户名,窄屏自动堆叠到卡片下方;拉取失败保留最近数据并标红时间戳
+- **中转站实时面板(管理员)**:右侧常驻栏展示中转站全部用户 —— ①实时调度(每个在跑调度一个色块,颜色按**实际调用模型**分配——`glm-5.3` 直连与 `glm-5.3 → glm-5.3-flash` 转发为两种颜色,悬浮显示映射,下方图例;15s 轮询);②今日 Token 排行(默认前 5,点「更多」展开全部;进度条按模型**多色堆叠**;站内 + `/admin/external-resources` 外部资源用量合并成完整榜单,外部部分带「外 N」徽标;5 分钟刷新一次,标题行 ↻ 手动刷新)。可折叠(状态记忆,折叠时卡片区占满),隐私模式下遮蔽用户名,窄屏自动堆叠到卡片下方;拉取失败保留最近数据并标红时间戳。**仅当 `.env` 配置了 `SUB2API_BASE_URL` 时展示**(容量胶囊同理),未配置时面板与胶囊不渲染、不轮询
+- 模型调用页(右上角「模型调用」):网关地址由服务端 `MODELS_GATEWAY_URL` 注入(只读);未配置时页面禁用并提示
 - 智谱个人账号重置提醒:周用量达到 60%、未耗尽、明显超出理论进度，且预计会在官方重置前至少停用 1 天时标记「需要重置」；仅排除已勾选「团队版」(type=2) 的账号与任一额度已耗尽的账号（不以 JWT `user_type=ENTERPRISE` 判定，个人订阅号的 JWT 也可能是 ENTERPRISE）
 - 站点筛选(全部 / 智谱 / YesCode / Sub2API / 火山 / 智云 / 千问 / MiniMax,Sub2API 角标显示站点别名)+ 紧张度排序
 - 详情弹窗:负责人信息、余额、消费周期、API Key 表格、用量曲线(echarts)

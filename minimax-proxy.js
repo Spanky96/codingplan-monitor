@@ -1,11 +1,13 @@
 // MiniMax 反向代理:把同源请求 /minimax/* 透传到 sub2api 中转站,
 // 由中转站按账号端点映射透传 https://api.minimaxi.com/*(原生端点透传)。
 // 目的:规避浏览器直连中转站/官方 API 的跨域与证书问题。
-// 安全:上游主机固定(可用 MINIMAX_PROXY_UPSTREAM 覆盖),不读取请求里的目标,
-// 避免成为开放代理 / SSRF。
+// 默认关闭:.env 配置 MINIMAX_PROXY_UPSTREAM 后才启用,未配置时 /minimax/* 返回 404。
+// (models 模型调用页现已直连网关地址,本代理为兼容保留)
+// 安全:上游主机固定,不读取请求里的目标,避免成为开放代理 / SSRF。
 'use strict';
 
-const UPSTREAM_ORIGIN = process.env.MINIMAX_PROXY_UPSTREAM || 'http://192.168.0.20:8090';
+const config = require('./config');
+const UPSTREAM_ORIGIN = config.minimaxProxyUpstream;
 
 // 不转发给上游的请求头(hop-by-hop / 代理语义;content-encoding 由 fetch 自行处理)
 const STRIP_REQ = ['host', 'connection', 'content-length', 'transfer-encoding', 'keep-alive',
@@ -63,6 +65,15 @@ function proxy(req, res) {
 }
 
 module.exports = function (app) {
+  if (!UPSTREAM_ORIGIN) {
+    // 未配置上游:注册占位路由返回明确错误,避免误用
+    const notConfigured = (req, res) => res.status(404).json({
+      error: 'MINIMAX_PROXY_UPSTREAM 未配置,反向代理未启用'
+    });
+    app.all('/minimax', notConfigured);
+    app.all('/minimax/*', notConfigured);
+    return;
+  }
   app.all('/minimax', proxy);
   app.all('/minimax/*', proxy);
 };

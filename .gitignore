@@ -4,6 +4,7 @@ accounts.json
 *.log
 /tmp
 /test
+/cclogs
 usage-cache.json
 token.telecomjs.com/
 

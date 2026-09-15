@@ -1410,6 +1410,16 @@ module.exports = function(app) {
         res.json({ success: req.body.password === PASSWORD });
     });
 
+    // ============ 功能开关(公开,无鉴权) ============
+    // 前端启动时拉取一次,据此决定是否渲染/轮询可选集成功能。
+    // 只暴露布尔值与网关地址字符串,绝不暴露 token / 密码。
+    app.get('/api/features', function(req, res) {
+        res.json({
+            relayEnabled: config.relayEnabled,
+            modelsGatewayUrl: config.modelsGatewayUrl
+        });
+    });
+
     // ============ 用量查询 ============
     // /api/usage 始终秒回:有缓存(含过期)先展示,缺失则返回 loading 骨架;
     // 需要刷新的账号在后台抓取,前端再调 /api/usage/:index 补齐(join 同一 inflight)。
@@ -1466,9 +1476,10 @@ module.exports = function(app) {
         } catch (err) { res.status(500).json({ error: err.message }); }
     });
 
-    // ============ 凭证导出接口(为中转站等内部系统同步最新登录态,需管理密码) ============
+    // ============ 凭证导出接口(为中转站等内部系统同步最新登录态) ============
+    // 默认关闭:仅当 .env 配置 CREDENTIALS_EXPORT=1 时注册路由,否则接口不存在。
     // 背景:yescode 等平台官方 token 有效期缩短为 24h,本项目已支持账密自动重登并持续
-    // 刷新凭证;下游(如 lwsub2api 外部渠道)按账号名精确匹配拉取,避免各自维护登录。
+    // 刷新凭证;下游(中转站外部渠道)按账号名精确匹配拉取,避免各自维护登录。
     // GET /api/credentials?password=<管理密码>&platform=yescode → { "账号名": "凭证" }
     var CREDENTIAL_FIELDS = {
         yescode: 'cookie',
@@ -1480,21 +1491,23 @@ module.exports = function(app) {
         minimax: 'cookie',
         telecomjs: 'satoken'
     };
-    app.get('/api/credentials', function(req, res) {
-        try {
-            if (req.query.password !== PASSWORD) return res.status(401).json({ error: 'unauthorized' });
-            var platform = req.query.platform || 'yescode';
-            var field = CREDENTIAL_FIELDS[platform];
-            if (!field) return res.status(400).json({ error: '不支持的平台: ' + platform });
-            var out = {};
-            readAccounts().forEach(function(acc) {
-                if (!acc || (acc.platform || 'glm') !== platform) return;
-                var cred = (acc[field] || '').trim();
-                if (cred) out[acc.name] = cred;
-            });
-            res.json(out);
-        } catch (err) { res.status(500).json({ error: err.message }); }
-    });
+    if (config.credentialsExportEnabled) {
+        app.get('/api/credentials', function(req, res) {
+            try {
+                if (req.query.password !== PASSWORD) return res.status(401).json({ error: 'unauthorized' });
+                var platform = req.query.platform || 'yescode';
+                var field = CREDENTIAL_FIELDS[platform];
+                if (!field) return res.status(400).json({ error: '不支持的平台: ' + platform });
+                var out = {};
+                readAccounts().forEach(function(acc) {
+                    if (!acc || (acc.platform || 'glm') !== platform) return;
+                    var cred = (acc[field] || '').trim();
+                    if (cred) out[acc.name] = cred;
+                });
+                res.json(out);
+            } catch (err) { res.status(500).json({ error: err.message }); }
+        });
+    }
 
     // ============ 权重接口(为中转站提供 token 分配权重,纯读缓存 + 默认兜底) ============
     app.get('/api/weights', function(req, res) {
@@ -1550,9 +1563,11 @@ module.exports = function(app) {
     // ---- sub2api 容量快照（代理拉取 + 5s 内存缓存）----
     // 供监控页渲染「当前调度中|总容量」胶囊；按 matched_key 聚合后悬浮可看
     // 指向同一权重的多个 sub2api 账号细分。sub2api 侧快照为内网开放数据。
+    // 未配置 SUB2API_BASE_URL 时整体禁用(前端也不会轮询本接口)。
     var _sub2apiCapacityCache = { at: 0, data: null };
     app.get('/api/sub2api/capacity', function(req, res) {
         try {
+            if (!config.relayEnabled) return res.status(404).json({ error: 'SUB2API_BASE_URL 未配置,中转站功能未启用' });
             if (req.query.password !== PASSWORD) return res.status(401).json({ error: 'unauthorized' });
             var now = Date.now();
             if (_sub2apiCapacityCache.data && now - _sub2apiCapacityCache.at < 5000) {
@@ -1585,6 +1600,7 @@ module.exports = function(app) {
     }
     app.get('/api/relay/activity', function(req, res) {
         try {
+            if (!config.relayEnabled) return res.status(404).json({ error: 'SUB2API_BASE_URL 未配置,中转站功能未启用' });
             if (req.query.password !== PASSWORD) return res.status(401).json({ error: 'unauthorized' });
             var now = Date.now();
             if (_relayActivityCache.data && now - _relayActivityCache.at < 10000) {
@@ -1607,6 +1623,7 @@ module.exports = function(app) {
     var _relayUsageCache = { at: 0, data: null };
     app.get('/api/relay/usage', function(req, res) {
         try {
+            if (!config.relayEnabled) return res.status(404).json({ error: 'SUB2API_BASE_URL 未配置,中转站功能未启用' });
             if (req.query.password !== PASSWORD) return res.status(401).json({ error: 'unauthorized' });
             var now = Date.now();
             if (req.query.force !== '1' && _relayUsageCache.data && now - _relayUsageCache.at < 4 * 60 * 1000) {
