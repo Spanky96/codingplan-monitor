@@ -1,6 +1,6 @@
 # GLM 用量监控
 
-多账号 API 用量监控面板,支持 **智谱 GLM(bigmodel.cn)**、**YesCode(co.yes.vg)**、**Sub2API 中转站(任意 sub2api 部署站点)**、**火山(AgentPlan / CodingPlan 同一登录会话)**、**智云(token.telecomjs.com)**、**千问(platform.qianwenai.com)**、**MiniMax(platform.minimaxi.com)** 等账号,以卡片 + 用量曲线的形式集中展示额度消耗、余额、订阅到期、API Key 管理。
+多账号 API 用量监控面板,支持 **智谱 GLM(bigmodel.cn)**、**YesCode(co.yes.vg)**、**Sub2API 中转站(任意 sub2api 部署站点)**、**火山(AgentPlan / CodingPlan 同一登录会话)**、**智云(token.telecomjs.com)**、**千问(platform.qianwenai.com)**、**MiniMax(platform.minimaxi.com)**、**阶跃星辰(platform.stepfun.com)** 等账号,以卡片 + 用量曲线的形式集中展示额度消耗、余额、订阅到期、API Key 管理。
 
 ## 效果展示
 
@@ -107,6 +107,7 @@ docker compose down           # 停止并移除容器(./data 账号数据保留)
 | 火山(AgentPlan=火山A / CodingPlan=火山C) | `cookie`、`csrf`、可选 `web_id`、`planType` | console.volcengine.com 请求(用 cURL 复制带出完整 Cookie);添加账号时选套餐类型:AgentPlan 抓 `GetAgentPlanAFPUsage`,CodingPlan 抓 `GetCodingPlanUsage`。两者同一登录会话,Cookie/CSRF 共用 |
 | 智云 | `satoken`、`phone` | 可手动填写 token.telecomjs.com 请求头中的 `Satoken`;认证失效时卡片会提供重新登录入口，用户核对账号登记手机号后使用官方二维码扫码登录，成功后自动回写。扫码页会自动勾选「一周内自动登录」（若未勾选）。后端通过 Chrome 执行页面及瑞数脚本并查询余额 |
 | MiniMax | `cookie`、可选 `group_id` | platform.minimaxi.com 任意请求的完整 Cookie(含 `_token` 登录态);`group_id` 取请求头 `x-group-id`,留空时自动取 Cookie 中的 `minimax_group_id_v2`。套餐名称与到期时间从消息盒子(`message_category=4` 权益发放通知)解析;5h 限额 / 周限额(均百分比)与视频赠送 / 视频周赠(均计数)从 `remains_percent` 接口解析 |
+| 阶跃星辰 | `cookie`、可选 `stepfun_webid` | platform.stepfun.com 任意请求的完整 Cookie(建议 Copy as cURL,须含 `Oasis-Token` 双段 JWT 与 `_wafdytokenv1`);`webid` 取请求头 `oasis-webid`,留空时自动取 Cookie 中的 `Oasis-Webid`。抓 Connect RPC 接口:`GetStepPlanStatus`(套餐)、`QueryStepPlanRateLimit`(月度积分限额)、`QueryStepPlanUsages`(今日/曲线用量)、`QueryAccountBalance`(按量余额)。access 段仅 30 分钟,过期自动用 refresh 段(~30 天,不轮换)续期并回写 Cookie 中的 `Oasis-Token` 段 |
 
 ## 后端 API
 
@@ -124,7 +125,7 @@ docker compose down           # 停止并移除容器(./data 账号数据保留)
 | DELETE | `/api/keys/:index/:apiKey` | ✅ | 删除 Key |
 | GET  | `/api/accounts` | ✅ | 账号列表 |
 | POST / PUT / DELETE | `/api/accounts[/:index]` | ✅ | 账号增改删 / 整体排序 |
-| GET  | `/api/model-usage/:index?period=today\|7d\|30d` | - | 智谱用量曲线 |
+| GET  | `/api/model-usage/:index?period=today\|7d\|30d` | - | 用量曲线(智谱当日/7/30 天、千问、MiniMax 与阶跃 7/30 天,阶跃纵轴为积分) |
 | GET  | `/api/expire[/:index]` | - | 订阅到期时间(24 小时缓存) |
 | GET  | `/api/weights` | 可选密码 | 公开账号 token 分配权重(0~10,纯读缓存) |
 | GET  | `/api/relay/activity` | ✅ | 中转站实时调度快照(占用/排队 + 近跑模型,代理中转站 `/api/user-activity-snapshot`,10s 缓存);`SUB2API_BASE_URL` 未配置时返回 404 |
@@ -177,7 +178,7 @@ docker compose down           # 停止并移除容器(./data 账号数据保留)
 - **中转站实时面板(管理员)**:右侧常驻栏展示中转站全部用户 —— ①实时调度(每个在跑调度一个色块,颜色按**实际调用模型**分配——`glm-5.3` 直连与 `glm-5.3 → glm-5.3-flash` 转发为两种颜色,悬浮显示映射,下方图例;15s 轮询);②今日 Token 排行(默认前 5,点「更多」展开全部;进度条按模型**多色堆叠**;站内 + `/admin/external-resources` 外部资源用量合并成完整榜单,外部部分带「外 N」徽标;5 分钟刷新一次,标题行 ↻ 手动刷新)。可折叠(状态记忆,折叠时卡片区占满),隐私模式下遮蔽用户名,窄屏自动堆叠到卡片下方;拉取失败保留最近数据并标红时间戳。**模型颜色按模型名固定分配**(哈希定槽 + 本地持久化,不随在线模型集合变化而漂移;亮/暗主题各一套已校验色阶)。**仅当 `.env` 配置了 `SUB2API_BASE_URL` 时展示**(容量胶囊同理),未配置时面板与胶囊不渲染、不轮询
 - 模型调用页(右上角「模型调用」):网关地址由服务端 `MODELS_GATEWAY_URL` 注入(只读);未配置时页面禁用并提示
 - 智谱个人账号重置提醒:周用量达到 60%、未耗尽、明显超出理论进度，且预计会在官方重置前至少停用 1 天时标记「需要重置」；仅排除已勾选「团队版」(type=2) 的账号与任一额度已耗尽的账号（不以 JWT `user_type=ENTERPRISE` 判定，个人订阅号的 JWT 也可能是 ENTERPRISE）
-- 站点筛选(全部 / 智谱 / YesCode / Sub2API / 火山 / 智云 / 千问 / MiniMax,Sub2API 角标显示站点别名)+ 紧张度排序
+- 站点筛选(全部 / 智谱 / YesCode / Sub2API / 火山 / 智云 / 千问 / MiniMax / 阶跃星辰,Sub2API 角标显示站点别名)+ 紧张度排序
 - 详情弹窗:负责人信息、余额、消费周期、API Key 表格、用量曲线(echarts)
 - 深色模式(从按钮处径向扩散动画)+ 隐私模式(隐藏账号名)
 - 账号管理:拖拽排序、粘贴 fetch/cURL 快速导入
@@ -186,4 +187,4 @@ docker compose down           # 停止并移除容器(./data 账号数据保留)
 
 - `accounts.json` 与 `.env` 均含明文凭证 / 密码,切勿提交到公开仓库(均已加入 `.gitignore`);`accounts.json` 删除后重启会自动重建空文件。
 - 所有对 bigmodel.cn / co.yes.vg / 各 sub2api 站点的请求由服务端代理转发,浏览器不直接持有凭证。
-- 凭证(JWT / Cookie / Token)会过期,失败时面板显示「请求失败」;智谱若配了登录账号密码会在 401/403/405 时自动重登并回写 JWT,否则需重新抓 token;YesCode 官方 Cookie 有效期仅 24h,配了账密会自动重登续期;Sub2API token 同为 24h,配了账密自动续登;火山需重抓 Cookie/CSRF;智云认证失败时可从卡片核对手机号并重新登录，自动更新 Satoken；扫码时后端会尽量勾选天翼「一周内自动登录」;MiniMax 需重抓 Cookie。
+- 凭证(JWT / Cookie / Token)会过期,失败时面板显示「请求失败」;智谱若配了登录账号密码会在 401/403/405 时自动重登并回写 JWT,否则需重新抓 token;YesCode 官方 Cookie 有效期仅 24h,配了账密会自动重登续期;Sub2API token 同为 24h,配了账密自动续登;火山需重抓 Cookie/CSRF;智云认证失败时可从卡片核对手机号并重新登录，自动更新 Satoken；扫码时后端会尽量勾选天翼「一周内自动登录」;MiniMax 需重抓 Cookie;阶跃 Cookie 中的 access 段仅 30 分钟,后端会自动用 refresh 段续期并回写(建议整段 Copy as cURL 保留 `_wafdytokenv1` 等 WAF 段),refresh 段约 30 天过期,过期后需重抄完整 Cookie。

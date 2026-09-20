@@ -288,6 +288,7 @@
     .platform-telecomjs { background: rgba(225,29,72,.15); color: #be123c; border: 1px solid rgba(225,29,72,.3); }
     .platform-qwen { background: rgba(219,39,119,.15); color: #be185d; border: 1px solid rgba(219,39,119,.3); }
     .platform-minimax { background: rgba(202,138,4,.16); color: #a16207; border: 1px solid rgba(202,138,4,.3); }
+    .platform-stepfun { background: rgba(79,70,229,.16); color: #4338ca; border: 1px solid rgba(79,70,229,.3); }
     :root.dark .platform-glm { background: rgba(56,189,248,.16); color: #7dd3fc; border-color: rgba(56,189,248,.3); }
     :root.dark .platform-yescode { background: rgba(74,222,128,.16); color: #86efac; border-color: rgba(74,222,128,.3); }
     :root.dark .platform-huoli { background: rgba(251,191,36,.16); color: #fcd34d; border-color: rgba(251,191,36,.3); }
@@ -297,6 +298,7 @@
     :root.dark .platform-telecomjs { background: rgba(251,113,133,.16); color: #fda4af; border-color: rgba(251,113,133,.3); }
     :root.dark .platform-qwen { background: rgba(244,114,182,.16); color: #f9a8d4; border-color: rgba(244,114,182,.3); }
     :root.dark .platform-minimax { background: rgba(250,204,21,.16); color: #fde047; border-color: rgba(250,204,21,.3); }
+    :root.dark .platform-stepfun { background: rgba(165,180,252,.16); color: #a5b4fc; border-color: rgba(165,180,252,.3); }
 
     .card-status { font-size: 12px; padding: 2px 11px; border-radius: 11px; font-weight: 600; }
     .status-ok { background: var(--ok-bg); color: var(--ok); border: 1px solid var(--ok-bd); }
@@ -1031,6 +1033,7 @@
       if (platform === 'telecomjs') return '智云';
       if (platform === 'qwen') return '千问';
       if (platform === 'minimax') return 'MiniMax';
+      if (platform === 'stepfun') return '阶跃星辰';
       return '智谱';
     }
     // 团队版 level 翻译：pro→团队标准版, max→团队高级版; 非团队版原样返回
@@ -1286,6 +1289,7 @@
       if (platform === 'telecomjs') return '<span class="platform-tag platform-telecomjs">智云</span>';
       if (platform === 'qwen') return '<span class="platform-tag platform-qwen">千问</span>';
       if (platform === 'minimax') return '<span class="platform-tag platform-minimax">MiniMax</span>';
+      if (platform === 'stepfun') return '<span class="platform-tag platform-stepfun">阶跃星辰</span>';
       return '<span class="platform-tag platform-glm">智谱</span>';
     }
 
@@ -1636,6 +1640,23 @@
       }));
     }
 
+    // 阶跃 credit 大数缩写：>=1e8 → x.xx亿，>=1e4 → x.x万，否则原样（如 2930）
+    function fmtStepfunCredits(v) {
+      var n = Number(v) || 0;
+      if (n >= 1e8) { var y = (n / 1e8).toFixed(2); return y.replace(/\.?0+$/, '') + '亿'; }
+      if (n >= 1e4) { var w = (n / 1e4).toFixed(1); return w.replace(/\.0$/, '') + '万'; }
+      return String(n);
+    }
+
+    // 阶跃「今日积分」行：今日（北京时间）消耗 credit + 调用次数；无数据返回空串
+    function stepfunTodayRow(usage) {
+      var t = usage && usage.today;
+      if (!t || t.credits == null) return '';
+      var calls = t.calls ? ' · ' + t.calls + '次' : '';
+      return '<div class="limit-row"><div class="limit-label"><span class="limit-name">今日积分</span>'
+        + '<span class="limit-value">' + esc(fmtStepfunCredits(t.credits)) + calls + '</span></div></div>';
+    }
+
     function renderCardHTML(i, acc) {
       var platform = acc.platform || 'glm';
       var btn = isAdmin() ? '<button class="card-refresh" id="refresh-' + i + '" onclick="refreshCard(' + i + ')" title="刷新">&#x21bb;</button>' : '';
@@ -1848,6 +1869,34 @@
           + '<button class="detail-btn" onclick="showDetail(' + i + ')">详情</button></div></div>';
       }
 
+      if (platform === 'stepfun') {
+        var sfU = (acc.data && acc.data.usage) || null;
+        var sfS = (acc.data && acc.data.subscription) || null;
+        // 限额接口软失败时仅展示套餐信息占位；成功后 usage.windows 渲染为进度行（月度积分单条，同火山每月窗）
+        var sfBody = sfU
+          ? minimaxUsageRows(sfU) + stepfunTodayRow(sfU)
+          : '<div class="limit-row"><div class="limit-label"><span class="limit-name">用量</span><span class="limit-value" style="color:var(--text-faint)">待接入</span></div>'
+            + '<div style="font-size:11px;color:var(--text-faint);margin-top:2px">限额接口对接中，当前仅展示套餐与到期信息</div></div>';
+        var sfP = sfU ? minimaxMaxPct(sfU) : 0;
+        var sfStatusCls = getStatusClass(sfP), sfStatusTxt = getStatusText(sfP);
+        if (!sfU) { sfStatusCls = 'status-ok'; sfStatusTxt = '正常'; }
+        if (sfS && sfS.expireMs && sfS.expireMs < Date.now()) { sfStatusCls = 'status-danger'; sfStatusTxt = '已过期'; }
+        var sfExpHtml = '';
+        if (sfS && sfS.expireDate) {
+          var sfDaysLeft = Math.ceil((sfS.expireMs - Date.now()) / 86400000);
+          var sfExpCls = sfDaysLeft <= 10 ? 'expire-danger' : '';
+          var sfExpHint = sfDaysLeft <= 0 ? '已过期' : sfDaysLeft + '天后到期';
+          sfExpHtml = '<div class="expire-row" title="订阅到期"><span class="expire-label">订阅到期</span><span class="expire-value ' + sfExpCls + '">' + esc(sfS.expireDate) + '<span class="expire-hint">' + sfExpHint + '</span></span></div>';
+        }
+        var sfPlanBadge = '<span class="level-badge">' + esc((sfS && sfS.planName) || '无套餐') + '</span>'
+          + (sfS && sfS.autoRenew ? '<span class="level-badge level-badge-ok">自动续费</span>' : '');
+        return '<div class="card" id="card-' + i + '"><div class="card-header">' + headerLeft
+          + '<div class="card-header-right">' + btn + '<span class="card-status ' + sfStatusCls + '">' + sfStatusTxt + '</span></div></div>'
+          + '<div class="card-body">' + sfBody + '</div>' + sfExpHtml
+          + '<div class="card-footer"><div class="card-footer-left">' + sfPlanBadge + cache + '</div>'
+          + '<button class="detail-btn" onclick="showDetail(' + i + ')">详情</button></div></div>';
+      }
+
       // GLM
       var limits = acc.data && acc.data.limits ? acc.data.limits : [];
       var hasWeekly = limits.some(function(l) { return l.unit === 6; });
@@ -2029,7 +2078,7 @@
         return rings;
       }
 
-      if (plat === 'minimax') {
+      if (plat === 'minimax' || plat === 'stepfun') {
         var mws = (acc.data && acc.data.usage && acc.data.usage.windows) || [];
         mws.forEach(function(w) {
           var pct = typeof w.usedPct === 'number' ? w.usedPct : (w.quota > 0 ? ((w.used || 0) / w.quota) * 100 : 0);
@@ -2083,7 +2132,7 @@
       } else if (platform === 'qwen') {
         var qs = acc.data && acc.data.subscription;
         if (qs && qs.endTime) { expTime = new Date(qs.endTime).toISOString(); txt = esc(new Date(expTime).toLocaleDateString('zh-CN')); }
-      } else if (platform === 'minimax') {
+      } else if (platform === 'minimax' || platform === 'stepfun') {
         var mSub = acc.data && acc.data.subscription;
         if (mSub && mSub.expireDate) { expTime = mSub.expireDate + 'T23:59:59'; txt = esc(mSub.expireDate); }
       }
@@ -2124,7 +2173,7 @@
         if (qSub && qSub.remainingDays != null) b += '<span class="level-badge level-badge-ok">剩余 ' + qSub.remainingDays + '天</span>';
         return b;
       }
-      if (platform === 'minimax') {
+      if (platform === 'minimax' || platform === 'stepfun') {
         var mSub2 = (acc.data && acc.data.subscription) || null;
         return '<span class="level-badge">' + esc((mSub2 && mSub2.planName) || '无套餐记录') + '</span>';
       }
@@ -2198,7 +2247,7 @@
         var q7 = typeof qU.per1WeekPercentage === 'number' ? qU.per1WeekPercentage : 0;
         return Math.max(q5, q7);
       }
-      if (plat === 'minimax') {
+      if (plat === 'minimax' || plat === 'stepfun') {
         return minimaxMaxPct(acc.data && acc.data.usage);
       }
       if (plat === 'sub2api' || plat === 'huoli') {
@@ -2266,7 +2315,7 @@
     }
 
     // 按固定顺序展示用户实际拥有的站点，没添加的类型不显示
-    var PLATFORM_ORDER = ['glm', 'yescode', 'sub2api', 'huoli', 'volc', 'telecomjs', 'qwen', 'minimax'];
+    var PLATFORM_ORDER = ['glm', 'yescode', 'sub2api', 'huoli', 'volc', 'telecomjs', 'qwen', 'minimax', 'stepfun'];
     function renderPlatformFilters(data) {
       var box = document.getElementById('platformFilters');
       if (!box) return;
@@ -2772,6 +2821,92 @@
       document.getElementById('modalBody').innerHTML = html;
     }
 
+    // 阶跃详情：基本信息 / 订阅 / 今日模型用量 / 按量余额 / 用量曲线（积分）
+    function renderStepfunDetail(index, acc) {
+      var sub = (acc.data && acc.data.subscription) || null;
+      var user = (acc.data && acc.data.user) || null;
+      var usage = (acc.data && acc.data.usage) || null;
+      var balance = (acc.data && acc.data.balance) || null;
+
+      var html = '<div class="info-section"><div class="info-section-title">负责人信息</div><div class="info-grid">'
+        + '<span class="info-label">负责人</span><span class="info-value">' + esc(acc.responsiblePerson||'-') + '</span>'
+        + '<span class="info-label">电话</span><span class="info-value">' + esc(acc.phone||'-') + '</span>'
+        + '<span class="info-label">备注</span><span class="info-value">' + esc(acc.notes||'-') + '</span>'
+        + '</div></div>';
+
+      html += '<div class="info-section"><div class="info-section-title">基本信息</div><div class="info-grid">'
+        + '<span class="info-label">昵称</span><span class="info-value">' + esc((user && user.nickname) || '-') + '</span>'
+        + '<span class="info-label">手机号</span><span class="info-value">' + esc((user && user.mobileMasked) || '-') + '</span>'
+        + '<span class="info-label">UID</span><span class="info-value">' + esc((user && user.uid) || '-') + '</span>'
+        + '</div></div>';
+
+      var daysLeftTxt = '-';
+      if (sub && sub.expireMs) {
+        var dl = Math.ceil((sub.expireMs - Date.now()) / 86400000);
+        daysLeftTxt = dl <= 0 ? '已过期' : dl + ' 天';
+      }
+      var priceTxt = (sub && sub.priceYuan != null) ? '¥' + sub.priceYuan + ' / ' + (sub.durationDays || '-') + '天' : '-';
+      var modelsTxt = (sub && sub.supportModels && sub.supportModels.length) ? (sub.supportModels.length + ' 个（' + sub.supportModels.slice(0, 6).join('、') + (sub.supportModels.length > 6 ? ' 等' : '') + '）') : '-';
+      html += '<div class="info-section"><div class="info-section-title">订阅信息（Step 套餐）</div><div class="info-grid">'
+        + '<span class="info-label">套餐</span><span class="info-value">' + esc((sub && sub.planName) || '无套餐') + '</span>'
+        + '<span class="info-label">价格</span><span class="info-value">' + priceTxt + '</span>'
+        + '<span class="info-label">状态</span><span class="info-value">' + esc((sub && sub.statusText) || '-') + '</span>'
+        + '<span class="info-label">自动续费</span><span class="info-value">' + ((sub && sub.autoRenew) ? '已开启' : '未开启') + '</span>'
+        + '<span class="info-label">激活时间</span><span class="info-value">' + esc(fmtYesCodeDate(sub && sub.activatedMs)) + '</span>'
+        + '<span class="info-label">到期时间</span><span class="info-value">' + esc((sub && sub.expireDate) || '-') + '</span>'
+        + '<span class="info-label">剩余天数</span><span class="info-value">' + daysLeftTxt + '</span>'
+        + '<span class="info-label">支持模型</span><span class="info-value">' + esc(modelsTxt) + '</span>'
+        + '<span class="info-label">官网</span><span class="info-value"><a href="https://platform.stepfun.com/account-overview" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none">阶跃星辰控制台 ↗</a></span>'
+        + '</div></div>';
+
+      // 今日（北京时间）按模型积分消耗；月度窗的 used/quota 一并展示
+      var today = (usage && usage.today) || null;
+      var todayHtml = '<span class="info-label">今日消耗</span><span class="info-value" style="color:var(--text-faint)">当日暂无消耗</span>';
+      if (today && today.models && today.models.length) {
+        todayHtml = '<table style="width:100%;border-collapse:collapse;font-size:13px">'
+          + '<tr style="color:var(--text-faint);text-align:left"><th style="padding:4px 8px;font-weight:500">模型</th><th style="padding:4px 8px;font-weight:500">积分</th><th style="padding:4px 8px;font-weight:500">次数</th></tr>'
+          + today.models.map(function(m) {
+              return '<tr><td style="padding:4px 8px">' + esc(m.modelId) + '</td>'
+                + '<td style="padding:4px 8px">' + esc(fmtStepfunCredits(m.credits)) + '</td>'
+                + '<td style="padding:4px 8px">' + (m.calls || 0) + '</td></tr>';
+            }).join('')
+          + '<tr><td style="padding:4px 8px;font-weight:600">合计</td>'
+            + '<td style="padding:4px 8px;font-weight:600">' + esc(fmtStepfunCredits(today.credits || 0)) + '</td>'
+            + '<td style="padding:4px 8px;font-weight:600">' + (today.calls || 0) + '</td></tr>'
+          + '</table>';
+      }
+      var quotaInfo = '';
+      var monthlyWin = (usage && usage.windows || []).filter(function(w) { return w.quota > 0; })[0];
+      if (monthlyWin) {
+        quotaInfo = '<span class="info-label">月度积分</span><span class="info-value">' + esc(fmtStepfunCredits(monthlyWin.used)) + ' / ' + esc(fmtStepfunCredits(monthlyWin.quota)) + ' 已用</span>';
+      }
+      html += '<div class="info-section"><div class="info-section-title">今日模型用量</div><div class="info-grid">'
+        + quotaInfo + todayHtml + '</div></div>';
+
+      // 按量付费侧（代金券/昨日/本月），软失败时不展示该节
+      if (balance) {
+        html += '<div class="info-section"><div class="info-section-title">按量付费余额</div><div class="info-grid">'
+          + '<span class="info-label">代金券</span><span class="info-value">¥' + (+balance.voucherYuan).toFixed(2) + '</span>'
+          + '<span class="info-label">余额合计</span><span class="info-value">¥' + (+balance.balanceYuan).toFixed(2) + '</span>'
+          + '<span class="info-label">昨日消费</span><span class="info-value">¥' + (+balance.costYesterdayYuan).toFixed(2) + '</span>'
+          + '<span class="info-label">本月消费</span><span class="info-value">¥' + (+balance.costMonthYuan).toFixed(2) + '</span>'
+          + '</div></div>';
+      }
+
+      // 用量曲线：纵轴为积分（credit），复用通用图表渲染
+      html += '<div class="info-section"><div class="info-section-title">用量曲线（积分）</div>'
+        + '<div class="chart-controls">'
+        + '<button class="period-btn active" id="period-7d-' + index + '" onclick="loadUsageChart(' + index + ',\'7d\')">近7天</button>'
+        + '<button class="period-btn" id="period-30d-' + index + '" onclick="loadUsageChart(' + index + ',\'30d\')">近30天</button>'
+        + '<div class="chart-summary" id="chartSummary-' + index + '"></div>'
+        + '</div>'
+        + '<div class="chart-wrap"><div id="chartContainer-' + index + '" style="width:100%;height:320px"></div>'
+        + '<div class="chart-loading" id="chartLoading-' + index + '"></div></div>'
+        + '</div>';
+
+      document.getElementById('modalBody').innerHTML = html;
+    }
+
     function showDetail(index) {
       // Dispose existing chart if any
       if (_usageCharts[_detailIndex]) { _usageCharts[_detailIndex].dispose(); delete _usageCharts[_detailIndex]; }
@@ -2814,6 +2949,13 @@
 
       if ((acc.platform || 'glm') === 'minimax') {
         renderMiniMaxDetail(index, acc);
+        document.getElementById('modalOverlay').classList.add('active');
+        loadUsageChart(index, '7d');
+        return;
+      }
+
+      if ((acc.platform || 'glm') === 'stepfun') {
+        renderStepfunDetail(index, acc);
         document.getElementById('modalOverlay').classList.add('active');
         loadUsageChart(index, '7d');
         return;
@@ -3393,9 +3535,10 @@
       var telecomDisp = platform === 'telecomjs' ? '' : 'none';
       var qwenDisp = platform === 'qwen' ? '' : 'none';
       var minimaxDisp = platform === 'minimax' ? '' : 'none';
+      var stepfunDisp = platform === 'stepfun' ? '' : 'none';
       document.getElementById('mgmtBody').innerHTML = ''
         + '<div class="import-section"><div class="import-toggle" onclick="this.nextElementSibling.classList.toggle(\'open\')">&#9660; 快速导入（粘贴 fetch 命令）</div>'
-        + '<div class="import-body"><textarea class="form-input" id="f_fetch" placeholder="粘贴 fetch / cURL 命令，自动识别智谱 / YesCode / Sub2API 中转站 / 火山 / 智云 / 千问 / MiniMax"></textarea>'
+        + '<div class="import-body"><textarea class="form-input" id="f_fetch" placeholder="粘贴 fetch / cURL 命令，自动识别智谱 / YesCode / Sub2API 中转站 / 火山 / 智云 / 千问 / MiniMax / 阶跃星辰"></textarea>'
         + '<div class="import-actions"><button class="btn-primary" style="padding:5px 16px;font-size:12px" onclick="parseFetch()">解析并填充</button></div></div></div>'
         + '<div class="form-row">'
         + '<div class="form-group"><label class="form-label">站点</label><select class="form-input" id="f_platform" onchange="onPlatformChange()">'
@@ -3406,6 +3549,7 @@
         + '<option value="telecomjs"' + (platform==='telecomjs'?' selected':'') + '>智云</option>'
         + '<option value="qwen"' + (platform==='qwen'?' selected':'') + '>千问</option>'
         + '<option value="minimax"' + (platform==='minimax'?' selected':'') + '>MiniMax</option>'
+        + '<option value="stepfun"' + (platform==='stepfun'?' selected':'') + '>阶跃星辰</option>'
         + '</select></div>'
         + '<div class="form-group"><label class="form-label">账号名称</label><input class="form-input" id="f_name" value="' + esc(a.name||'') + '"></div>'
         + '</div>'
@@ -3450,6 +3594,10 @@
         + '<div class="form-group"><label class="form-label">Cookie</label><textarea class="form-input" id="f_minimax_cookie" placeholder="完整 Cookie，用于访问 www.minimaxi.com（建议从 platform.minimaxi.com 请求 Copy as cURL 带出登录态）">' + esc(a.cookie||'') + '</textarea></div>'
         + '<div class="form-group"><label class="form-label">Group ID（可选）</label><input class="form-input" id="f_minimax_group_id" placeholder="请求头 x-group-id；留空时自动取 Cookie 中的 minimax_group_id_v2" value="' + esc(a.group_id||'') + '"></div>'
         + '</div>'
+        + '<div id="f_stepfun_fields" style="display:' + stepfunDisp + '">'
+        + '<div class="form-group"><label class="form-label">Cookie</label><textarea class="form-input" id="f_stepfun_cookie" placeholder="完整 Cookie，用于访问 platform.stepfun.com（建议 Copy as cURL 带出登录态，须含 Oasis-Token 双段 JWT 与 _wafdytokenv1）；access 段 30 分钟自动续期回写">' + esc(a.cookie||'') + '</textarea></div>'
+        + '<div class="form-group"><label class="form-label">Webid（可选）</label><input class="form-input" id="f_stepfun_webid" placeholder="请求头 oasis-webid；留空时自动取 Cookie 中的 Oasis-Webid" value="' + esc(a.stepfun_webid||'') + '"></div>'
+        + '</div>'
         + '<div class="form-row"><div class="form-group"><label class="form-label">负责人</label><input class="form-input" id="f_person" value="' + esc(a.responsiblePerson||'') + '"></div>'
         + '<div class="form-group"><label class="form-label">电话</label><input class="form-input" id="f_phone" value="' + esc(a.phone||'') + '"></div></div>'
         + '<div class="form-group"><label class="form-label">备注</label><input class="form-input" id="f_notes" value="' + esc(a.notes||'') + '"></div>'
@@ -3466,6 +3614,7 @@
       document.getElementById('f_telecom_fields').style.display = p === 'telecomjs' ? '' : 'none';
       document.getElementById('f_qwen_fields').style.display = p === 'qwen' ? '' : 'none';
       document.getElementById('f_minimax_fields').style.display = p === 'minimax' ? '' : 'none';
+      document.getElementById('f_stepfun_fields').style.display = p === 'stepfun' ? '' : 'none';
     }
 
     // 从 fetch / Node fetch / cURL 文本中提取指定 header 值
@@ -3501,6 +3650,7 @@
       var isGlm = /bigmodel\.cn|bigmodel-organization|bigmodel-project/i.test(t);
       var isQwen = /qianwenai\.com|sfm_tokenplansolo|tokenplan\/personal/i.test(t);
       var isMinimax = /minimaxi\.com|minimax_group_id/i.test(t);
+      var isStepfun = /platform\.stepfun\.com|oasis-token|oasis-webid/i.test(t);
 
       if (isTelecom && !isGlm) {
         document.getElementById('f_platform').value = 'telecomjs';
@@ -3599,6 +3749,25 @@
         return;
       }
 
+      if (isStepfun) {
+        document.getElementById('f_platform').value = 'stepfun';
+        onPlatformChange();
+        var sfCookie = extractCookie(t);
+        if (sfCookie) { document.getElementById('f_stepfun_cookie').value = sfCookie; }
+        var sfWebid = extractHeader(t, 'oasis-webid');
+        if (!sfWebid && sfCookie) {
+          var swm = sfCookie.match(/Oasis-Webid=([^;\s]+)/);
+          if (swm) sfWebid = swm[1];
+        }
+        if (sfWebid) { document.getElementById('f_stepfun_webid').value = sfWebid; }
+        if (!sfCookie) {
+          alert('未能解析出 Cookie。\n\n「Copy as fetch」不会包含 Cookie 头（它靠 credentials:include 由浏览器自动带），\n请改用：右键请求 -> Copy -> Copy as cURL (bash)，\ncURL 复制会带出完整 Cookie（含 Oasis-Token 登录态与 _wafdytokenv1），再粘贴到这里解析。');
+        } else if (!/Oasis-Token=/.test(sfCookie)) {
+          alert('已解析出 Cookie，但其中缺少 Oasis-Token 登录态，请确认复制的是登录后的请求。');
+        }
+        return;
+      }
+
       document.getElementById('f_platform').value = 'glm';
       onPlatformChange();
       var n = 0;
@@ -3663,6 +3832,14 @@
         body.cookie = document.getElementById('f_minimax_cookie').value.trim();
         body.group_id = document.getElementById('f_minimax_group_id').value.trim();
         if (!body.name || !body.cookie) { alert('账号名称和 Cookie 不能为空'); return; }
+      } else if (platform === 'stepfun') {
+        body.cookie = document.getElementById('f_stepfun_cookie').value.trim();
+        body.stepfun_webid = document.getElementById('f_stepfun_webid').value.trim();
+        if (!body.name || !body.cookie) { alert('账号名称和 Cookie 不能为空'); return; }
+        // Cookie 必须带 Oasis-Token 登录态（双段 JWT）；缺省时提示但仍允许保存（如只先占位）
+        if (body.cookie && !/Oasis-Token=/.test(body.cookie)) {
+          if (!confirm('Cookie 中未检测到 Oasis-Token 登录态，保存后将无法抓取用量。仍要保存吗？')) return;
+        }
       } else {
         body.authorization = document.getElementById('f_auth').value.trim();
         body.organization = document.getElementById('f_org').value.trim();

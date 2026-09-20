@@ -371,6 +371,14 @@ function minimaxWindows(data) {
     return ws;
 }
 
+// 阶跃星辰 Step 套餐:data.usage.windows 与 MiniMax 契约完全一致(usedPct 或 used+quota,
+// 配 resetMs/periodMs)。Plus/Max 等 credit 制套餐(plan_family=2)仅有「月度积分」窗,
+// resetMs=套餐到期、periodMs=激活→到期的真实周期(续费换新周期,与火山 CodingPlan 每月窗同语义),
+// 故直接复用 minimaxWindows 的归一化路径;5h/周窗仅当官方 reset_time 非 "0" 时由 api.js 追加。
+function stepfunWindows(data) {
+    return minimaxWindows(data);
+}
+
 // ============ 多窗口取瓶颈 ============
 
 // 任一窗口耗尽 → 整体 0;否则取所有有效窗口 score 的 min(最紧张=瓶颈);无有效窗口 → null
@@ -420,6 +428,7 @@ function scoreAccount(cachedResult) {
     else if (platform === 'volc') windows = volcWindows(cachedResult.data, cachedResult.planType);
     else if (platform === 'qwen') windows = qwenWindows(cachedResult.data);
     else if (platform === 'minimax') windows = minimaxWindows(cachedResult.data);
+    else if (platform === 'stepfun') windows = stepfunWindows(cachedResult.data);
     else return null;
 
     var agg = aggregate(windows);
