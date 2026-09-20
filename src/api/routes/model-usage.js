@@ -1,7 +1,9 @@
 // 用量曲线:智谱当日/7/30 天、千问、MiniMax 与阶跃 7/30 天(阶跃纵轴为积分)。
 var { readAccounts } = require('../accounts');
+var { httpsGet } = require('../../lib/http');
 var { isHiddenFromGuest } = require('../auth');
 var platforms = require('../platforms');
+var glm = require('../platforms/glm');
 
 function getAccount(req) {
     var accounts = readAccounts();
@@ -49,8 +51,8 @@ module.exports = function(app) {
                 + encodeURIComponent(startDate) + '&endTime=' + encodeURIComponent(endDate);
             // 团队版需带 type=2，否则拿到的是个人维度数据（与 quota/limit 口径一致）
             if (account.teamEdition) url += '&type=2';
-            var json = await withGlmAuthRetry(account, i, function(acc) {
-                return httpsGet(url, makeHeaders(acc));
+            var json = await glm.withGlmAuthRetry(account, i, function(acc) {
+                return httpsGet(url, glm.makeHeaders(acc));
             });
             res.json(json);
         } catch (err) { res.status(500).json({ error: err.message }); }

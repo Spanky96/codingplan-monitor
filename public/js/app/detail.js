@@ -386,8 +386,8 @@
       var today = (usage && usage.today) || null;
       var todayHtml = '<span class="info-label">今日消耗</span><span class="info-value" style="color:var(--text-faint)">当日暂无消耗</span>';
       if (today && today.models && today.models.length) {
-        todayHtml = '<table style="width:100%;border-collapse:collapse;font-size:13px">'
-          + '<tr style="color:var(--text-faint);text-align:left"><th style="padding:4px 8px;font-weight:500">模型</th><th style="padding:4px 8px;font-weight:500">Credits</th><th style="padding:4px 8px;font-weight:500">次数</th></tr>'
+        todayHtml = '<table style="width:100%;border-collapse:collapse;font-size:13px;white-space:nowrap">'
+          + '<tr style="color:var(--text-faint);text-align:left;white-space:nowrap"><th style="padding:4px 8px;font-weight:500">模型</th><th style="padding:4px 8px;font-weight:500">Credits</th><th style="padding:4px 8px;font-weight:500">次数</th></tr>'
           + today.models.map(function(m) {
               return '<tr><td style="padding:4px 8px">' + esc(m.modelId) + '</td>'
                 + '<td style="padding:4px 8px">' + esc(fmtStepfunCredits(m.credits)) + '</td>'
@@ -410,7 +410,7 @@
       html += '<div class="info-section"><div class="info-section-title">今日用量</div><div class="info-grid">'
         + quotaInfo + todaySumInfo + todayHtml + '</div>'
         // 口径备注:阶跃官方按 Credits 计费,非真实 Token 数(不同模型折算比例不同)
-        + '<div style="font-size:11px;color:var(--text-faint);margin-top:6px">注：以上为阶跃官方 Credits 计费口径，非真实 Token 用量；今日窗口按北京时间 00:00 起算</div></div>';
+        // + '<div style="font-size:11px;color:var(--text-faint);margin-top:6px">注：以上为阶跃官方 Credits 计费口径，非真实 Token 用量；今日窗口按北京时间 00:00 起算</div></div>';
 
       // 按量付费侧（代金券/昨日/本月），软失败时不展示该节
       if (balance) {
@@ -441,7 +441,7 @@
         // 邀请记录
         if (campaign.invites && campaign.invites.length) {
           html += '<div style="margin-top:10px"><div style="font-size:12px;color:var(--text-faint);margin-bottom:4px">邀请记录</div><table style="width:100%;border-collapse:collapse;font-size:13px">'
-            + '<tr style="color:var(--text-faint);text-align:left"><th style="padding:4px 8px;font-weight:500">好友</th><th style="padding:4px 8px;font-weight:500">奖励</th><th style="padding:4px 8px;font-weight:500">注册时间</th></tr>'
+            + '<tr style="color:var(--text-faint);text-align:left;white-space:nowrap"><th style="padding:4px 8px;font-weight:500">好友</th><th style="padding:4px 8px;font-weight:500">奖励</th><th style="padding:4px 8px;font-weight:500">注册时间</th></tr>'
             + campaign.invites.map(function(it) {
                 return '<tr><td style="padding:4px 8px">' + esc(it.nickname || it.maskedPhone || '-') + '</td>'
                   + '<td style="padding:4px 8px">' + (it.rewardDays || 0) + ' 天</td>'
@@ -456,7 +456,7 @@
         if (campaign.rewards && campaign.rewards.length) {
           var typeName = { register: '新注册赠送', invite: '邀请赠送', other: '其他奖励' };
           html += '<div style="margin-top:10px"><div style="font-size:12px;color:var(--text-faint);margin-bottom:4px">奖励记录</div><table style="width:100%;border-collapse:collapse;font-size:13px">'
-            + '<tr style="color:var(--text-faint);text-align:left"><th style="padding:4px 8px;font-weight:500">类型</th><th style="padding:4px 8px;font-weight:500">天数</th><th style="padding:4px 8px;font-weight:500">生效时间</th><th style="padding:4px 8px;font-weight:500">到期时间</th></tr>'
+            + '<tr style="color:var(--text-faint);text-align:left;white-space:nowrap"><th style="padding:4px 8px;font-weight:500">类型</th><th style="padding:4px 8px;font-weight:500">天数</th><th style="padding:4px 8px;font-weight:500">生效时间</th><th style="padding:4px 8px;font-weight:500">到期时间</th></tr>'
             + campaign.rewards.map(function(r) {
                 return '<tr><td style="padding:4px 8px">' + esc(typeName[r.rewardType] || r.rewardType) + '</td>'
                   + '<td style="padding:4px 8px">' + (r.rewardDays || 0) + ' 天</td>'
@@ -469,7 +469,7 @@
       }
 
       // 用量曲线：纵轴为积分（credit），复用通用图表渲染
-      html += '<div class="info-section"><div class="info-section-title">用量曲线（官方 Credits，非 Token）</div>'
+      html += '<div class="info-section"><div class="info-section-title">用量曲线</div>'
         + '<div class="chart-controls">'
         + '<button class="period-btn active" id="period-7d-' + index + '" onclick="loadUsageChart(' + index + ',\'7d\')">近7天</button>'
         + '<button class="period-btn" id="period-30d-' + index + '" onclick="loadUsageChart(' + index + ',\'30d\')">近30天</button>'
@@ -755,8 +755,12 @@
       if (!el) return;
       var tu = (data && data.totalUsage) || {};
       var totalTokens = tu.totalTokensUsage || 0;
+      // 阶跃纵轴为官方 Credits(非 Token),汇总单位随平台标注
+      var acc = accAt(idx);
+      var isCredits = acc && (acc.platform || 'glm') === 'stepfun';
+      var unit = isCredits ? 'M credits' : 'M';
       var html = '<span>总用量</span>'
-        + '<span class="sum-total">' + (totalTokens / 1000000).toFixed(2) + ' M</span>';
+        + '<span class="sum-total">' + (totalTokens / 1000000).toFixed(2) + ' ' + unit + '</span>';
       if (tu.totalModelCallCount != null) {
         html += '<span class="sum-divider">·</span><span>调用 ' + tu.totalModelCallCount.toLocaleString() + '</span>';
       }

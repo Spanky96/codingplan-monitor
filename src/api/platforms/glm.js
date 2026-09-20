@@ -2,7 +2,7 @@
 // 公共 helpers(请求头/URL 构造/风控文案/重置卡解析)+ 抓取 + 401 自动重登回写。
 var { httpsGet, httpsRequest } = require('../../lib/http');
 var { readAccounts, writeAccounts } = require('../accounts');
-var { setCache, setExpireCache } = require('../cache');
+var { setCache, setExpireCache, patchCachedResult } = require('../cache');
 function makeHeaders(account) {
     return {
         'accept': 'application/json, text/plain, */*',
@@ -100,8 +100,7 @@ function persistGlmResetCards(i, cards) {
     }
     writeAccounts(accounts);
     // 同步刷新内存用量缓存里的 resetCards,避免 /api/usage 仍返回旧值
-    var c = usageCache[i];
-    if (c && c.result) c.result.resetCards = cards.length ? accounts[i].resetCards : undefined;
+    patchCachedResult(i, { resetCards: cards.length ? accounts[i].resetCards : undefined });
     return accounts[i].resetCards;
 }
 

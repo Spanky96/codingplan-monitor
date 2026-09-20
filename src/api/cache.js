@@ -101,6 +101,14 @@ function ensureUsageFetch(account, index, force) {
     return p;
 }
 
+// 把补丁合并进某账号的缓存 result(不可变:生成新 result 对象)。
+// 供 keys/risk/reset-cards 路由在回写 accounts.json 后同步内存缓存,避免 /api/usage 返回旧值。
+function patchCachedResult(index, patch) {
+    var c = usageCache[index];
+    if (!c || !c.result) return;
+    usageCache[index] = { result: Object.assign({}, c.result, patch), time: c.time };
+}
+
 function normalizeTelephone(value) {
     var phone = String(value || '').replace(/[\s()-]/g, '');
     if (phone.indexOf('+86') === 0) phone = phone.slice(3);
@@ -169,6 +177,7 @@ module.exports = {
     usageForResponse: usageForResponse,
     buildWeightEntries: buildWeightEntries,
     normalizeTelephone: normalizeTelephone,
+    patchCachedResult: patchCachedResult,
     getExpireCached: getExpireCached,
     setExpireCache: setExpireCache,
     CACHE_TTL: CACHE_TTL

@@ -4,13 +4,12 @@ var jsonParser = express.json();
 var { httpsGet, httpsRequest } = require('../../lib/http');
 var { readAccounts, writeAccounts } = require('../accounts');
 var { checkAuth, isAuthed, isHiddenFromGuest } = require('../auth');
-var { clearCacheIndex } = require('../cache');
-var platforms = require('../platforms');
+var { clearCacheIndex, patchCachedResult } = require('../cache');
 var {
     makeHeaders, keysUrl, ipWhitelistUrl, riskInfoUrl, resetCardsUrl, resetCardUseUrl,
     RESET_CARD_USE_TYPES, RISK_TIPS, RISK_TIPS_FALLBACK, decodeJwtUserType,
     parseGlmResetCards, persistGlmResetCards, isValidIp, uuidV4, withGlmAuthRetry
-} = platforms;
+} = require('../platforms/glm');
 
 function getAccount(req) {
     var accounts = readAccounts();
@@ -34,8 +33,7 @@ module.exports = function(app) {
             var accounts = readAccounts();
             accounts[i].keyCount = keys.length;
             writeAccounts(accounts);
-            var c = usageCache[i];
-            if (c && c.result) c.result.keyCount = keys.length;
+            patchCachedResult(i, { keyCount: keys.length });
             res.json(keys);
         } catch (err) { res.status(500).json({ error: err.message }); }
     });
@@ -150,8 +148,7 @@ module.exports = function(app) {
                 }
                 writeAccounts(accounts);
                 // 同步刷新内存用量缓存里的 risk,避免 /api/usage 仍返回旧值
-                var c = usageCache[i];
-                if (c && c.result) c.result.risk = text ? accounts[i].risk : undefined;
+                patchCachedResult(i, { risk: text ? accounts[i].risk : undefined });
             }
             res.json({ level: level || null, text: text, teamEdition: false });
         } catch (err) { res.status(500).json({ error: err.message }); }
