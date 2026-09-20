@@ -107,7 +107,7 @@ docker compose down           # 停止并移除容器(./data 账号数据保留)
 | 火山(AgentPlan=火山A / CodingPlan=火山C) | `cookie`、`csrf`、可选 `web_id`、`planType` | console.volcengine.com 请求(用 cURL 复制带出完整 Cookie);添加账号时选套餐类型:AgentPlan 抓 `GetAgentPlanAFPUsage`,CodingPlan 抓 `GetCodingPlanUsage`。两者同一登录会话,Cookie/CSRF 共用 |
 | 智云 | `satoken`、`phone` | 可手动填写 token.telecomjs.com 请求头中的 `Satoken`;认证失效时卡片会提供重新登录入口，用户核对账号登记手机号后使用官方二维码扫码登录，成功后自动回写。扫码页会自动勾选「一周内自动登录」（若未勾选）。后端通过 Chrome 执行页面及瑞数脚本并查询余额 |
 | MiniMax | `cookie`、可选 `group_id` | platform.minimaxi.com 任意请求的完整 Cookie(含 `_token` 登录态);`group_id` 取请求头 `x-group-id`,留空时自动取 Cookie 中的 `minimax_group_id_v2`。套餐名称与到期时间从消息盒子(`message_category=4` 权益发放通知)解析;5h 限额 / 周限额(均百分比)与视频赠送 / 视频周赠(均计数)从 `remains_percent` 接口解析 |
-| 阶跃星辰 | `cookie`、可选 `stepfun_webid` | platform.stepfun.com 任意请求的完整 Cookie(建议 Copy as cURL,须含 `Oasis-Token` 双段 JWT 与 `_wafdytokenv1`);`webid` 取请求头 `oasis-webid`,留空时自动取 Cookie 中的 `Oasis-Webid`。抓 Connect RPC 接口:`GetStepPlanStatus`(套餐)、`QueryStepPlanRateLimit`(月度积分限额)、`QueryStepPlanUsages`(今日/曲线用量)、`QueryAccountBalance`(按量余额)。access 段仅 30 分钟,过期自动用 refresh 段(~30 天,不轮换)续期并回写 Cookie 中的 `Oasis-Token` 段 |
+| 阶跃星辰 | `cookie`、可选 `stepfun_webid` | platform.stepfun.com 任意请求的完整 Cookie(建议 Copy as cURL,须含 `Oasis-Token` 双段 JWT 与 `_wafdytokenv1`);`webid` 取请求头 `oasis-webid`,留空时自动取 Cookie 中的 `Oasis-Webid`。抓 Connect RPC 接口:`GetStepPlanStatus`(套餐)、`QueryStepPlanRateLimit`(月度积分限额)、`QueryStepPlanUsages`(今日/曲线用量)、`QueryAccountBalance`(按量余额)、`GetCampaignInviteLink`+`ListCampaignInvites`+`GetCampaignStatus`(邀请活动:详情页展示邀请码/链接复制、邀请进度、邀请记录与奖励账本,已邀满时复制会提醒名额已用完)。access 段仅 30 分钟,过期自动用 refresh 段(~30 天,不轮换)续期并回写 Cookie 中的 `Oasis-Token` 段 |
 
 ## 后端 API
 
