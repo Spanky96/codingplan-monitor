@@ -15,6 +15,7 @@ var registerTelecomLogin = require('./routes/telecom-login');
 var registerAccounts = require('./routes/accounts');
 var registerModelUsage = require('./routes/model-usage');
 var registerExpire = require('./routes/expire');
+var registerConsoleUrl = require('./routes/console-url');
 
 module.exports = function(app) {
     registerAuth(app);
@@ -29,6 +30,7 @@ module.exports = function(app) {
     registerAccounts(app);
     registerModelUsage(app);
     registerExpire(app);
+    registerConsoleUrl(app);
 };
 
 // 供单测覆盖的纯函数与内部状态(不走 HTTP 路由)。

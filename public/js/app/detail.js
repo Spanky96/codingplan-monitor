@@ -482,6 +482,20 @@
       document.getElementById('modalBody').innerHTML = html;
     }
 
+    // 管理员点击 GLM「控制台」:先在用户手势中开窗(否则 fetch 后的 window.open 会被
+    // 浏览器弹窗拦截),再经 /api/console-url 换取带 token 的地址;失败降级普通链接。
+    function openGlmConsole(index) {
+      var win = null;
+      try { win = window.open('', '_blank'); } catch (e) { /* 弹窗被拦:下面降级 */ }
+      var jump = function(url) { if (win) { try { win.location.href = url; } catch (e) { /* 跨域窗口忽略 */ } } };
+      fetch(API_PREFIX + '/api/console-url/' + index, { headers: authHeaders() })
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+          jump((d && d.url) || 'https://bigmodel.cn/coding-plan');
+        })
+        .catch(function() { jump('https://bigmodel.cn/coding-plan'); });
+    }
+
     function showDetail(index) {
       // Dispose existing chart if any
       if (_usageCharts[_detailIndex]) { _usageCharts[_detailIndex].dispose(); delete _usageCharts[_detailIndex]; }
@@ -541,11 +555,14 @@
         ? '<div class="keys-create"><input id="newKeyName" placeholder="Key 名称"><button onclick="createKey(' + index + ')">创建</button></div>'
         : '';
 
-      // 智谱控制台直达:管理员点击时 URL 携带 authorization token,
-      // 由油猴脚本读取 ?token= 写入 bigmodel_token_production cookie 后进入后台;
-      // 游客(或账号无 token)只给普通链接,不暴露凭证。
+      // 智谱控制台直达:管理员点击时经 /api/console-url(checkAuth 保护)换取
+      // 带 authorization token 的跳转地址,油猴脚本读取 ?token= 写入
+      // bigmodel_token_production cookie 后进入后台;游客只给普通链接。
+      // 注意:usage 缓存里不含 authorization,不能在前端直接拼 token。
       var glmConsoleHref = 'https://bigmodel.cn/coding-plan';
-      if (admin && acc.authorization) glmConsoleHref += '?token=' + encodeURIComponent(acc.authorization);
+      var glmConsoleHtml = admin
+        ? '<a href="javascript:void(0)" onclick="openGlmConsole(' + index + ')" style="color:var(--accent);text-decoration:none">bigmodel.cn/coding-plan ↗</a>'
+        : '<a href="' + esc(glmConsoleHref) + '" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none">bigmodel.cn/coding-plan ↗</a>';
 
       var html = '<div id="riskBanner-' + index + '">' + riskBannerHTML(acc) + '</div>'
         + '<div class="info-section"><div class="info-section-title">负责人信息</div><div class="info-grid">'
@@ -554,9 +571,9 @@
         + '<span class="info-label">备注</span><span class="info-value">' + esc(acc.notes||'-') + '</span>'
         + '</div></div>'
         + '<div class="info-section"><div class="info-section-title">控制台</div><div class="info-grid">'
-        + '<span class="info-label">智谱 Coding Plan</span><span class="info-value"><a href="' + esc(glmConsoleHref) + '" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none">bigmodel.cn/coding-plan ↗</a></span>'
-        + (admin && acc.authorization
-            ? '<span class="info-label">自动登录</span><span class="info-value" style="font-size:12px;color:var(--text-mute)">链接已携带 token，油猴脚本读取后自动写入 cookie 进入后台；未安装脚本时会跳到登录页，属正常现象</span>'
+        + '<span class="info-label">智谱 Coding Plan</span><span class="info-value">' + glmConsoleHtml + '</span>'
+        + (admin
+            ? '<span class="info-label">自动登录</span><span class="info-value" style="font-size:12px;color:var(--text-mute)">点击后自动换取带 token 的地址并打开，油猴脚本读取后写入 cookie 进入后台；未安装脚本时会跳到登录页，属正常现象</span>'
             : '')
         + '</div></div>'
         + '<div id="resetCards-' + index + '">' + resetCardsSectionHTML(acc, admin, index) + '</div>'
