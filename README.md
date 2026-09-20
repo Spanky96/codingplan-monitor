@@ -44,6 +44,7 @@ npm start
 | `PORT` | `4000` | 监听端口 |
 | `HOST` | `0.0.0.0` | 监听地址,默认允许局域网访问 |
 | `ADMIN_PASSWORD` | `123456` | 管理密码(账号增删改、Key 复制/创建/删除需校验) |
+| `ACCOUNT_SECRET` | 空 | 账号凭证加密密钥(AES-256-GCM)。建议 `openssl rand -base64 32` 生成,**本地与服务器保持一致**才能互拷 `accounts.json`;未配置时从 `ADMIN_PASSWORD` 派生(此后改管理密码会导致旧密文解不开,解不开时按明文兜底并告警) |
 | `ACCOUNTS_FILE` | `./accounts.json` | 账号数据文件路径(Docker 持久化用,本地留空) |
 | `NODE_ENV` | `development` | 运行环境 |
 | `TELECOMJS_CHROME_PATH` | 自动发现 | 智云抓取所用 Chrome/Chromium 可执行文件路径 |
@@ -185,6 +186,7 @@ docker compose down           # 停止并移除容器(./data 账号数据保留)
 
 ## 注意事项
 
-- `accounts.json` 与 `.env` 均含明文凭证 / 密码,切勿提交到公开仓库(均已加入 `.gitignore`);`accounts.json` 删除后重启会自动重建空文件。
+- `accounts.json` 与 `.env` 均含敏感信息,切勿提交到公开仓库(均已加入 `.gitignore`);`accounts.json` 删除后重启会自动重建空文件。其中账号的密码 / Cookie / Token 类字段(`glm_password`、`yescode_password`、`sub2api_password`、`cookie`、`authorization`、`satoken`)落盘前会以 AES-256-GCM 加密(密文前缀 `enc:v1:`),密钥取 `ACCOUNT_SECRET`(未配置则从 `ADMIN_PASSWORD` 派生);读取时自动解密,前端无感知。历史明文字段在下次保存该账号时自动转为密文。
 - 所有对 bigmodel.cn / co.yes.vg / 各 sub2api 站点的请求由服务端代理转发,浏览器不直接持有凭证。
+- 管理密码防爆破:同一 IP 连续输错 3 次封禁 15 分钟(内存计数,重启清零),期间即使密码正确也返回 429;`/api/weights`、`/api/credentials` 仅在**带了错误密码**时计入(中转站不带密码轮询不受影响)。
 - 凭证(JWT / Cookie / Token)会过期,失败时面板显示「请求失败」;智谱若配了登录账号密码会在 401/403/405 时自动重登并回写 JWT,否则需重新抓 token;YesCode 官方 Cookie 有效期仅 24h,配了账密会自动重登续期;Sub2API token 同为 24h,配了账密自动续登;火山需重抓 Cookie/CSRF;智云认证失败时可从卡片核对手机号并重新登录，自动更新 Satoken；扫码时后端会尽量勾选天翼「一周内自动登录」;MiniMax 需重抓 Cookie;阶跃 Cookie 中的 access 段仅 30 分钟,后端会自动用 refresh 段续期并回写(建议整段 Copy as cURL 保留 `_wafdytokenv1` 等 WAF 段),refresh 段约 30 天过期,过期后需重抄完整 Cookie。

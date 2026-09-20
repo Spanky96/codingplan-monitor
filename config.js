@@ -11,6 +11,11 @@ const config = {
   host: process.env.HOST || '0.0.0.0',
   // 管理密码(账号增删改、Key 复制/创建/删除需校验)
   adminPassword: process.env.ADMIN_PASSWORD || '123456',
+  // 账号凭证加密密钥(accounts.json 中密码/Cookie/Token 落盘前加密)。
+  // 强烈建议显式配置(32 字节以上随机串):本地与服务器必须一致才能互拷数据;
+  // 未配置时从 ADMIN_PASSWORD 派生(单环境自洽,但改管理密码会导致旧密文解不开)。
+  // 解密的密钥不匹配时写读按明文兜底并告警,不会导致服务崩溃。
+  accountSecret: process.env.ACCOUNT_SECRET || '',
   // 账号数据文件路径:本地默认 ./accounts.json;Docker 内由 ACCOUNTS_FILE 指向挂载目录
   accountsFile: process.env.ACCOUNTS_FILE
     ? path.resolve(process.env.ACCOUNTS_FILE)

@@ -1668,7 +1668,8 @@
       var t = usage && usage.today;
       if (!t || t.credits == null) return '';
       var calls = t.calls ? ' · ' + t.calls + '次' : '';
-      return '<div class="limit-row"><div class="limit-label"><span class="limit-name">今日积分</span>'
+      // 阶跃官方按 Credits 计费,非真实 Token——用 title 说明口径
+      return '<div class="limit-row" title="阶跃官方 Credits 计费口径，非真实 Token 用量"><div class="limit-label"><span class="limit-name">今日积分</span>'
         + '<span class="limit-value">' + esc(fmtStepfunCredits(t.credits)) + calls + '</span></div></div>';
     }
 
@@ -2879,7 +2880,7 @@
       var todayHtml = '<span class="info-label">今日消耗</span><span class="info-value" style="color:var(--text-faint)">当日暂无消耗</span>';
       if (today && today.models && today.models.length) {
         todayHtml = '<table style="width:100%;border-collapse:collapse;font-size:13px">'
-          + '<tr style="color:var(--text-faint);text-align:left"><th style="padding:4px 8px;font-weight:500">模型</th><th style="padding:4px 8px;font-weight:500">积分</th><th style="padding:4px 8px;font-weight:500">次数</th></tr>'
+          + '<tr style="color:var(--text-faint);text-align:left"><th style="padding:4px 8px;font-weight:500">模型</th><th style="padding:4px 8px;font-weight:500">Credits</th><th style="padding:4px 8px;font-weight:500">次数</th></tr>'
           + today.models.map(function(m) {
               return '<tr><td style="padding:4px 8px">' + esc(m.modelId) + '</td>'
                 + '<td style="padding:4px 8px">' + esc(fmtStepfunCredits(m.credits)) + '</td>'
@@ -2895,8 +2896,14 @@
       if (monthlyWin) {
         quotaInfo = '<span class="info-label">月度积分</span><span class="info-value">' + esc(fmtStepfunCredits(monthlyWin.used)) + ' / ' + esc(fmtStepfunCredits(monthlyWin.quota)) + ' 已用</span>';
       }
-      html += '<div class="info-section"><div class="info-section-title">今日模型用量</div><div class="info-grid">'
-        + quotaInfo + todayHtml + '</div></div>';
+      // 当日汇总（北京时间口径），明细表紧随其后
+      var todaySumInfo = (today && today.credits != null)
+        ? '<span class="info-label">当日消耗</span><span class="info-value">' + esc(fmtStepfunCredits(today.credits)) + ' Credits · ' + (today.calls || 0) + ' 次</span>'
+        : '';
+      html += '<div class="info-section"><div class="info-section-title">今日用量</div><div class="info-grid">'
+        + quotaInfo + todaySumInfo + todayHtml + '</div>'
+        // 口径备注:阶跃官方按 Credits 计费,非真实 Token 数(不同模型折算比例不同)
+        + '<div style="font-size:11px;color:var(--text-faint);margin-top:6px">注：以上为阶跃官方 Credits 计费口径，非真实 Token 用量；今日窗口按北京时间 00:00 起算</div></div>';
 
       // 按量付费侧（代金券/昨日/本月），软失败时不展示该节
       if (balance) {
@@ -2955,7 +2962,7 @@
       }
 
       // 用量曲线：纵轴为积分（credit），复用通用图表渲染
-      html += '<div class="info-section"><div class="info-section-title">用量曲线（积分）</div>'
+      html += '<div class="info-section"><div class="info-section-title">用量曲线（官方 Credits，非 Token）</div>'
         + '<div class="chart-controls">'
         + '<button class="period-btn active" id="period-7d-' + index + '" onclick="loadUsageChart(' + index + ',\'7d\')">近7天</button>'
         + '<button class="period-btn" id="period-30d-' + index + '" onclick="loadUsageChart(' + index + ',\'30d\')">近30天</button>'
@@ -3476,8 +3483,9 @@
     function submitPassword() {
       var pwd = document.getElementById('pwdInput').value;
       fetch(API_PREFIX + '/api/auth', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({password: pwd}) })
-        .then(function(r) { return r.json(); })
-        .then(function(d) {
+        .then(function(r) { return r.json().then(function(d) { return { status: r.status, data: d }; }); })
+        .then(function(res) {
+          var d = res.data;
           if (d.success) {
             localStorage.setItem('glm_pwd', pwd);
             closeModal('pwdOverlay');
@@ -3490,7 +3498,8 @@
             }
             if (next) { next(); }
           } else {
-            document.getElementById('pwdError').textContent = '密码错误';
+            // 429=连续错误被封禁 15 分钟；其余为普通密码错误
+            document.getElementById('pwdError').textContent = d.error || '密码错误';
             document.getElementById('pwdInput').value = '';
             document.getElementById('pwdInput').focus();
           }

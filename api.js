@@ -161,15 +161,80 @@ function setExpireCache(index, result) {
     expireCache[index] = { result: result, time: Date.now() };
 }
 
+// ============ 账号凭证加密存储（AES-256-GCM）============
+
+// 密文格式: enc:v1:<iv_b64url>:<tag_b64url>:<data_b64url>
+// 密钥来源: env ACCOUNT_SECRET(推荐,本地与服务器保持一致);未配置则从 ADMIN_PASSWORD 派生。
+// 派生 salt 固定——secret 本身应由用户设为高熵随机串,固定 salt 保证跨进程/跨机器同一 key。
+var CREDENTIAL_SECRET_FIELDS = ['glm_password', 'yescode_password', 'sub2api_password', 'cookie', 'authorization', 'satoken'];
+var ENC_PREFIX = 'enc:v1:';
+
+// 密钥惰性派生(进程内缓存;切换 secret 仅存在于测试场景)
+var _accountKeyCache = { secret: null, key: null };
+function accountSecretKey() {
+    var secret = config.accountSecret || config.adminPassword;
+    if (_accountKeyCache.key && _accountKeyCache.secret === secret) return _accountKeyCache.key;
+    var key = crypto.scryptSync(String(secret), 'glm-usage-accounts-v1', 32);
+    _accountKeyCache = { secret: secret, key: key };
+    return key;
+}
+
+function encryptSecret(plaintext) {
+    var s = String(plaintext);
+    if (!s || s.indexOf(ENC_PREFIX) === 0) return s;   // 空值/已加密不重复加密
+    var iv = crypto.randomBytes(12);
+    var cipher = crypto.createCipheriv('aes-256-gcm', accountSecretKey(), iv);
+    var data = Buffer.concat([cipher.update(s, 'utf8'), cipher.final()]);
+    return ENC_PREFIX + iv.toString('base64url') + ':' + cipher.getAuthTag().toString('base64url') + ':' + data.toString('base64url');
+}
+
+// 解密失败(密钥不匹配/格式损坏)返回 null,由调用方决定是否按明文兜底
+function decryptSecretOrNull(value) {
+    if (typeof value !== 'string' || value.indexOf(ENC_PREFIX) !== 0) return null;
+    try {
+        var parts = value.slice(ENC_PREFIX.length).split(':');
+        if (parts.length !== 3) return null;
+        var decipher = crypto.createDecipheriv('aes-256-gcm', accountSecretKey(), Buffer.from(parts[0], 'base64url'));
+        decipher.setAuthTag(Buffer.from(parts[1], 'base64url'));
+        return Buffer.concat([decipher.update(Buffer.from(parts[2], 'base64url')), decipher.final()]).toString('utf8');
+    } catch (e) { return null; }
+}
+
+function decryptAccounts(accounts) {
+    return accounts.map(function(acc) {
+        if (!acc || typeof acc !== 'object') return acc;
+        var out = Array.isArray(acc) ? acc.slice() : Object.assign({}, acc);
+        CREDENTIAL_SECRET_FIELDS.forEach(function(f) {
+            if (typeof out[f] !== 'string') return;
+            var plain = decryptSecretOrNull(out[f]);
+            if (plain !== null) out[f] = plain;
+            // 非 enc:v1 前缀视为历史明文,原样保留(下次写盘自动转密文)
+        });
+        return out;
+    });
+}
+
+function encryptAccounts(accounts) {
+    return accounts.map(function(acc) {
+        if (!acc || typeof acc !== 'object') return acc;
+        var out = Array.isArray(acc) ? acc.slice() : Object.assign({}, acc);
+        CREDENTIAL_SECRET_FIELDS.forEach(function(f) {
+            if (typeof out[f] === 'string' && out[f]) out[f] = encryptSecret(out[f]);
+        });
+        return out;
+    });
+}
+
 function readAccounts() {
     if (!fs.existsSync(glmAccountsFile)) {
         writeAccounts([]);
         return [];
     }
-    return JSON.parse(fs.readFileSync(glmAccountsFile, 'utf8')).accounts;
+    var parsed = JSON.parse(fs.readFileSync(glmAccountsFile, 'utf8'));
+    return decryptAccounts(parsed.accounts || []);
 }
 function writeAccounts(accounts) {
-    fs.writeFileSync(glmAccountsFile, JSON.stringify({ accounts: accounts }, null, 2));
+    fs.writeFileSync(glmAccountsFile, JSON.stringify({ accounts: encryptAccounts(accounts) }, null, 2));
 }
 
 function httpsGet(url, headers) {
@@ -260,9 +325,72 @@ function httpsPostForm(url, headers, formBody) {
     });
 }
 
+// ============ 管理密码防爆破（连续失败 3 次封 IP 15 分钟）============
+
+var AUTH_FAIL_LIMIT = 3;
+var AUTH_BAN_MS = 15 * 60 * 1000;
+
+// 内存封禁表 { ip: { fails, bannedUntil } }；重启清空（防爆破不需持久化）
+var authBanTable = {};
+
+// 客户端 IP：反代场景取 x-forwarded-for 首段，否则取 socket 地址（Docker 直连可用）
+function clientIp(req) {
+    var fwd = req.headers && req.headers['x-forwarded-for'];
+    if (fwd) return String(fwd).split(',')[0].trim();
+    return (req.socket && req.socket.remoteAddress) || (req.connection && req.connection.remoteAddress) || 'unknown';
+}
+
+// 惰性清理：过期封禁项清零计数，避免内存表无限增长（IP 量级很小，全扫可接受）
+function authBanGc(now) {
+    Object.keys(authBanTable).forEach(function(ip) {
+        var e = authBanTable[ip];
+        if (!e) return;
+        if (e.bannedUntil && e.bannedUntil <= now) delete authBanTable[ip];
+        else if (e.bannedUntil && now - e.bannedUntil > AUTH_BAN_MS) delete authBanTable[ip];
+    });
+}
+
+// 查询某 IP 封禁状态：{ banned, retryAfterSec, fails }
+function authBanState(ip, now) {
+    authBanGc(now);
+    var e = authBanTable[ip];
+    if (!e || !e.bannedUntil || e.bannedUntil <= now) {
+        return { banned: false, retryAfterSec: 0, fails: e ? e.fails : 0 };
+    }
+    return { banned: true, retryAfterSec: Math.ceil((e.bannedUntil - now) / 1000), fails: e.fails };
+}
+
+// 记录一次密码失败；达到上限时写入封禁截止时间。返回新的封禁状态
+function authBanRecordFailure(ip, now) {
+    authBanGc(now);
+    var e = authBanTable[ip] || (authBanTable[ip] = { fails: 0, bannedUntil: 0 });
+    if (e.bannedUntil && e.bannedUntil > now) return authBanState(ip, now);
+    e.fails += 1;
+    if (e.fails >= AUTH_FAIL_LIMIT) {
+        e.bannedUntil = now + AUTH_BAN_MS;
+    }
+    return authBanState(ip, now);
+}
+
+// 密码正确后清零该 IP 的失败计数与封禁
+function authBanReset(ip) {
+    delete authBanTable[ip];
+}
+
 function checkAuth(req, res, next) {
-    if (req.headers['x-auth-password'] !== PASSWORD)
+    var ip = clientIp(req);
+    var st = authBanState(ip, Date.now());
+    if (st.banned) {
+        return res.status(429).json({ error: '密码连续错误次数过多，已封禁 ' + Math.ceil(st.retryAfterSec / 60) + ' 分钟，请稍后再试', retryAfterSec: st.retryAfterSec });
+    }
+    if (req.headers['x-auth-password'] !== PASSWORD) {
+        var after = authBanRecordFailure(ip, Date.now());
+        if (after.banned) {
+            return res.status(429).json({ error: '密码连续错误 ' + AUTH_FAIL_LIMIT + ' 次，已封禁 15 分钟', retryAfterSec: after.retryAfterSec });
+        }
         return res.status(401).json({ error: '密码错误' });
+    }
+    authBanReset(ip);
     next();
 }
 
@@ -1875,7 +2003,21 @@ module.exports = function(app) {
 
     // 密码验证
     app.post('/api/auth', jsonParser, function(req, res) {
-        res.json({ success: req.body.password === PASSWORD });
+        var ip = clientIp(req);
+        var now = Date.now();
+        var st = authBanState(ip, now);
+        if (st.banned) {
+            return res.status(429).json({ success: false, error: '密码连续错误次数过多，已封禁 ' + Math.ceil(st.retryAfterSec / 60) + ' 分钟，请稍后再试', retryAfterSec: st.retryAfterSec });
+        }
+        if (req.body.password !== PASSWORD) {
+            var after = authBanRecordFailure(ip, now);
+            if (after.banned) {
+                return res.status(429).json({ success: false, error: '密码连续错误 ' + AUTH_FAIL_LIMIT + ' 次，已封禁 15 分钟', retryAfterSec: after.retryAfterSec });
+            }
+            return res.json({ success: false, error: '密码错误，连续错误 ' + AUTH_FAIL_LIMIT + ' 次将封禁 15 分钟' });
+        }
+        authBanReset(ip);
+        res.json({ success: true });
     });
 
     // ============ 功能开关(公开,无鉴权) ============
@@ -1963,7 +2105,17 @@ module.exports = function(app) {
     if (config.credentialsExportEnabled) {
         app.get('/api/credentials', function(req, res) {
             try {
-                if (req.query.password !== PASSWORD) return res.status(401).json({ error: 'unauthorized' });
+                var cIp = clientIp(req);
+                var cNow = Date.now();
+                var cSt = authBanState(cIp, cNow);
+                if (cSt.banned) {
+                    return res.status(429).json({ error: '密码连续错误次数过多，已封禁 ' + Math.ceil(cSt.retryAfterSec / 60) + ' 分钟，请稍后再试', retryAfterSec: cSt.retryAfterSec });
+                }
+                if (req.query.password !== PASSWORD) {
+                    authBanRecordFailure(cIp, cNow);
+                    return res.status(401).json({ error: 'unauthorized' });
+                }
+                authBanReset(cIp);
                 var platform = req.query.platform || 'yescode';
                 var field = CREDENTIAL_FIELDS[platform];
                 if (!field) return res.status(400).json({ error: '不支持的平台: ' + platform });
@@ -1981,7 +2133,17 @@ module.exports = function(app) {
     // ============ 权重接口(为中转站提供 token 分配权重,纯读缓存 + 默认兜底) ============
     app.get('/api/weights', function(req, res) {
         try {
+            // 中转站等下游按账号名轮询本接口属常态（可不带密码），仅当带了错误密码才计入防爆破
             var authenticated = req.query.password === PASSWORD;
+            if (!authenticated && req.query.password) {
+                var wIp = clientIp(req);
+                var wNow = Date.now();
+                var wSt = authBanState(wIp, wNow);
+                if (wSt.banned) {
+                    return res.status(429).json({ error: '密码连续错误次数过多，已封禁 ' + Math.ceil(wSt.retryAfterSec / 60) + ' 分钟，请稍后再试', retryAfterSec: wSt.retryAfterSec });
+                }
+                authBanRecordFailure(wIp, wNow);
+            }
             var wantDetail = authenticated && req.query.detail === '1';
             var accounts = readAccounts();
             var result = {};
@@ -2590,4 +2752,13 @@ module.exports._parseStepfunRateLimit = parseStepfunRateLimit;
 module.exports._parseStepfunUsages = parseStepfunUsages;
 module.exports._parseStepfunModelUsage = parseStepfunModelUsage;
 module.exports._parseStepfunCampaign = parseStepfunCampaign;
+// 供单测覆盖凭证加密与密码防爆破（不走 HTTP 路由）
+module.exports._encryptSecret = encryptSecret;
+module.exports._decryptSecretOrNull = decryptSecretOrNull;
+module.exports._encryptAccounts = encryptAccounts;
+module.exports._decryptAccounts = decryptAccounts;
+module.exports._authBanState = authBanState;
+module.exports._authBanRecordFailure = authBanRecordFailure;
+module.exports._authBanReset = authBanReset;
+module.exports._clientIp = clientIp;
 module.exports._minimaxGroupId = minimaxGroupId;
