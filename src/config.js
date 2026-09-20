@@ -16,10 +16,10 @@ const config = {
   // 未配置时从 ADMIN_PASSWORD 派生(单环境自洽,但改管理密码会导致旧密文解不开)。
   // 解密的密钥不匹配时写读按明文兜底并告警,不会导致服务崩溃。
   accountSecret: process.env.ACCOUNT_SECRET || '',
-  // 账号数据文件路径:本地默认 ./accounts.json;Docker 内由 ACCOUNTS_FILE 指向挂载目录
+  // 账号数据文件路径:本地默认仓库根下的 accounts.json;Docker 内由 ACCOUNTS_FILE 指向挂载目录
   accountsFile: process.env.ACCOUNTS_FILE
     ? path.resolve(process.env.ACCOUNTS_FILE)
-    : path.join(__dirname, 'accounts.json'),
+    : path.join(__dirname, '..', 'accounts.json'),
   // 智云抓取使用的 Chrome/Chromium；留空时按操作系统常见路径自动发现
   telecomjsChromePath: process.env.TELECOMJS_CHROME_PATH || process.env.PUPPETEER_EXECUTABLE_PATH || '',
   // sub2api 中转站服务地址（容量快照/用户活动快照代理用）。

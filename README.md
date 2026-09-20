@@ -10,18 +10,54 @@
 
 ```
 glm-usage/
-├── server.js              # Express 入口:静态托管 + 挂载 api 中间件
-├── api.js                 # 后端:账号凭证读写、用量/到期/Key 代理(5 分钟缓存)
-├── config.js              # 配置中心:加载 .env 并导出不可变配置(port/host/密码等)
+├── src/                        # 后端源码(按域拆分)
+│   ├── server.js               # Express 入口:静态托管 + 挂载 api 中间件
+│   ├── config.js               # 配置中心:加载 .env 并导出不可变配置
+│   ├── weights.js              # 权重评分纯函数(供 /api/weights 与中转站)
+│   ├── telecomjs.js            # 智云抓取(Chromium 执行瑞数挑战)
+│   ├── minimax-proxy.js        # MiniMax 反向代理(env gating)
+│   ├── lib/                    # 无业务依赖的基础件
+│   │   ├── http.js             #   HTTP 助手(超时/JSON/非 2xx 抛错)
+│   │   ├── crypto.js           #   凭证加解密(AES-256-GCM)
+│   │   └── util.js             #   通用小工具(补零等)
+│   └── api/
+│       ├── index.js            # 中间件组装:按域注册路由 + 单测导出
+│       ├── accounts.js         # accounts.json 读写(凭证自动加解密)
+│       ├── auth.js             # 管理密码防爆破 + 鉴权中间件
+│       ├── cache.js            # 用量缓存(5min TTL/落盘/防抖写/去重抓取)
+│       ├── platforms/          # 各平台适配器(新增平台在此登记)
+│       │   ├── index.js        #   平台分派 fetchAccountUsage / fetchAccountExpire
+│       │   ├── glm.js          #   智谱(bigmodel.cn)
+│       │   ├── yescode.js      #   YesCode(co.yes.vg)
+│       │   ├── sub2api.js      #   Sub2API 中转站(任意部署站点)
+│       │   ├── volc.js         #   火山(AgentPlan / CodingPlan)
+│       │   ├── qwen.js         #   千问(platform.qianwenai.com)
+│       │   ├── minimax.js      #   MiniMax(platform.minimaxi.com)
+│       │   ├── stepfun.js      #   阶跃星辰(platform.stepfun.com)
+│       │   └── telecom.js      #   智云(token.telecomjs.com)
+│       └── routes/             # HTTP 路由(按域拆分)
+│           ├── auth.js         #   登录(防爆破)
+│           ├── features.js     #   功能开关
+│           ├── usage.js        #   用量查询(秒回 + 后台补齐)
+│           ├── credentials.js  #   凭证导出(env gating)
+│           ├── weights.js      #   权重接口 + 权重配置
+│           ├── relay.js        #   中转站容量/实时面板快照代理
+│           ├── keys.js         #   智谱 Keys / IP 白名单 / 风控 / 重置卡
+│           ├── telecom-login.js#   智云扫码登录
+│           ├── accounts.js     #   账号管理 CRUD
+│           ├── model-usage.js  #   用量曲线
+│           └── expire.js       #   订阅到期
 ├── accounts.json          # 账号凭证(运行时自动生成,敏感,.gitignore 已忽略)
 ├── .env.example           # 环境变量模板(复制为 .env 后生效,.gitignore 已忽略)
 ├── Dockerfile             # 容器镜像构建(node:22-alpine)
 ├── docker-compose.yml     # 一键编排(.env 注入 + ./data 数据持久化)
 ├── package.json
+├── test/                  # 单元测试(node --test,本地跑,不入库)
 └── public/
-    ├── index.html         # 前端监控面板(原 usage.html)
-    └── js/echart/
-        └── echarts.min.js # 用量曲线依赖(本地,可离线)
+    ├── index.html         # 前端监控面板(结构 + 样式)
+    ├── js/                # 前端脚本(按职责拆分)
+    │   └── echart/
+    │       └── echarts.min.js # 用量曲线依赖(本地,可离线)
 ```
 
 ## 快速开始
@@ -112,7 +148,7 @@ docker compose down           # 停止并移除容器(./data 账号数据保留)
 
 ## 后端 API
 
-`api.js` 以 `/api` 为前缀暴露以下接口(供前端 `index.html` 调用):
+`src/api/` 以 `/api` 为前缀暴露以下接口(供前端 `index.html` 调用):
 
 | 方法 | 路径 | 鉴权 | 说明 |
 |------|------|------|------|

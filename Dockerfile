@@ -22,4 +22,4 @@ COPY . .
 # 应用监听端口(对应 .env 的 PORT,默认 4000)
 EXPOSE 4000
 
-CMD ["/sbin/tini", "--", "xvfb-run", "-a", "node", "server.js"]
+CMD ["/sbin/tini", "--", "xvfb-run", "-a", "node", "src/server.js"]
