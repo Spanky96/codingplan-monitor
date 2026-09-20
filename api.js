@@ -1653,7 +1653,52 @@ async function fetchStepfunModelUsage(account, index, period) {
     return chart;
 }
 
-// 阶跃抓取：并行调 套餐状态（主，硬失败）+ 限额（软）+ 今日用量（软）+ 账号信息（软）+ 按量余额（软）。
+// 阶跃邀请活动：邀请好友双方各得 15 天 plan，每人可邀请上限 invite_max_count 个；
+// 新注册用户首次调用另有 15 天（REGISTER 奖励）。三个接口均软失败，无数据返回 undefined。
+// invite 记录字段: invitee_masked_phone / invitee_nickname / reward_days / used_at(秒串)。
+// reward 记录(GetCampaignStatus)字段: reward_type(1=新注册赠/4=邀请赠) / reward_days / status / activated_at / expired_at。
+// 邀请链接为 https://platform.stepfun.com/?invite_code_v2=<code>（官方 short_link 同源）。
+function parseStepfunCampaign(linkJson, invitesJson, statusJson) {
+    var campaign = null;
+    if (linkJson && linkJson.invite_code) {
+        campaign = {
+            inviteCode: String(linkJson.invite_code),
+            inviteUrl: 'https://platform.stepfun.com/?invite_code_v2=' + encodeURIComponent(String(linkJson.invite_code)),
+            inviteCount: Number(linkJson.invite_count) || 0,
+            inviteMaxCount: Number(linkJson.invite_max_count) || 0,
+            remainingRewardDays: Number(linkJson.remaining_reward_days) || 0,
+            invites: [],
+            rewards: []
+        };
+    }
+    if (campaign && invitesJson && Array.isArray(invitesJson.invites)) {
+        campaign.invites = invitesJson.invites.map(function(it) {
+            if (!it) return null;
+            return {
+                nickname: it.invitee_nickname || null,
+                maskedPhone: it.invitee_masked_phone || null,
+                rewardDays: Number(it.reward_days) || 0,
+                usedAtMs: stepfunSecToMs(it.used_at) || null
+            };
+        }).filter(Boolean);
+    }
+    if (campaign && statusJson && Array.isArray(statusJson.rewards)) {
+        campaign.rewards = statusJson.rewards.map(function(r) {
+            if (!r) return null;
+            return {
+                rewardDays: Number(r.reward_days) || 0,
+                // reward_type: 1=新注册赠送 4=邀请赠送
+                rewardType: r.reward_type === 1 ? 'register' : (r.reward_type === 4 ? 'invite' : 'other'),
+                status: r.status,
+                activatedMs: stepfunSecToMs(r.activated_at) || null,
+                expiredMs: stepfunSecToMs(r.expired_at) || null
+            };
+        }).filter(Boolean);
+    }
+    return campaign; // 未拿到邀请码时返回 undefined（前端不渲染该节）
+}
+
+// 阶跃抓取：并行调 套餐状态（主，硬失败）+ 限额（软）+ 今日用量（软）+ 账号信息（软）+ 按量余额（软）+ 邀请活动（软）。
 // 套餐状态 401（access 过期）时刷新 token 整体重试一次；限额失败 → usage 为 null → 卡片「待接入」。
 // 今日窗口取北京时间当日零点 → now；金额字段官方为分，统一换算为元。
 async function fetchStepfunUsage(account, index) {
@@ -1678,6 +1723,18 @@ async function fetchStepfunUsage(account, index) {
         var balancePromise = withStepfunAuthRetry(account, index, function(acc) {
             return stepfunCall(acc, '/api/step.openapi.devcenter.Dashboard/QueryAccountBalance', {});
         }).catch(function() { return null; });
+        // 邀请活动三件套（软失败）：邀请链接/邀请记录/奖励账本
+        var campaignPromise = Promise.all([
+            withStepfunAuthRetry(account, index, function(acc) {
+                return stepfunCall(acc, '/api/step.openapi.devcenter.Dashboard/GetCampaignInviteLink', {});
+            }).catch(function() { return null; }),
+            withStepfunAuthRetry(account, index, function(acc) {
+                return stepfunCall(acc, '/api/step.openapi.devcenter.Dashboard/ListCampaignInvites', {});
+            }).catch(function() { return null; }),
+            withStepfunAuthRetry(account, index, function(acc) {
+                return stepfunCall(acc, '/api/step.openapi.devcenter.Dashboard/GetCampaignStatus', {});
+            }).catch(function() { return null; })
+        ]);
 
         var usage = null;
         var windows = parseStepfunRateLimit(await ratePromise, subscription);
@@ -1702,6 +1759,8 @@ async function fetchStepfunUsage(account, index) {
             costYesterdayYuan: (Number(balJson.cost_yesterday) || 0) / 100,
             costMonthYuan: (Number(balJson.cost_month) || 0) / 100
         } : null;
+        var campaignParts = await campaignPromise;
+        var campaign = parseStepfunCampaign(campaignParts[0], campaignParts[1], campaignParts[2]);
 
         var result = {
             index: index,
@@ -1715,7 +1774,8 @@ async function fetchStepfunUsage(account, index) {
                 usage: usage,
                 subscription: subscription,
                 user: user,
-                balance: balance
+                balance: balance,
+                campaign: campaign
             },
             success: true,
             cachedAt: Date.now()
@@ -2529,4 +2589,5 @@ module.exports._parseStepfunPlanStatus = parseStepfunPlanStatus;
 module.exports._parseStepfunRateLimit = parseStepfunRateLimit;
 module.exports._parseStepfunUsages = parseStepfunUsages;
 module.exports._parseStepfunModelUsage = parseStepfunModelUsage;
+module.exports._parseStepfunCampaign = parseStepfunCampaign;
 module.exports._minimaxGroupId = minimaxGroupId;

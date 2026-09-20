@@ -1154,6 +1154,21 @@
       return Promise.resolve();
     }
 
+    // 复制阶跃邀请链接：先复制再判断——已邀满时提醒「复制仍成功，但活动名额已用完，
+    // 新好友注册双方不再获得赠送」（官方邀请人数上限 3）。
+    function copyStepfunInvite(index) {
+      var acc = accAt(index);
+      var c = acc && acc.data && acc.data.campaign;
+      var url = (document.getElementById('sfInviteUrl-' + index) || {}).value
+        || (c && c.inviteUrl) || '';
+      if (!url) { alert('未获取到邀请链接'); return; }
+      clipCopy(url).then(function() {
+        if (c && c.inviteMaxCount > 0 && c.inviteCount >= c.inviteMaxCount) {
+          alert('链接已复制。\n\n注意：你已邀满 ' + c.inviteMaxCount + ' 人，活动名额已用完；\n新好友通过此链接注册，双方不会获得 15 天赠送。');
+        }
+      });
+    }
+
     // ============ GLM 高峰/工时模型 ============
     var GLM_PERIOD_5H_MS = 5 * 3600000;      // 5小时窗口长度
     var GLM_PERIOD_WEEK_MS = 7 * 86400000;   // 每周窗口长度(滚动7天)
@@ -2891,6 +2906,52 @@
           + '<span class="info-label">昨日消费</span><span class="info-value">¥' + (+balance.costYesterdayYuan).toFixed(2) + '</span>'
           + '<span class="info-label">本月消费</span><span class="info-value">¥' + (+balance.costMonthYuan).toFixed(2) + '</span>'
           + '</div></div>';
+      }
+
+      // 邀请活动：邀请码/链接（点击复制，满员提醒）、邀请进度、邀请记录与奖励账本
+      var campaign = (acc.data && acc.data.campaign) || null;
+      if (campaign && campaign.inviteUrl) {
+        var full = campaign.inviteCount >= campaign.inviteMaxCount && campaign.inviteMaxCount > 0;
+        html += '<div class="info-section"><div class="info-section-title">邀请活动</div><div class="info-grid">'
+          + '<span class="info-label">我的邀请码</span><span class="info-value" style="font-weight:600;letter-spacing:.5px">' + esc(campaign.inviteCode) + '</span>'
+          + '<span class="info-label">邀请进度</span><span class="info-value">' + campaign.inviteCount + ' / ' + campaign.inviteMaxCount + ' 人'
+          + (campaign.remainingRewardDays ? '　还可领 ' + campaign.remainingRewardDays + ' 天' : '') + '</span>'
+          + '</div>'
+          // 卡片上整行展示链接 + 复制按钮，满员时按钮文案变化（点击仍可复制，但会提醒活动已无收益）
+          + '<div style="display:flex;gap:8px;align-items:center;margin-top:6px">'
+          + '<input class="form-input" id="sfInviteUrl-' + index + '" value="' + esc(campaign.inviteUrl) + '" readonly style="flex:1;font-size:12px" onclick="this.select()">'
+          + '<button class="btn-primary" style="padding:6px 14px;font-size:12px" onclick="copyStepfunInvite(' + index + ')">' + (full ? '复制（已邀满）' : '复制链接') + '</button>'
+          + '</div>'
+          + '<div style="font-size:11px;color:var(--text-faint);margin-top:4px">好友通过链接注册，双方各得 15 天 plan；每人最多邀请 ' + campaign.inviteMaxCount + ' 人</div>';
+
+        // 邀请记录
+        if (campaign.invites && campaign.invites.length) {
+          html += '<div style="margin-top:10px"><div style="font-size:12px;color:var(--text-faint);margin-bottom:4px">邀请记录</div><table style="width:100%;border-collapse:collapse;font-size:13px">'
+            + '<tr style="color:var(--text-faint);text-align:left"><th style="padding:4px 8px;font-weight:500">好友</th><th style="padding:4px 8px;font-weight:500">奖励</th><th style="padding:4px 8px;font-weight:500">注册时间</th></tr>'
+            + campaign.invites.map(function(it) {
+                return '<tr><td style="padding:4px 8px">' + esc(it.nickname || it.maskedPhone || '-') + '</td>'
+                  + '<td style="padding:4px 8px">' + (it.rewardDays || 0) + ' 天</td>'
+                  + '<td style="padding:4px 8px">' + esc(fmtYesCodeDate(it.usedAtMs)) + '</td></tr>';
+              }).join('')
+            + '</table></div>';
+        } else {
+          html += '<div style="font-size:12px;color:var(--text-faint);margin-top:10px">暂无邀请记录</div>';
+        }
+
+        // 奖励账本（新注册赠送 / 邀请赠送）
+        if (campaign.rewards && campaign.rewards.length) {
+          var typeName = { register: '新注册赠送', invite: '邀请赠送', other: '其他奖励' };
+          html += '<div style="margin-top:10px"><div style="font-size:12px;color:var(--text-faint);margin-bottom:4px">奖励记录</div><table style="width:100%;border-collapse:collapse;font-size:13px">'
+            + '<tr style="color:var(--text-faint);text-align:left"><th style="padding:4px 8px;font-weight:500">类型</th><th style="padding:4px 8px;font-weight:500">天数</th><th style="padding:4px 8px;font-weight:500">生效时间</th><th style="padding:4px 8px;font-weight:500">到期时间</th></tr>'
+            + campaign.rewards.map(function(r) {
+                return '<tr><td style="padding:4px 8px">' + esc(typeName[r.rewardType] || r.rewardType) + '</td>'
+                  + '<td style="padding:4px 8px">' + (r.rewardDays || 0) + ' 天</td>'
+                  + '<td style="padding:4px 8px">' + esc(fmtYesCodeDate(r.activatedMs)) + '</td>'
+                  + '<td style="padding:4px 8px">' + esc(fmtYesCodeDate(r.expiredMs)) + '</td></tr>';
+              }).join('')
+            + '</table></div>';
+        }
+        html += '</div>';
       }
 
       // 用量曲线：纵轴为积分（credit），复用通用图表渲染
