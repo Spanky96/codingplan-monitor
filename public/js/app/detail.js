@@ -541,11 +541,23 @@
         ? '<div class="keys-create"><input id="newKeyName" placeholder="Key 名称"><button onclick="createKey(' + index + ')">创建</button></div>'
         : '';
 
+      // 智谱控制台直达:管理员点击时 URL 携带 authorization token,
+      // 由油猴脚本读取 ?token= 写入 bigmodel_token_production cookie 后进入后台;
+      // 游客(或账号无 token)只给普通链接,不暴露凭证。
+      var glmConsoleHref = 'https://bigmodel.cn/coding-plan';
+      if (admin && acc.authorization) glmConsoleHref += '?token=' + encodeURIComponent(acc.authorization);
+
       var html = '<div id="riskBanner-' + index + '">' + riskBannerHTML(acc) + '</div>'
         + '<div class="info-section"><div class="info-section-title">负责人信息</div><div class="info-grid">'
         + '<span class="info-label">负责人</span><span class="info-value">' + esc(acc.responsiblePerson||'-') + '</span>'
         + '<span class="info-label">电话</span><span class="info-value">' + esc(acc.phone||'-') + '</span>'
         + '<span class="info-label">备注</span><span class="info-value">' + esc(acc.notes||'-') + '</span>'
+        + '</div></div>'
+        + '<div class="info-section"><div class="info-section-title">控制台</div><div class="info-grid">'
+        + '<span class="info-label">智谱 Coding Plan</span><span class="info-value"><a href="' + esc(glmConsoleHref) + '" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none">bigmodel.cn/coding-plan ↗</a></span>'
+        + (admin && acc.authorization
+            ? '<span class="info-label">自动登录</span><span class="info-value" style="font-size:12px;color:var(--text-mute)">链接已携带 token，油猴脚本读取后自动写入 cookie 进入后台；未安装脚本时会跳到登录页，属正常现象</span>'
+            : '')
         + '</div></div>'
         + '<div id="resetCards-' + index + '">' + resetCardsSectionHTML(acc, admin, index) + '</div>'
         + '<div class="detail-tabs">'
