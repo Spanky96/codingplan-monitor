@@ -11,6 +11,10 @@
             closeModal('pwdOverlay');
             var next = _pendingAuth;
             _pendingAuth = null;
+            // 登录即管理员:重取隐私标记(外网强制态随之解除)并刷新为明文数据
+            refreshPrivacyState();
+            loadData();
+            loadExpire();
             if (FEATURES.relayEnabled) {
               activityApplyVisibility();   // 登录成功后显示实时活动面板(配置了中转站才启用)
               loadActivityDispatch();
@@ -45,7 +49,7 @@
     function renderMgmtList() {
       document.getElementById('mgmtTitle').textContent = '账号管理';
       fetch(API_PREFIX + '/api/accounts', { headers: authHeaders() })
-        .then(function(r) { if (r.status===401){localStorage.removeItem('glm_pwd');alert('密码已失效');closeModal('mgmtOverlay');return null;} return r.json(); })
+        .then(function(r) { if (r.status===401){localStorage.removeItem('glm_pwd');alert('密码已失效');closeModal('mgmtOverlay');refreshPrivacyState();loadData();loadExpire();return null;} return r.json(); })
         .then(function(accounts) {
           if (!accounts) return;
           var html = '';

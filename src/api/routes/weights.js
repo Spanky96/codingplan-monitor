@@ -6,26 +6,33 @@ var config = require('../../config');
 var weights = require('../../weights');
 var { readAccounts, writeAccounts } = require('../accounts');
 var { buildWeightEntries, CACHE_TTL } = require('../cache');
-var { checkAuth, clientIp, authBanState, authBanRecordFailure, authBanReset } = require('../auth');
+var { checkAuth, clientIp, authBanState } = require('../auth');
+var privacy = require('../privacy');
 
 var PASSWORD = config.adminPassword;
 
 module.exports = function(app) {
     app.get('/api/weights', function(req, res) {
         try {
-            // 中转站等下游按账号名轮询本接口属常态（可不带密码），仅当带了错误密码才计入防爆破
+            // 中转站等下游按账号名轮询本接口属常态（可不带密码），仅当带了错误密码才计入防爆破。
+            // 计数已统一收敛到 privacy.isAdminRequest(下方 forcedPrivacy 内),此处只保留封禁拦截,
+            // 避免同一次错误请求被记两遍(连续 3 次封 15 分钟的阈值不缩水)
             var authenticated = req.query.password === PASSWORD;
             if (!authenticated && req.query.password) {
                 var wIp = clientIp(req);
-                var wNow = Date.now();
-                var wSt = authBanState(wIp, wNow);
+                var wSt = authBanState(wIp, Date.now());
                 if (wSt.banned) {
                     return res.status(429).json({ error: '密码连续错误次数过多，已封禁 ' + Math.ceil(wSt.retryAfterSec / 60) + ' 分钟，请稍后再试', retryAfterSec: wSt.retryAfterSec });
                 }
-                authBanRecordFailure(wIp, wNow);
             }
             var wantDetail = authenticated && req.query.detail === '1';
             var accounts = readAccounts();
+            // 强制隐私(外网访客/全隐私)时 key 换账号别名(与 /api/usage 同一别名表),
+            // 真实账号名不外发;中转站轮询请带 password(即视为管理员,拿真实账号名)。
+            // 响应随请求方不同,禁止中间层缓存串号
+            res.set('Cache-Control', 'no-store');
+            var forceMask = privacy.forcedPrivacy(req);
+            var aliasMap = forceMask ? privacy.buildAliasMap(accounts) : null;
             var result = {};
             var detail = [];
             var generatedAt = Date.now();
@@ -39,7 +46,7 @@ module.exports = function(app) {
                 var base = s ? s.weight : null;                      // token 失效/无缓存 → null → 走默认权重
                 var final = weights.finalWeight(base, cfg);
                 if (s && s.exhausted) final = 0;                     // 耗尽账号权重恒为 0,不受策略 A/D 复活
-                result[acc.name] = final;
+                result[forceMask ? aliasMap[entry.index] : acc.name] = final;
                 if (wantDetail) {
                     detail.push({
                         index: entry.index, name: acc.name, platform: entry.platform, weight: final,

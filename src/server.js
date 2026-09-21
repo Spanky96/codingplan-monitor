@@ -23,6 +23,9 @@ const server = app.listen(port, host, () => {
   if (config.adminPassword === '123456') {
     console.log('  ⚠️  正在使用默认密码,请在 .env 中设置 ADMIN_PASSWORD');
   }
+  if (config.privacyMode === 'split' && !config.privacyExternalHosts.length) {
+    console.log('  ⚠️  PRIVACY_MODE=split 但未配置 PRIVACY_EXTERNAL_HOSTS,外网判定仅剩客户端 IP 兜底;反代若改写 Host 且不带 X-Forwarded-For 时外网可能漏判,建议显式配置外网域名');
+  }
 });
 
 server.on('error', (err) => {

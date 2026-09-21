@@ -2,6 +2,7 @@
 var { readAccounts } = require('../accounts');
 var { ensureUsageFetch, getCached, getCachedLastKnown, usageForResponse, accountUsageShell } = require('../cache');
 var { isHiddenFromGuest } = require('../auth');
+var privacy = require('../privacy');
 var platforms = require('../platforms');
 
 function getAccount(req) {
@@ -14,6 +15,14 @@ module.exports = function(app) {
         try {
             var accounts = readAccounts();
             var force = req.query.force === '1';
+            // 强制隐私(外网访客/全隐私):统一换账号别名并抹去负责人/电话/备注与身份字段。
+            // 响应随请求方(管理员/游客)不同,禁止中间层缓存串号
+            res.set('Cache-Control', 'no-store');
+            var forceMask = privacy.forcedPrivacy(req);
+            var aliasMap = forceMask ? privacy.buildAliasMap(accounts) : null;
+            var mask = function(result, i) {
+                return forceMask ? privacy.maskUsageResult(result, aliasMap[i]) : result;
+            };
             var results = [];
             for (var i = 0; i < accounts.length; i++) {
                 var account = accounts[i];
@@ -24,7 +33,7 @@ module.exports = function(app) {
 
                 // 非强制且缓存仍新鲜:直接返回,不触发抓取
                 if (!force && fresh) {
-                    results.push(usageForResponse(fresh));
+                    results.push(mask(usageForResponse(fresh), i));
                     continue;
                 }
 
@@ -33,13 +42,13 @@ module.exports = function(app) {
 
                 if (lastKnown) {
                     var shown = usageForResponse(lastKnown);
-                    results.push(Object.assign({}, shown, {
+                    results.push(mask(Object.assign({}, shown, {
                         pending: true,
                         stale: !fresh,
                         refreshing: !!force
-                    }));
+                    }), i));
                 } else {
-                    results.push(accountUsageShell(account, i));
+                    results.push(mask(accountUsageShell(account, i), i));
                 }
             }
             res.json(results);
@@ -53,12 +62,18 @@ module.exports = function(app) {
             if (!account) return res.status(404).json({ error: '未找到账号' });
             if (isHiddenFromGuest(req, account)) return res.status(404).json({ error: '未找到账号' });
             var force = req.query.force === '1';
+            res.set('Cache-Control', 'no-store');
+            var forceMask = privacy.forcedPrivacy(req);
+            var aliasMap = forceMask ? privacy.buildAliasMap(readAccounts()) : null;
+            var mask = function(result) {
+                return forceMask ? privacy.maskUsageResult(result, aliasMap[i]) : result;
+            };
             if (!force) {
                 var c = getCached(i);
-                if (c) return res.json(usageForResponse(c));
+                if (c) return res.json(mask(usageForResponse(c)));
             }
             // 等待后台抓取完成(与列表接口共享 inflight);完成后返回最终结果
-            res.json(usageForResponse(await ensureUsageFetch(account, i, force)));
+            res.json(mask(usageForResponse(await ensureUsageFetch(account, i, force))));
         } catch (err) { res.status(500).json({ error: err.message }); }
     });
 

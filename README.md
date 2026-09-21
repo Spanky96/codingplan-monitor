@@ -89,6 +89,8 @@ npm start
 | `MODELS_GATEWAY_URL` | 空(不启用) | 模型调用页(`models.html`)网关地址(OpenAI 兼容入口,含 `/v1`);配置后页面可用,留空禁用 |
 | `CREDENTIALS_EXPORT` | 空(关闭) | 凭证导出接口 `/api/credentials` 开关(供中转站外部渠道同步登录态),接受 `1/true/yes`;留空则路由不注册 |
 | `MINIMAX_PROXY_UPSTREAM` | 空(关闭) | MiniMax 反向代理 `/minimax/*` 上游地址(兼容保留,模型调用页已直连网关);留空则代理返回 404 |
+| `PRIVACY_MODE` | 空(`off`) | 隐私模式,对**非管理员**在服务端强制脱敏(账号名→「站点名+序号」别名,负责人/电话/备注与平台身份字段不下发,隐私开关锁定为开):`off`=不强制;`full`=全隐私(内外网访客一律强制,此档下中转站轮询 `/api/weights` 需带 `password` 才能拿真实账号名);`split`=内网无隐私/外网隐私(内网访问维持原状,外网访问强制且不可切换;别名 `external`/`lan-open`) |
+| `PRIVACY_EXTERNAL_HOSTS` | 空 | `split` 模式的外网主机名(逗号分隔,如 `lwai.05info.com`):请求 Host 命中即判外网,内网用户走外网域名访问同样强制;建议外网反代同时透传 `X-Forwarded-For` 作为公网 IP 兜底判定 |
 
 `.env` 示例:
 
@@ -153,9 +155,9 @@ docker compose down           # 停止并移除容器(./data 账号数据保留)
 | 方法 | 路径 | 鉴权 | 说明 |
 |------|------|------|------|
 | POST | `/api/auth` | - | 校验管理密码 |
-| GET  | `/api/features` | - | 功能开关上报(`relayEnabled` / `modelsGatewayUrl`),前端据此决定可选集成功能是否渲染 |
-| GET  | `/api/usage` | - | 全部账号用量(秒回:新鲜缓存直接返回,缺失/强刷时先返回旧数据或 loading 骨架并后台抓取;前端再按卡补齐) |
-| GET  | `/api/usage/:index` | - | 单账号用量(可 join 列表触发的进行中抓取) |
+| GET  | `/api/features` | - | 功能开关上报(`relayEnabled` / `modelsGatewayUrl` / `privacyForced`),前端据此决定可选集成功能是否渲染与隐私强制态;响应随请求方(内外网/是否管理员)变化,已禁缓存 |
+| GET  | `/api/usage` | - | 全部账号用量(秒回:新鲜缓存直接返回,缺失/强刷时先返回旧数据或 loading 骨架并后台抓取;前端再按卡补齐);隐私强制态下账号名为别名,不含负责人/电话/备注与平台身份字段 |
+| GET  | `/api/usage/:index` | - | 单账号用量(可 join 列表触发的进行中抓取);隐私强制态同上脱敏 |
 | GET  | `/api/keys/:index` | - | 智谱账号 API Key 列表 |
 | GET  | `/api/keys/:index/copy/:apiKey` | ✅ | 复制 Key 明文 |
 | POST | `/api/keys/:index` | ✅ | 创建 Key |
@@ -185,6 +187,8 @@ docker compose down           # 停止并移除容器(./data 账号数据保留)
 - 不带密码:`GET /api/weights` → 公开账号(`isPublic !== false`,未明确设为私有即默认公开)
 - 带正确密码:`GET /api/weights?password=<ADMIN_PASSWORD>` → 全部账号
 - 明细:`GET /api/weights?password=<PWD>&detail=1` → `{ weights, detail:[...], generatedAt, cacheTtlMs }`(需密码)；智云明细额外包含 `remainingDays`、`averageDaily`、`capacityScore`、`codingPressure`、`timeMultiplier`、`peak`
+
+**隐私模式下的脱敏**:`PRIVACY_MODE` 为 `full`,或 `split` 且请求来自外网(Host 命中 `PRIVACY_EXTERNAL_HOSTS` / 客户端 IP 为公网)时,不带密码请求返回的 key 为「站点名+序号」别名(与 `/api/usage` 的别名一致);带 `password` 即视为管理员,返回真实账号名——因此 `full` 档下中转站轮询本接口必须配置 password,否则无法按账号名匹配。
 
 **计算流程**:
 1. **CodingPlan base(0~6)**:各平台按 5 小时、周、月等有效窗口的实际消耗速度与理论进度评分，取最紧张窗口；任一有效窗口耗尽则为 0

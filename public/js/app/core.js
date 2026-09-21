@@ -22,6 +22,7 @@
     var _filterPlatform = 'all';
     var _sortMode = 'default';
     var _privacyMode = localStorage.getItem('usage_privacy') === 'true';
+    var _privacyForced = false;   // 服务端强制隐私(/api/features.privacyForced,外网访客/全隐私)
     var _viewMode = localStorage.getItem('usage_view') === 'list' ? 'list' : 'block';
     var _telecomLoginSessionId = null;
     var _telecomLoginIndex = -1;
@@ -33,18 +34,29 @@
     var _telecomLoginHandled = false;
 
     // ============ Privacy Mode ============
-    (function() {
+    function syncPrivacyIcon() {
       var btn = document.getElementById('privacyToggle');
-      function syncIcon() {
-        document.getElementById('eyeIcon').style.display = _privacyMode ? 'none' : '';
-        document.getElementById('eyeOffIcon').style.display = _privacyMode ? '' : 'none';
-        btn.classList.toggle('active', _privacyMode);
-      }
-      syncIcon();
-      btn.addEventListener('click', function() {
+      document.getElementById('eyeIcon').style.display = _privacyMode ? 'none' : '';
+      document.getElementById('eyeOffIcon').style.display = _privacyMode ? '' : 'none';
+      btn.classList.toggle('active', _privacyMode);
+    }
+    // 服务端强制隐私(外网访问/全隐私档,仅非管理员):隐藏切换按钮并锁定隐私状态,
+    // 由 data.js 的 refreshPrivacyState 从 /api/features 读取后调用
+    function applyPrivacyForced(forced) {
+      if (_privacyForced === forced) return;
+      _privacyForced = forced;
+      document.getElementById('privacyToggle').style.display = forced ? 'none' : '';
+      _privacyMode = forced ? true : (localStorage.getItem('usage_privacy') === 'true');
+      syncPrivacyIcon();
+      if (accountsData.length) renderCards(accountsData);
+    }
+    (function() {
+      syncPrivacyIcon();
+      document.getElementById('privacyToggle').addEventListener('click', function() {
+        if (_privacyForced) return;   // 强制态不可切换
         _privacyMode = !_privacyMode;
         localStorage.setItem('usage_privacy', _privacyMode);
-        syncIcon();
+        syncPrivacyIcon();
         if (accountsData.length) renderCards(accountsData);
         if (_detailIndex >= 0 && document.getElementById('modalOverlay').classList.contains('active')) {
           var acc = accAt(_detailIndex);
@@ -108,6 +120,8 @@
     })();
 
     // 隐私模式：账号名称 → 站点名 + 站点内序号（按全局顺序，1 起）
+    // 注意:服务端 src/api/privacy.js 的 platformLabel 与本函数逐字同步(强制隐私的
+    // 账号别名由后端生成),改任一侧必须同改另一侧
     function platformLabel(platform) {
       if (platform === 'yescode') return 'YesCode';
       if (platform === 'sub2api') return 'Sub2API';
@@ -182,12 +196,21 @@
     }
     function displayName(acc, origIdx) {
       var name = (acc && acc.name) || '';
+      // 强制隐私:后端 /api/usage 已把 name 替换为「站点名+序号」别名,直接显示即可
+      // (别名单点在后端 buildAliasMap,前端不自行重算,避免两套编号漂移)
+      if (_privacyForced) return name;
       if (!_privacyMode) return name;
       var platform = (acc && acc.platform) || 'glm';
       var seq = 0;
+      // 编号与后端 buildAliasMap 同构:isPublic===false 不占号(游客本就看不到,
+      // 管理员本地开隐私时公开账号编号与游客视图一致);目标账号若是私有,自身仍编号避免同号
       for (var i = 0; i < accountsData.length; i++) {
-        if (((accountsData[i] && accountsData[i].platform) || 'glm') === platform) seq++;
-        if (i === origIdx) break;
+        var a = accountsData[i];
+        if (!a) { if (i === origIdx) break; continue; }
+        if (a.isPublic !== false || a.index === origIdx) {
+          if ((a.platform || 'glm') === platform) seq++;
+        }
+        if (a.index === origIdx) break;
       }
       return platformLabel(platform) + seq;
     }

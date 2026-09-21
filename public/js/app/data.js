@@ -228,24 +228,31 @@
     }
 
     document.getElementById('refreshBtn').addEventListener('click', function(){ loadData(true); loadExpire(true); });
-    loadData();
-    loadExpire();
+    // 隐私状态(带当前登录态询问服务端是否强制):外网访客/全隐私时 applyPrivacyForced
+    // 隐藏切换按钮并锁定;登录/登出后也要重取(管理员任何入口不强制)
+    function refreshPrivacyState() {
+      // 4s 超时兜底:features 挂起时不能阻塞主数据加载(finally 里的 loadData 照常执行)
+      var ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+      var timer = ctrl ? setTimeout(function() { ctrl.abort(); }, 4000) : null;
+      return fetch(API_PREFIX + '/api/features', { headers: authHeaders(), cache: 'no-store', signal: ctrl ? ctrl.signal : undefined })
+        .then(function(r) { return r.ok ? r.json() : null; })
+        .then(function(f) {
+          if (f && typeof f.relayEnabled === 'boolean') FEATURES.relayEnabled = f.relayEnabled;
+          if (f && typeof f.privacyForced === 'boolean') applyPrivacyForced(f.privacyForced);
+        })
+        .catch(function() { /* 拉取失败按未启用/不强制处理(安全默认;脱敏在后端兜底) */ })
+        .finally(function() { if (timer) clearTimeout(timer); });
+    }
+    // 先拉功能开关+隐私标记再加载主数据:避免隐私按钮先显示后消失的闪烁
+    refreshPrivacyState().finally(function() {
+      loadData();
+      loadExpire();
+      activityApplyVisibility();
+      if (FEATURES.relayEnabled && isAdmin()) { loadActivityDispatch(); loadActivityUsage(); }
+    });
     setInterval(function(){ loadData(); }, 5 * 60 * 1000);
     // 容量快照轻量（后端 5s 缓存）：管理员打开页面时 30s 刷新一次胶囊
     setInterval(function(){ if (isAdmin() && accountsData.length) loadCapacity(); }, 30 * 1000);
-    // 实时活动面板:调度快照 15s 高频轮询(后端 10s 缓存);
-    // 今日榜单 5 分钟一次 + 标题行 ↻ 手动刷新;页面隐藏时暂停。
-    // 先拉功能开关再启动:SUB2API_BASE_URL 未配置时面板不渲染、不轮询
-    fetch(API_PREFIX + '/api/features')
-      .then(function(r) { return r.ok ? r.json() : null; })
-      .then(function(f) {
-        if (f && typeof f.relayEnabled === 'boolean') FEATURES.relayEnabled = f.relayEnabled;
-      })
-      .catch(function() {})   // 拉取失败按未启用处理(安全默认)
-      .finally(function() {
-        activityApplyVisibility();
-        if (FEATURES.relayEnabled && isAdmin()) { loadActivityDispatch(); loadActivityUsage(); }
-      });
     setInterval(function(){ if (FEATURES.relayEnabled && isAdmin() && !_activityCollapsed && !document.hidden) loadActivityDispatch(); }, 15 * 1000);
     setInterval(function(){ if (FEATURES.relayEnabled && isAdmin() && !document.hidden) loadActivityUsage(); }, 5 * 60 * 1000);
     document.addEventListener('visibilitychange', function() {

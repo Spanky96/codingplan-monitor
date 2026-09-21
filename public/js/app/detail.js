@@ -2,6 +2,17 @@
 
     var _usageCharts = {};
 
+    // 「负责人信息」区块(负责人/电话/备注):强制隐私(外网访客/全隐私)时整体隐藏;
+    // 服务端此时也已删除这三个字段,此函数是纵深防御 + 避免渲染空区块
+    function ownerInfoSectionHTML(acc) {
+      if (_privacyForced) return '';
+      return '<div class="info-section"><div class="info-section-title">负责人信息</div><div class="info-grid">'
+        + '<span class="info-label">负责人</span><span class="info-value">' + esc(acc.responsiblePerson||'-') + '</span>'
+        + '<span class="info-label">电话</span><span class="info-value">' + esc(acc.phone||'-') + '</span>'
+        + '<span class="info-label">备注</span><span class="info-value">' + esc(acc.notes||'-') + '</span>'
+        + '</div></div>';
+    }
+
     function fmtYesCodeDate(s) {
       if (!s) return '-';
       var d = new Date(s);
@@ -17,11 +28,7 @@
       var monthSpent = d.current_month_spend || 0;
       var monthLimit = plan.monthly_spend_limit || 0;
 
-      var html = '<div class="info-section"><div class="info-section-title">负责人信息</div><div class="info-grid">'
-        + '<span class="info-label">负责人</span><span class="info-value">' + esc(acc.responsiblePerson||'-') + '</span>'
-        + '<span class="info-label">电话</span><span class="info-value">' + esc(acc.phone||'-') + '</span>'
-        + '<span class="info-label">备注</span><span class="info-value">' + esc(acc.notes||'-') + '</span>'
-        + '</div></div>';
+      var html = ownerInfoSectionHTML(acc);
 
       html += '<div class="info-section"><div class="info-section-title">账号信息</div><div class="info-grid">'
         + '<span class="info-label">用户名</span><span class="info-value">' + esc(d.username||'-') + '</span>'
@@ -78,11 +85,7 @@
       var monthlyUsed = sub.monthly_usage_usd || 0;
       var monthlyLimit = grp.monthly_limit_usd || 0;
 
-      var html = '<div class="info-section"><div class="info-section-title">负责人信息</div><div class="info-grid">'
-        + '<span class="info-label">负责人</span><span class="info-value">' + esc(acc.responsiblePerson||'-') + '</span>'
-        + '<span class="info-label">电话</span><span class="info-value">' + esc(acc.phone||'-') + '</span>'
-        + '<span class="info-label">备注</span><span class="info-value">' + esc(acc.notes||'-') + '</span>'
-        + '</div></div>';
+      var html = ownerInfoSectionHTML(acc);
 
       html += '<div class="info-section"><div class="info-section-title">站点与账户</div><div class="info-grid">'
         + '<span class="info-label">站点别名</span><span class="info-value">' + esc(acc.alias || platformLabel(acc.platform || 'sub2api')) + '</span>'
@@ -167,11 +170,7 @@
       var week = usage.AFPWeekly || {};
       var month = usage.AFPMonthly || {};
 
-      var html = '<div class="info-section"><div class="info-section-title">负责人信息</div><div class="info-grid">'
-        + '<span class="info-label">负责人</span><span class="info-value">' + esc(acc.responsiblePerson||'-') + '</span>'
-        + '<span class="info-label">电话</span><span class="info-value">' + esc(acc.phone||'-') + '</span>'
-        + '<span class="info-label">备注</span><span class="info-value">' + esc(acc.notes||'-') + '</span>'
-        + '</div></div>';
+      var html = ownerInfoSectionHTML(acc);
 
       html += '<div class="info-section"><div class="info-section-title">订阅信息</div><div class="info-grid">'
         + '<span class="info-label">套餐类型</span><span class="info-value">' + esc(usage.PlanType || (sub && sub.BizInfo) || '-') + '</span>'
@@ -211,11 +210,7 @@
       var week = volcCQuota(usage, 'weekly');
       var month = volcCQuota(usage, 'monthly');
 
-      var html = '<div class="info-section"><div class="info-section-title">负责人信息</div><div class="info-grid">'
-        + '<span class="info-label">负责人</span><span class="info-value">' + esc(acc.responsiblePerson||'-') + '</span>'
-        + '<span class="info-label">电话</span><span class="info-value">' + esc(acc.phone||'-') + '</span>'
-        + '<span class="info-label">备注</span><span class="info-value">' + esc(acc.notes||'-') + '</span>'
-        + '</div></div>';
+      var html = ownerInfoSectionHTML(acc);
 
       html += '<div class="info-section"><div class="info-section-title">订阅信息</div><div class="info-grid">'
         + '<span class="info-label">套餐类型</span><span class="info-value">' + esc((sub && sub.BizInfo) || '-') + '</span>'
@@ -251,11 +246,7 @@
       var d = acc.data || {};
       var tm = telecomMetrics(d, acc.cachedAt);
       function money(value) { return '¥' + (+(value || 0)).toFixed(2); }
-      var html = '<div class="info-section"><div class="info-section-title">负责人信息</div><div class="info-grid">'
-        + '<span class="info-label">负责人</span><span class="info-value">' + esc(acc.responsiblePerson||'-') + '</span>'
-        + '<span class="info-label">电话</span><span class="info-value">' + esc(acc.phone||'-') + '</span>'
-        + '<span class="info-label">备注</span><span class="info-value">' + esc(acc.notes||'-') + '</span>'
-        + '</div></div>';
+      var html = ownerInfoSectionHTML(acc);
       html += '<div class="info-section"><div class="info-section-title">余额详情</div><div class="info-grid">'
         + '<span class="info-label">账户余额</span><span class="info-value">' + money(d.balance) + '</span>'
         + '<span class="info-label">赠金余额</span><span class="info-value">' + money(d.platformGiftBalance) + '</span>'
@@ -277,11 +268,7 @@
     function renderQwenDetail(index, acc) {
       var sub = (acc.data && acc.data.subscription) || null;
 
-      var html = '<div class="info-section"><div class="info-section-title">负责人信息</div><div class="info-grid">'
-        + '<span class="info-label">负责人</span><span class="info-value">' + esc(acc.responsiblePerson||'-') + '</span>'
-        + '<span class="info-label">电话</span><span class="info-value">' + esc(acc.phone||'-') + '</span>'
-        + '<span class="info-label">备注</span><span class="info-value">' + esc(acc.notes||'-') + '</span>'
-        + '</div></div>';
+      var html = ownerInfoSectionHTML(acc);
 
       html += '<div class="info-section"><div class="info-section-title">订阅信息</div><div class="info-grid">'
         + '<span class="info-label">套餐规格</span><span class="info-value">' + esc(qwenSpecName(sub && sub.specCode)) + '</span>'
@@ -311,11 +298,7 @@
     function renderMiniMaxDetail(index, acc) {
       var sub = (acc.data && acc.data.subscription) || null;
 
-      var html = '<div class="info-section"><div class="info-section-title">负责人信息</div><div class="info-grid">'
-        + '<span class="info-label">负责人</span><span class="info-value">' + esc(acc.responsiblePerson||'-') + '</span>'
-        + '<span class="info-label">电话</span><span class="info-value">' + esc(acc.phone||'-') + '</span>'
-        + '<span class="info-label">备注</span><span class="info-value">' + esc(acc.notes||'-') + '</span>'
-        + '</div></div>';
+      var html = ownerInfoSectionHTML(acc);
 
       var daysLeftTxt = '-';
       if (sub && sub.expireMs) {
@@ -351,11 +334,7 @@
       var usage = (acc.data && acc.data.usage) || null;
       var balance = (acc.data && acc.data.balance) || null;
 
-      var html = '<div class="info-section"><div class="info-section-title">负责人信息</div><div class="info-grid">'
-        + '<span class="info-label">负责人</span><span class="info-value">' + esc(acc.responsiblePerson||'-') + '</span>'
-        + '<span class="info-label">电话</span><span class="info-value">' + esc(acc.phone||'-') + '</span>'
-        + '<span class="info-label">备注</span><span class="info-value">' + esc(acc.notes||'-') + '</span>'
-        + '</div></div>';
+      var html = ownerInfoSectionHTML(acc);
 
       html += '<div class="info-section"><div class="info-section-title">基本信息</div><div class="info-grid">'
         + '<span class="info-label">昵称</span><span class="info-value">' + esc((user && user.nickname) || '-') + '</span>'
@@ -565,11 +544,7 @@
         : '<a href="' + esc(glmConsoleHref) + '" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none">bigmodel.cn/coding-plan ↗</a>';
 
       var html = '<div id="riskBanner-' + index + '">' + riskBannerHTML(acc) + '</div>'
-        + '<div class="info-section"><div class="info-section-title">负责人信息</div><div class="info-grid">'
-        + '<span class="info-label">负责人</span><span class="info-value">' + esc(acc.responsiblePerson||'-') + '</span>'
-        + '<span class="info-label">电话</span><span class="info-value">' + esc(acc.phone||'-') + '</span>'
-        + '<span class="info-label">备注</span><span class="info-value">' + esc(acc.notes||'-') + '</span>'
-        + '</div></div>'
+        + ownerInfoSectionHTML(acc)
         + '<div class="info-section"><div class="info-section-title">控制台</div><div class="info-grid">'
         + '<span class="info-label">智谱 Coding Plan</span><span class="info-value">' + glmConsoleHtml + '</span>'
         + (admin

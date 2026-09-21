@@ -39,6 +39,20 @@ const config = {
   credentialsExportEnabled: /^(1|true|yes)$/i.test((process.env.CREDENTIALS_EXPORT || '').trim()),
   // MiniMax 反向代理(/minimax/*)上游地址。留空(默认)= 代理关闭,返回 404
   minimaxProxyUpstream: (process.env.MINIMAX_PROXY_UPSTREAM || '').trim().replace(/\/+$/, ''),
+  // 隐私模式(对非管理员在服务端强制脱敏:账号名→别名,负责人/电话/备注与身份字段不外发):
+  //   off   = 默认,不强制(隐私开关交给用户自行切换)
+  //   full  = 全隐私,内外网访客一律强制
+  //   split = 内网无隐私/外网隐私,内网访问维持原状,外网访问强制且不可切换(别名 external/lan-open)
+  privacyMode: (function(raw) {
+    var v = String(raw || '').trim().toLowerCase();
+    if (v === 'full' || v === 'all' || v === '1' || v === 'true') return 'full';
+    if (v === 'split' || v === 'external' || v === 'lan-open') return 'split';
+    return 'off';
+  })(process.env.PRIVACY_MODE),
+  // split 模式的外网主机名(逗号分隔,如 lwai.05info.com):请求 Host 命中即判外网。
+  // 建议反代同时传 X-Forwarded-For(公网客户端 IP 兜底判定),两者任一命中即外网
+  privacyExternalHosts: String(process.env.PRIVACY_EXTERNAL_HOSTS || '')
+    .split(',').map(function(s) { return s.trim().toLowerCase(); }).filter(Boolean),
   // 运行环境
   nodeEnv: process.env.NODE_ENV || 'development',
 };
