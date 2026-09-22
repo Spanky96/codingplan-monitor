@@ -7,7 +7,7 @@ var { checkAuth, isAuthed, isHiddenFromGuest } = require('../auth');
 var { clearCacheIndex, patchCachedResult } = require('../cache');
 var {
     makeHeaders, keysUrl, ipWhitelistUrl, riskInfoUrl, resetCardsUrl, resetCardUseUrl,
-    RESET_CARD_USE_TYPES, RISK_TIPS, RISK_TIPS_FALLBACK, decodeJwtUserType,
+    subscriptionListUrl, RESET_CARD_USE_TYPES, RISK_TIPS, RISK_TIPS_FALLBACK, decodeJwtUserType,
     parseGlmResetCards, persistGlmResetCards, isValidIp, uuidV4, withGlmAuthRetry
 } = require('../platforms/glm');
 
@@ -217,6 +217,37 @@ module.exports = function(app) {
             var cards = parseGlmResetCards(afterJson && afterJson.data);
             persistGlmResetCards(i, cards);
             res.json({ success: true, cards: cards, checkedAt: Date.now() });
+        } catch (err) { res.status(500).json({ error: err.message }); }
+    });
+
+    // ============ 用户 ID（智谱订阅列表 customerId,仅管理员,详情页展示+复制）============
+
+    app.get('/api/customer-id/:index', checkAuth, async function(req, res) {
+        try {
+            var i = parseInt(req.params.index);
+            var account = getAccount(req);
+            if (!account) return res.status(404).json({ error: '未找到账号' });
+            if ((account.platform || 'glm') !== 'glm') return res.json({ customerId: null });
+            // customerId 与账号绑定不变:accounts.json 已有则直接返回(?force=1 强制刷新)
+            if (account.customerId && req.query.force !== '1') {
+                return res.json({ customerId: account.customerId, cached: true });
+            }
+            var json = await withGlmAuthRetry(account, i, function(acc) {
+                return httpsGet(subscriptionListUrl(), makeHeaders(acc));
+            });
+            var list = (json && json.data) || [];
+            var active = (Array.isArray(list) ? list : []).find(function(s) { return s && s.status === 'VALID'; })
+                || (Array.isArray(list) ? list[0] : null);
+            var customerId = active && active.customerId != null ? String(active.customerId) : null;
+            if (customerId) {
+                var accounts = readAccounts();
+                if (accounts[i]) {
+                    accounts[i].customerId = customerId;
+                    writeAccounts(accounts);
+                }
+                // 注意:不能 patchCachedResult——usage 缓存游客可读,customerId 仅管理员可见
+            }
+            res.json({ customerId: customerId });
         } catch (err) { res.status(500).json({ error: err.message }); }
     });
 

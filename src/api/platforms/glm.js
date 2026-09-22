@@ -32,6 +32,11 @@ function resetCardsUrl() {
     return 'https://bigmodel.cn/api/biz/customer-package-reset/list?targetType=PERSONAL';
 }
 
+// 智谱账号订阅列表接口(到期时间兜底 / 用户 customerId 均取自这里)
+function subscriptionListUrl() {
+    return 'https://bigmodel.cn/api/biz/subscription/list';
+}
+
 // 智谱账号(个人版)重置卡使用接口(官方请求体需 targetType/resetType/recordId/requestId)
 function resetCardUseUrl() {
     return 'https://bigmodel.cn/api/biz/customer-package-reset/use';
@@ -225,7 +230,7 @@ function glmSubscriptionExpireTime(sub) {
 async function glmSubscriptionExpire(account, index) {
     try {
         var json = await withGlmAuthRetry(account, index, async function(acc) {
-            return httpsGet('https://bigmodel.cn/api/biz/subscription/list', makeHeaders(acc));
+            return httpsGet(subscriptionListUrl(), makeHeaders(acc));
         });
         var list = (json && json.data) || [];
         if (!Array.isArray(list) || !list.length) return null;
@@ -262,6 +267,7 @@ module.exports = {
     ipWhitelistUrl: ipWhitelistUrl,
     riskInfoUrl: riskInfoUrl,
     resetCardsUrl: resetCardsUrl,
+    subscriptionListUrl: subscriptionListUrl,
     resetCardUseUrl: resetCardUseUrl,
     RESET_CARD_USE_TYPES: RESET_CARD_USE_TYPES,
     RISK_TIPS: RISK_TIPS,

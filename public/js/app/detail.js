@@ -475,6 +475,39 @@
         .catch(function() { jump('https://bigmodel.cn/coding-plan'); });
     }
 
+    // 智谱用户 ID(订阅列表 customerId)图标:复制 / 已复制
+    var _cidSvgCopy = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>';
+    var _cidSvgCheck = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>';
+
+    // 一键复制用户 ID:复制成功后图标切换为 ✓,2 秒还原(与 Key 复制交互一致)
+    function copyGlmCustomerId(btn, value) {
+      clipCopy(value).then(function() {
+        btn.innerHTML = _cidSvgCheck;
+        btn.classList.add('copied');
+        setTimeout(function() { btn.innerHTML = _cidSvgCopy; btn.classList.remove('copied'); }, 2000);
+      });
+    }
+
+    // 管理员打开智谱详情时拉取用户 ID(/api/customer-id 为 checkAuth 保护,仅管理员可见),
+    // 首次取回后服务端落 accounts.json,后续直接回缓存值
+    function loadGlmCustomerId(index) {
+      var el = document.getElementById('glmCustomerId-' + index);
+      if (!el) return;
+      fetch(API_PREFIX + '/api/customer-id/' + index, { headers: authHeaders() })
+        .then(function(r) {
+          if (r.status === 401) { localStorage.removeItem('glm_pwd'); requireAuth(function(){loadGlmCustomerId(index)}); return null; }
+          return r.json();
+        })
+        .then(function(d) {
+          if (!d || !el.isConnected) return;
+          if (d.error) { el.textContent = '获取失败'; el.title = d.error; return; }
+          if (!d.customerId) { el.textContent = '-'; return; }
+          el.innerHTML = '<span style="font-family:\'SF Mono\',\'Fira Code\',ui-monospace,monospace">' + esc(d.customerId) + '</span>'
+            + '<button class="icon-btn" onclick="copyGlmCustomerId(this,\'' + esc(d.customerId) + '\')" title="复制用户 ID" style="vertical-align:-4px;margin-left:4px">' + _cidSvgCopy + '</button>';
+        })
+        .catch(function() { if (el.isConnected) el.textContent = '获取失败'; });
+    }
+
     function showDetail(index) {
       // Dispose existing chart if any
       if (_usageCharts[_detailIndex]) { _usageCharts[_detailIndex].dispose(); delete _usageCharts[_detailIndex]; }
@@ -550,6 +583,9 @@
         + (admin
             ? '<span class="info-label">自动登录</span><span class="info-value" style="font-size:12px;color:var(--text-mute)">点击后自动换取带 token 的地址并打开，油猴脚本读取后写入 cookie 进入后台；未安装脚本时会跳到登录页，属正常现象</span>'
             : '')
+        + (admin
+            ? '<span class="info-label">用户 ID</span><span class="info-value" id="glmCustomerId-' + index + '" style="font-size:12px;color:var(--text-mute)">获取中...</span>'
+            : '')
         + '</div></div>'
         + '<div id="resetCards-' + index + '">' + resetCardsSectionHTML(acc, admin, index) + '</div>'
         + '<div class="detail-tabs">'
@@ -599,6 +635,7 @@
       // 管理员打开详情时才加载重置卡:有卡则记录数量,卡片外徽章随之更新;游客只看缓存
       if ((acc.platform || 'glm') === 'glm' && admin) {
         loadResetCards(index);
+        loadGlmCustomerId(index);
       }
 
       if (admin) {
