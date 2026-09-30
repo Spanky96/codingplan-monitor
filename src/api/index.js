@@ -40,6 +40,7 @@ module.exports._hasGlmLoginCredentials = require('./platforms/glm').hasGlmLoginC
 module.exports._parseGlmResetCards = require('./platforms/glm').parseGlmResetCards;
 module.exports._loginGlm = require('./platforms/glm').loginGlm;
 module.exports._fetchGLMUsage = require('./platforms/glm').fetchGLMUsage;
+module.exports._fetchGLMExpire = require('./platforms/glm').fetchGLMExpire;
 module.exports._withGlmAuthRetry = require('./platforms/glm').withGlmAuthRetry;
 module.exports._yescodeLogin = require('./platforms/yescode').yescodeLogin;
 module.exports._fetchYesCodeUsage = require('./platforms/yescode').fetchYesCodeUsage;

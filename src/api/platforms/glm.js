@@ -226,16 +226,20 @@ function glmSubscriptionExpireTime(sub) {
     return null;
 }
 
-// 积分制(新版)套餐无体验卡，到期时间改从订阅列表接口获取；软失败返回 null。
-async function glmSubscriptionExpire(account, index) {
+// 从订阅列表响应中取当前生效订阅(status VALID 优先,兜底第一条);无订阅返回 null。
+function glmActiveSubscription(json) {
+    var list = (json && json.data) || [];
+    if (!Array.isArray(list) || !list.length) return null;
+    return list.find(function(s) { return s && s.status === 'VALID'; }) || list[0];
+}
+
+// 拉取订阅列表:积分制(新版)套餐的到期兜底 + 自动续费标记(autoRenew 0/1,体验卡接口不含该字段);软失败返回 null。
+async function glmSubscriptionInfo(account, index) {
     try {
         var json = await withGlmAuthRetry(account, index, async function(acc) {
             return httpsGet(subscriptionListUrl(), makeHeaders(acc));
         });
-        var list = (json && json.data) || [];
-        if (!Array.isArray(list) || !list.length) return null;
-        var active = list.find(function(s) { return s && s.status === 'VALID'; }) || list[0];
-        return glmSubscriptionExpireTime(active);
+        return glmActiveSubscription(json);
     } catch (err) {
         return null;
     }
@@ -248,11 +252,13 @@ async function fetchGLMExpire(account, index) {
         });
         var expireTime = json.data && json.data.expireTime;
         var inviteCode = json.data && json.data.inviteCode;
+        // 订阅列表:积分制套餐的到期时间兜底 + 自动续费标记;失败不影响到期展示
+        var sub = await glmSubscriptionInfo(account, index);
         // 体验卡接口对积分制套餐返回「暂不支持体验卡」→ 回退到订阅列表取到期时间
         if (!expireTime) {
-            expireTime = await glmSubscriptionExpire(account, index);
+            expireTime = glmSubscriptionExpireTime(sub);
         }
-        var result = { expireTime: expireTime, inviteCode: inviteCode, success: true, cachedAt: Date.now() };
+        var result = { expireTime: expireTime, inviteCode: inviteCode, autoRenew: !!(sub && sub.autoRenew), success: true, cachedAt: Date.now() };
         setExpireCache(index, result);
         return result;
     } catch (err) {
@@ -274,6 +280,7 @@ module.exports = {
     RISK_TIPS_FALLBACK: RISK_TIPS_FALLBACK,
     decodeJwtUserType: decodeJwtUserType,
     parseGlmResetCards: parseGlmResetCards,
+    glmActiveSubscription: glmActiveSubscription,
     persistGlmResetCards: persistGlmResetCards,
     isValidIp: isValidIp,
     uuidV4: uuidV4,

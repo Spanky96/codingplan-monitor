@@ -256,8 +256,9 @@
       if (exp && exp.success && exp.expireTime) {
         var daysLeft = Math.ceil((new Date(exp.expireTime.replace(/-/g, '/')) - Date.now()) / 86400000);
         var expCls = daysLeft <= 10 ? 'expire-danger' : '';
-        var expHint = daysLeft <= 0 ? '已过期' : daysLeft + '天后到期';
-        expHtml = '<div class="expire-row" onclick="refreshExpire(' + i + ')" title="点击刷新"><span class="expire-label">订阅到期</span><span class="expire-value ' + expCls + '">' + esc(exp.expireTime) + '<span class="expire-hint">' + expHint + '</span></span></div>';
+        // 自动续费账号的到期日即下次续费日,提示改为「N天后自动续费」
+        var expHint = daysLeft <= 0 ? '已过期' : daysLeft + (exp.autoRenew ? '天后自动续费' : '天后到期');
+        expHtml = '<div class="expire-row" onclick="refreshExpire(' + i + ')" title="点击刷新"><span class="expire-label">订阅到期</span><span class="expire-value ' + expCls + '">' + esc(String(exp.expireTime).slice(0, 10)) + '<span class="expire-hint">' + expHint + '</span></span></div>';
       }
       var keyBadge = isAdmin() && acc.keyCount != null ? '<span class="level-badge level-badge-ok">Key: ' + acc.keyCount + '个</span>' : '';
       var rcBadge = resetCardBadgeHTML(acc);
@@ -460,10 +461,10 @@
 
     function getListExpireHtml(i, acc) {
       var platform = acc.platform || 'glm';
-      var expTime = null, txt = '';
+      var expTime = null, txt = '', glmAutoRenew = false;
       if (platform === 'glm') {
         var exp = expireData[i];
-        if (exp && exp.success && exp.expireTime) { expTime = exp.expireTime.replace(/-/g, '/'); txt = esc(exp.expireTime); }
+        if (exp && exp.success && exp.expireTime) { expTime = exp.expireTime.replace(/-/g, '/'); txt = esc(String(exp.expireTime).slice(0, 10)); glmAutoRenew = !!exp.autoRenew; }
       } else if (platform === 'yescode') {
         if (acc.data && acc.data.subscription_expiry) { expTime = acc.data.subscription_expiry; txt = esc(new Date(expTime).toLocaleDateString('zh-CN')); }
       } else if (platform === 'sub2api' || platform === 'huoli') {
@@ -482,7 +483,8 @@
       if (!expTime) return '';
       var days = Math.ceil((new Date(expTime) - Date.now()) / 86400000);
       var cls = days <= 10 ? 'expire-danger' : '';
-      var hint = days <= 0 ? '已过期' : days + '天后';
+      // 智谱自动续费账号提示「N天后自动续费」,其余平台维持「N天后」
+      var hint = days <= 0 ? '已过期' : days + (glmAutoRenew ? '天后自动续费' : '天后');
       var click = platform === 'glm' ? ' onclick="event.stopPropagation(); refreshExpire(' + i + ')" title="订阅到期，点击刷新"' : ' title="订阅到期"';
       return '<span class="list-row-expire ' + cls + '"' + click + '>到期 ' + txt + ' (' + hint + ')</span>';
     }
