@@ -7,6 +7,7 @@ var { fetchVolcUsage } = require('./volc');
 var { fetchQwenUsage, fetchQwenModelUsage } = require('./qwen');
 var { fetchMiniMaxUsage, fetchMiniMaxModelUsage } = require('./minimax');
 var { fetchStepfunUsage, fetchStepfunModelUsage } = require('./stepfun');
+var { fetchZenmuxUsage, fetchZenmuxModelUsage } = require('./zenmux');
 var { fetchTelecomUsage } = require('./telecom');
 
 // ============ 统一调度 ============
@@ -30,6 +31,9 @@ async function fetchAccountUsage(account, index) {
     }
     if (platform === 'stepfun') {
         return fetchStepfunUsage(account, index);
+    }
+    if (platform === 'zenmux') {
+        return fetchZenmuxUsage(account, index);
     }
     if (platform === 'telecomjs') {
         return fetchTelecomUsage(account, index);
@@ -61,8 +65,10 @@ module.exports = {
     fetchQwenUsage: fetchQwenUsage,
     fetchMiniMaxUsage: fetchMiniMaxUsage,
     fetchStepfunUsage: fetchStepfunUsage,
+    fetchZenmuxUsage: fetchZenmuxUsage,
     fetchTelecomUsage: fetchTelecomUsage,
     fetchQwenModelUsage: fetchQwenModelUsage,
     fetchMiniMaxModelUsage: fetchMiniMaxModelUsage,
-    fetchStepfunModelUsage: fetchStepfunModelUsage
+    fetchStepfunModelUsage: fetchStepfunModelUsage,
+    fetchZenmuxModelUsage: fetchZenmuxModelUsage
 };

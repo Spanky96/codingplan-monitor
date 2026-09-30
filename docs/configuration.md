@@ -13,6 +13,7 @@
 | `ACCOUNTS_FILE` | `./accounts.json` | 账号数据文件路径(Docker 持久化用,本地留空) |
 | `NODE_ENV` | `development` | 运行环境 |
 | `TELECOMJS_CHROME_PATH` | 自动发现 | 智云抓取所用 Chrome/Chromium 可执行文件路径 |
+| `ZENMUX_PROXY_URL` | 空(直连) | ZenMux API 专用 HTTP CONNECT 代理,仅当服务器无法直连 zenmux.ai 时配置;Docker 访问宿主机代理示例 `http://host.docker.internal:7897` |
 | `PRIVACY_MODE` | 空(`off`) | 隐私模式,对**非管理员**在服务端强制脱敏(账号名→「站点名+序号」别名,负责人/电话/备注与平台身份字段不下发,隐私开关锁定为开):`off`=不强制;`full`=全隐私(内外网访客一律强制,此档下中转站轮询 `/api/weights` 需带 `password` 才能拿真实账号名);`split`=内网无隐私/外网隐私(内网访问维持原状,外网访问强制且不可切换;别名 `external`/`lan-open`) |
 | `PRIVACY_EXTERNAL_HOSTS` | 空 | `split` 模式的外网主机名(逗号分隔,如 `lwai.05info.com`):请求 Host 命中即判外网,内网用户走外网域名访问同样强制;建议外网反代同时透传 `X-Forwarded-For` 作为公网 IP 兜底判定 |
 

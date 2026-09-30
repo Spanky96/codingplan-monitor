@@ -28,6 +28,7 @@ glm-usage/
 │       │   ├── qwen.js         #   千问(platform.qianwenai.com)
 │       │   ├── minimax.js      #   MiniMax(platform.minimaxi.com)
 │       │   ├── stepfun.js      #   阶跃星辰(platform.stepfun.com)
+│       │   ├── zenmux.js       #   ZenMux Builder Subscription(zenmux.ai)
 │       │   └── telecom.js      #   智云(token.telecomjs.com)
 │       └── routes/             # HTTP 路由(按域拆分)
 │           ├── auth.js         #   登录(防爆破)

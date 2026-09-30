@@ -1,6 +1,6 @@
 // ============ YesCode 账号（co.yes.vg）============
 var https = require('https');
-var { httpsGet, httpsRequest } = require('../../lib/http');
+var { httpsGet } = require('../../lib/http');
 var { readAccounts, writeAccounts } = require('../accounts');
 var { setCache } = require('../cache');
 
@@ -50,14 +50,20 @@ function yescodeLogin(username, password) {
     });
 }
 
-function saveYescodeCookie(index, newCookie) {
+function saveYescodeCredentials(index, patch) {
     try {
         var accounts = readAccounts();
         if (accounts[index] && accounts[index].platform === 'yescode') {
-            accounts[index].cookie = newCookie;
+            Object.assign(accounts[index], patch);
             writeAccounts(accounts);
+            return true;
         }
-    } catch (e) { /* ignore write errors */ }
+    } catch (e) { /* 请求仍可使用内存中的新凭证，落盘失败留待下次刷新 */ }
+    return false;
+}
+
+function saveYescodeCookie(index, newCookie) {
+    return saveYescodeCredentials(index, { cookie: newCookie });
 }
 
 function hasYescodeLoginCredentials(account) {
@@ -71,15 +77,34 @@ function yescodeProfileRequest(account) {
     });
 }
 
+function getYescodeProfileEmail(profileResponse) {
+    var profile = profileResponse && (profileResponse.data || profileResponse);
+    var email = profile && typeof profile.email === 'string' ? profile.email.trim() : '';
+    return email && email.indexOf('@') > 0 ? email : '';
+}
+
+// YesCode 登录接口的参数名仍是 username，但当前只接受邮箱。历史界面曾允许填写
+// profile username，因此趁 Cookie 有效时用 profile.email 自动校准并持久化登录标识。
+function syncYescodeLoginEmail(account, index, profileResponse, saveCredentials) {
+    if (!account.yescode_password) return false;
+    var email = getYescodeProfileEmail(profileResponse);
+    if (!email || account.yescode_username === email) return false;
+    account.yescode_username = email;
+    return (saveCredentials || saveYescodeCredentials)(index, { yescode_username: email });
+}
+
 // profile 失效(401)且配置了账密 → 自动重登；无 Cookie 且有账密时也直接登录获取
-async function withYescodeAuthRetry(account, index, requestFn) {
+async function withYescodeAuthRetry(account, index, requestFn, dependencies) {
+    dependencies = dependencies || {};
+    var login = dependencies.login || yescodeLogin;
+    var saveCookie = dependencies.saveCookie || saveYescodeCookie;
     try {
         return await requestFn(account);
     } catch (authErr) {
         var isAuthErr = authErr.message && authErr.message.indexOf('HTTP 401') >= 0;
         if ((!isAuthErr && account.cookie) || !hasYescodeLoginCredentials(account)) throw authErr;
-        var newCookie = await yescodeLogin(account.yescode_username, account.yescode_password);
-        saveYescodeCookie(index, newCookie);
+        var newCookie = await login(account.yescode_username, account.yescode_password);
+        saveCookie(index, newCookie);
         // 本进程内后续请求立即用新 Cookie（accounts.json 也可能被其他写覆盖，以内存更新为准）
         account.cookie = newCookie;
         return await requestFn(account);
@@ -89,6 +114,7 @@ async function withYescodeAuthRetry(account, index, requestFn) {
 async function fetchYesCodeUsage(account, index) {
     try {
         var json = await withYescodeAuthRetry(account, index, yescodeProfileRequest);
+        syncYescodeLoginEmail(account, index, json);
         var result = {
             index: index,
             name: account.name,
@@ -123,8 +149,11 @@ async function fetchYesCodeUsage(account, index) {
 
 module.exports = {
     yescodeLogin: yescodeLogin,
+    saveYescodeCredentials: saveYescodeCredentials,
     saveYescodeCookie: saveYescodeCookie,
     hasYescodeLoginCredentials: hasYescodeLoginCredentials,
+    getYescodeProfileEmail: getYescodeProfileEmail,
+    syncYescodeLoginEmail: syncYescodeLoginEmail,
     withYescodeAuthRetry: withYescodeAuthRetry,
     fetchYesCodeUsage: fetchYesCodeUsage
 };

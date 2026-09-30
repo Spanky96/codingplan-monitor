@@ -7,12 +7,13 @@
 | 平台 | 必填凭证 | 抓取方式 |
 |------|----------|----------|
 | 智谱 GLM | `authorization`(JWT)、`organization`、`project`;可选 `glm_username` + `glm_password` | bigmodel.cn 任意请求头中的 `authorization` / `bigmodel-organization` / `bigmodel-project`;填了账号密码时 token 过期(401/403/405)会自动重新登录并回写 JWT |
-| YesCode | `cookie` 与 `yescode_username` + `yescode_password` 至少一项(推荐账密) | co.yes.vg 请求中的完整 `Cookie`,或登录接口(auth/login)的 fetch(自动解析账密)。官方 Cookie 有效期仅 24h,配了账密后失效自动重登并回写,无需再手动抓 Cookie |
+| YesCode | `cookie` 与 `yescode_username` + `yescode_password` 至少一项(推荐账密) | co.yes.vg 请求中的完整 `Cookie`,或登录接口(auth/login)的 fetch(自动解析账密)。`yescode_username` 必须填账户邮箱(profile 用户名无法登录);官方 Cookie 有效期仅 24h,配了账密后失效自动重登并回写,无需再手动抓 Cookie。历史账号会在 Cookie 有效时从 profile 自动校准邮箱 |
 | Sub2API 中转站 | `base_url`;`authorization` 与 `sub2api_email` + `sub2api_password` 至少一项(推荐账密);可选 `alias` 站点别名 | 任意 sub2api 部署站点(如 super-nb.me / ai98pro.xyz)。粘贴登录接口或控制台请求的 fetch/cURL,自动识别站点并解析账密。并行抓取 `auth/me`(余额)、`subscriptions`(订阅)、`usage/dashboard/stats`(今日/累计 Token 与费用);卡片以余额 + 今日用量为主,过期超 3 天的订阅自动隐藏。token 24h 失效自动重登。旧火狸账号自动兼容(回退 huolilink.com 与 `huoli_*` 字段) |
 | 火山(AgentPlan=火山A / CodingPlan=火山C) | `cookie`、`csrf`、可选 `web_id`、`planType` | console.volcengine.com 请求(用 cURL 复制带出完整 Cookie);添加账号时选套餐类型:AgentPlan 抓 `GetAgentPlanAFPUsage`,CodingPlan 抓 `GetCodingPlanUsage`。两者同一登录会话,Cookie/CSRF 共用 |
 | 智云 | `satoken`、`phone` | 可手动填写 token.telecomjs.com 请求头中的 `Satoken`;认证失效时卡片会提供重新登录入口,用户核对账号登记手机号后使用官方二维码扫码登录,成功后自动回写。扫码页会自动勾选「一周内自动登录」(若未勾选)。后端通过 Chrome 执行页面及瑞数脚本并查询余额 |
 | MiniMax | `cookie`、可选 `group_id` | platform.minimaxi.com 任意请求的完整 Cookie(含 `_token` 登录态);`group_id` 取请求头 `x-group-id`,留空时自动取 Cookie 中的 `minimax_group_id_v2`。套餐名称与到期时间从官方订阅接口解析,消息盒子权益通知兜底;5h 限额 / 周限额(均百分比)与视频赠送 / 视频周赠(均计数)从 `remains_percent` 接口解析 |
 | 阶跃星辰 | `cookie`、可选 `stepfun_webid` | platform.stepfun.com 任意请求的完整 Cookie(建议 Copy as cURL,须含 `Oasis-Token` 双段 JWT 与 `_wafdytokenv1`);`webid` 取请求头 `oasis-webid`,留空时自动取 Cookie 中的 `Oasis-Webid`。抓 Connect RPC 接口:`GetStepPlanStatus`(套餐)、`QueryStepPlanRateLimit`(月度积分限额)、`QueryStepPlanUsages`(今日/曲线用量)、`QueryAccountBalance`(按量余额)、`GetCampaignInviteLink`+`ListCampaignInvites`+`GetCampaignStatus`(邀请活动:详情页展示邀请码/链接复制、邀请进度、邀请记录与奖励账本,已邀满时复制会提醒名额已用完)。access 段仅 30 分钟,过期自动用 refresh 段(~30 天,不轮换)续期并回写 Cookie 中的 `Oasis-Token` 段 |
+| ZenMux | `authorization`(个人账户 `sk-mg-v1-*` Management API Key) | 官方 Platform API:`subscription/detail` 获取套餐、5h/7d Flow 窗口、月度上限、账户状态与到期;`management/usage` 获取今日 Token/请求数及近 7/30 天逐模型曲线。普通 API Key、Subscription API Key、组织 Management Key 均不支持。无法直连时可配置 `ZENMUX_PROXY_URL`(见 [configuration.md](configuration.md)) |
 
 ## 控制台免登录直达(管理员)
 
@@ -40,3 +41,4 @@
 | 智云 | 认证失效 | 卡片提供重新登录入口,核对手机号后扫码,自动更新 Satoken(后端尽量勾选天翼「一周内自动登录」) |
 | MiniMax | Cookie 过期 | 需重抓 Cookie |
 | 阶跃星辰 | access 段仅 30 分钟 | 后端自动用 refresh 段(~30 天,不轮换)续期并回写(建议整段 Copy as cURL 保留 `_wafdytokenv1` 等 WAF 段);refresh 段过期后需重抄完整 Cookie |
+| ZenMux | Management API Key 长期有效 | 无需续期;仅当服务器无法直连 zenmux.ai 时配置 `ZENMUX_PROXY_URL` HTTP CONNECT 代理 |

@@ -12,12 +12,14 @@
   <td align="center"><a href="https://bigmodel.cn"><img src="docs/assets/zhipu.png" width="44" alt="智谱"/><br /><b>智谱 GLM</b></a></td>
   <td align="center"><a href="https://co.yes.vg"><img src="docs/assets/yescode.ico" width="44" alt="YesCode"/><br /><b>YesCode</b></a></td>
   <td align="center"><img src="docs/assets/sub2api.svg" width="44" alt="Sub2API"/><br /><b>Sub2API</b></td>
-  <td align="center"><a href="https://console.volcengine.com"><img src="docs/assets/volc.png" width="44" alt="火山"/><br /><b>火山引擎</b></a></td>
 </tr><tr>
+  <td align="center"><a href="https://console.volcengine.com"><img src="docs/assets/volc.png" width="44" alt="火山"/><br /><b>火山引擎</b></a></td>
   <td align="center"><a href="https://token.telecomjs.com"><img src="docs/assets/telecom.ico" width="44" alt="智云"/><br /><b>智云·天翼</b></a></td>
   <td align="center"><a href="https://platform.qianwenai.com"><img src="docs/assets/qwen.svg" width="44" alt="千问"/><br /><b>通义千问</b></a></td>
+</tr><tr>
   <td align="center"><a href="https://platform.minimaxi.com"><img src="docs/assets/minimax.svg" width="44" alt="MiniMax"/><br /><b>MiniMax</b></a></td>
   <td align="center"><a href="https://platform.stepfun.com"><img src="docs/assets/stepfun.png" width="44" alt="阶跃星辰"/><br /><b>阶跃星辰</b></a></td>
+  <td align="center"><a href="https://zenmux.ai"><img src="docs/assets/zenmux.svg" width="44" alt="ZenMux"/><br /><b>ZenMux</b></a></td>
 </tr></table>
 
 </div>
@@ -28,7 +30,7 @@
 
 ## ✨ 核心功能
 
-- **多账号卡片面板**:额度进度、余额、5h / 周 / 月窗口紧张度(实际用量 vs 理论进度)、重置时间、订阅到期倒计时;站点筛选 + 紧张度排序
+- **多账号卡片面板**:额度进度、余额、5h / 周 / 月窗口紧张度(实际用量 vs 理论进度)、重置时间、订阅到期倒计时;站点多选筛选(记住选择)+ 紧张度排序
 - **用量曲线**:ECharts 当日 / 7 天 / 30 天消耗趋势
 - **智谱深度管理**:API Key 查看 / 复制 / 创建 / 删除、IP 白名单管理、风控异常提示、重置卡一键使用
 - **凭证免维护**:智谱 / YesCode / Sub2API 配账密后 token 失效自动重登;阶跃 refresh 段自动续期;智云扫码重登
@@ -47,6 +49,7 @@
 | 通义千问 | ✅ | ✅ 7/30 天 | ✅ | — | — | — | — | — |
 | MiniMax | ✅ 5h/周限额 | ✅ 7/30 天 | ✅ | — | — | — | — | — |
 | 阶跃星辰 | ✅ 积分+余额 | ✅ 7/30 天·积分 | ✅ | ✅ 自动续期 | — | — | — | — |
+| ZenMux | ✅ Flow 窗口 | ✅ 7/30 天·逐模型 | ✅ | ✅ 长期 Key | — | — | — | — |
 
 > 全平台通用:权重徽标、深色模式、隐私模式;管理员另有控制台免登录直达(智谱 / MiniMax,配合油猴脚本)。
 

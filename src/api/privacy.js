@@ -107,6 +107,7 @@ function platformLabel(platform) {
     if (platform === 'qwen') return '千问';
     if (platform === 'minimax') return 'MiniMax';
     if (platform === 'stepfun') return '阶跃星辰';
+    if (platform === 'zenmux') return 'ZenMux';
     return '智谱';
 }
 

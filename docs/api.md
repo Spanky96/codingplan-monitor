@@ -21,7 +21,7 @@
 | GET  | `/api/customer-id/:index` | ✅ | 智谱订阅 customerId(仅管理员,详情页展示+复制) |
 | GET  | `/api/accounts` | ✅ | 账号列表 |
 | POST / PUT / DELETE | `/api/accounts[/:index]` | ✅ | 账号增改删 / 整体排序 |
-| GET  | `/api/model-usage/:index?period=today\|7d\|30d` | - | 用量曲线(智谱当日/7/30 天、千问、MiniMax 与阶跃 7/30 天,阶跃纵轴为积分) |
+| GET  | `/api/model-usage/:index?period=today\|7d\|30d` | - | 用量曲线(智谱当日/7/30 天;千问、MiniMax、阶跃与 ZenMux 7/30 天,阶跃纵轴为积分,ZenMux 按模型明细) |
 | GET  | `/api/expire[/:index]` | - | 订阅到期时间(24 小时缓存) |
 | GET  | `/api/weights` | 可选密码 | 公开账号 token 分配权重(0~10,纯读缓存) |
 | GET  | `/api/console-url/:index` | ✅ | 控制台免登录直达地址(智谱/MiniMax,配合油猴脚本) |
