@@ -59,19 +59,44 @@
         + (reset ? '<div style="font-size:11px;color:var(--text-faint);margin-top:3px">' + reset + '</div>' : '') + '</div>';
     }
 
+    // 平台标签 mini logo(/logo/* 由 server 映射到 docs/assets,与 README 共用同一份图标)
+    var PLATFORM_LOGOS = {
+      glm: '/logo/zhipu.png',
+      yescode: '/logo/yescode.ico',
+      sub2api: '/logo/sub2api.svg',
+      huoli: '/logo/sub2api.svg',
+      volc: '/logo/volc.png',
+      volcc: '/logo/volc.png',
+      telecomjs: '/logo/telecom.ico',
+      qwen: '/logo/qwen.svg',
+      minimax: '/logo/minimax.svg',
+      stepfun: '/logo/stepfun.png'
+    };
+
+    function ptLogo(key) {
+      var src = PLATFORM_LOGOS[key];
+      return src ? '<img class="pt-logo" src="' + src + '" alt="" aria-hidden="true">' : '';
+    }
+
+    // ZenMux 黑章鱼在深色主题下不可见,按主题切换黑/白两版
+    function ptZenmuxLogo() {
+      return '<img class="pt-logo pt-light-only" src="/logo/zenmux.svg" alt="" aria-hidden="true">'
+        + '<img class="pt-logo pt-dark-only" src="/logo/zenmux-white.svg" alt="" aria-hidden="true">';
+    }
+
     function platformTag(platform, planType, alias) {
-      if (platform === 'yescode') return '<span class="platform-tag platform-yescode">YesCode</span>';
-      if (platform === 'sub2api') return '<span class="platform-tag platform-sub2api">' + esc(alias || 'Sub2API') + '</span>';
-      if (platform === 'huoli') return '<span class="platform-tag platform-huoli">火狸</span>';
+      if (platform === 'yescode') return '<span class="platform-tag platform-yescode">' + ptLogo('yescode') + 'YesCode</span>';
+      if (platform === 'sub2api') return '<span class="platform-tag platform-sub2api">' + ptLogo('sub2api') + esc(alias || 'Sub2API') + '</span>';
+      if (platform === 'huoli') return '<span class="platform-tag platform-huoli">' + ptLogo('huoli') + '火狸</span>';
       if (platform === 'volc') return planType === 'coding'
-        ? '<span class="platform-tag platform-volcc">火山C</span>'
-        : '<span class="platform-tag platform-volc">火山A</span>';
-      if (platform === 'telecomjs') return '<span class="platform-tag platform-telecomjs">智云</span>';
-      if (platform === 'qwen') return '<span class="platform-tag platform-qwen">千问</span>';
-      if (platform === 'minimax') return '<span class="platform-tag platform-minimax">MiniMax</span>';
-      if (platform === 'stepfun') return '<span class="platform-tag platform-stepfun">阶跃星辰</span>';
-      if (platform === 'zenmux') return '<span class="platform-tag platform-zenmux">ZenMux</span>';
-      return '<span class="platform-tag platform-glm">智谱</span>';
+        ? '<span class="platform-tag platform-volcc">' + ptLogo('volcc') + '火山C</span>'
+        : '<span class="platform-tag platform-volc">' + ptLogo('volc') + '火山A</span>';
+      if (platform === 'telecomjs') return '<span class="platform-tag platform-telecomjs">' + ptLogo('telecomjs') + '智云</span>';
+      if (platform === 'qwen') return '<span class="platform-tag platform-qwen">' + ptLogo('qwen') + '千问</span>';
+      if (platform === 'minimax') return '<span class="platform-tag platform-minimax">' + ptLogo('minimax') + 'MiniMax</span>';
+      if (platform === 'stepfun') return '<span class="platform-tag platform-stepfun">' + ptLogo('stepfun') + '阶跃星辰</span>';
+      if (platform === 'zenmux') return '<span class="platform-tag platform-zenmux">' + ptZenmuxLogo() + 'ZenMux</span>';
+      return '<span class="platform-tag platform-glm">' + ptLogo('glm') + '智谱</span>';
     }
 
     function renderSpendRow(label, spent, limit, lastReset, periodMs) {

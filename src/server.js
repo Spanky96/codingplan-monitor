@@ -9,6 +9,8 @@ const { port, host } = config;
 
 // 前端面板与静态资源(public/index.html,/js/echart/*;public 在仓库根,src 的上一级)
 app.use(express.static(path.join(__dirname, '..', 'public')));
+// 平台 logo(docs/assets 单一来源:README 引用相对路径,前端经 /logo/* 引用)
+app.use('/logo', express.static(path.join(__dirname, '..', 'docs', 'assets')));
 
 // MiniMax 反向代理(同源 /minimax/* → api.minimaxi.com,规避浏览器跨域)
 // 必须在 api(app) 之前挂载:代理需读取原始请求流(multipart 上传),不能被 api 的 json 解析消费

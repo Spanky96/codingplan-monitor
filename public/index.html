@@ -280,7 +280,10 @@
     .card-title-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
     .card-header h3 { font-size: 15px; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
     .card-header-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
-    .platform-tag { font-size: 10px; padding: 2px 7px; border-radius: 5px; font-weight: 600; flex-shrink: 0; letter-spacing: .3px; }
+    .platform-tag { font-size: 10px; padding: 2px 7px; border-radius: 5px; font-weight: 600; flex-shrink: 0; letter-spacing: .3px; display: inline-flex; align-items: center; gap: 4px; }
+    .platform-tag .pt-logo { width: 12px; height: 12px; border-radius: 3px; object-fit: contain; flex-shrink: 0; }
+    :root.dark .pt-light-only { display: none; }
+    :root:not(.dark) .pt-dark-only { display: none; }
     .platform-glm { background: rgba(14,165,233,.16); color: #0369a1; border: 1px solid rgba(14,165,233,.3); }
     .platform-yescode { background: rgba(22,163,74,.16); color: #15803d; border: 1px solid rgba(22,163,74,.3); }
     .platform-huoli { background: rgba(217,119,6,.16); color: #b45309; border: 1px solid rgba(217,119,6,.3); }
