@@ -82,3 +82,4 @@ module.exports._isAdminRequest = require('./privacy').isAdminRequest;
 module.exports._forcedPrivacy = require('./privacy').forcedPrivacy;
 module.exports._buildAliasMap = require('./privacy').buildAliasMap;
 module.exports._maskUsageResult = require('./privacy').maskUsageResult;
+module.exports._buildConsoleUrl = require('./routes/console-url')._buildConsoleUrl;

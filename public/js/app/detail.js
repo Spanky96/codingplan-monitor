@@ -305,12 +305,22 @@
         var dl = Math.ceil((sub.expireMs - Date.now()) / 86400000);
         daysLeftTxt = dl <= 0 ? '已过期' : dl + ' 天';
       }
+      // 控制台直达:与管理员 GLM 详情同构——管理员点击经 /api/console-url 换取
+      // 带 cookie 凭据(?ck= base64url)的地址,油猴脚本写回 .minimaxi.com cookie;
+      // 游客只给普通链接。注意:usage 缓存里不含 cookie,不能在前端直接拼。
+      var admin = isAdmin();
+      var mmConsoleUrl = 'https://platform.minimaxi.com/console/plan';
+      var mmConsoleHtml = admin
+        ? '<a href="javascript:void(0)" onclick="openMinimaxConsole(' + index + ')" style="color:var(--accent);text-decoration:none">MiniMax 控制台 ↗</a>'
+        : '<a href="' + esc(mmConsoleUrl) + '" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none">MiniMax 控制台 ↗</a>';
+
       html += '<div class="info-section"><div class="info-section-title">订阅信息</div><div class="info-grid">'
         + '<span class="info-label">套餐</span><span class="info-value">' + esc((sub && sub.planName) || '无套餐记录') + '</span>'
         + '<span class="info-label">到期时间</span><span class="info-value">' + esc((sub && sub.expireDate) || '-') + '</span>'
         + '<span class="info-label">剩余天数</span><span class="info-value">' + daysLeftTxt + '</span>'
         + '<span class="info-label">权益发放时间</span><span class="info-value">' + esc(fmtYesCodeDate(sub && sub.notifiedAt)) + '</span>'
-        + '<span class="info-label">官网</span><span class="info-value"><a href="https://platform.minimaxi.com/console/plan" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none">MiniMax 控制台 ↗</a></span>'
+        + '<span class="info-label">官网</span><span class="info-value">' + mmConsoleHtml + '</span>'
+        + (admin ? '<span class="info-label">自动登录</span><span class="info-value" style="font-size:12px;color:var(--text-mute)">点击后自动换取带凭据的地址并打开，油猴脚本读取后写入 cookie 进入后台；未安装脚本时会跳到登录页，属正常现象</span>' : '')
         + '</div></div>';
 
       // 用量曲线:官方 usage_summary 仅支持 7/30 天口径,与智谱/千问共用图表渲染
@@ -461,19 +471,23 @@
       document.getElementById('modalBody').innerHTML = html;
     }
 
-    // 管理员点击 GLM「控制台」:先在用户手势中开窗(否则 fetch 后的 window.open 会被
-    // 浏览器弹窗拦截),再经 /api/console-url 换取带 token 的地址;失败降级普通链接。
-    function openGlmConsole(index) {
+    // 管理员点击「控制台」:先在用户手势中开窗(否则 fetch 后的 window.open 会被
+    // 浏览器弹窗拦截),再经 /api/console-url 换取带登录凭据的地址;失败降级普通链接。
+    // 凭据形态随平台不同(glm 是 token,minimax 是整串 cookie 的 base64url),
+    // 均由油猴脚本读取参数写 cookie 后进入后台。
+    function openConsoleUrl(index, fallbackUrl) {
       var win = null;
       try { win = window.open('', '_blank'); } catch (e) { /* 弹窗被拦:下面降级 */ }
       var jump = function(url) { if (win) { try { win.location.href = url; } catch (e) { /* 跨域窗口忽略 */ } } };
       fetch(API_PREFIX + '/api/console-url/' + index, { headers: authHeaders() })
         .then(function(r) { return r.json(); })
         .then(function(d) {
-          jump((d && d.url) || 'https://bigmodel.cn/coding-plan');
+          jump((d && d.url) || fallbackUrl);
         })
-        .catch(function() { jump('https://bigmodel.cn/coding-plan'); });
+        .catch(function() { jump(fallbackUrl); });
     }
+    function openGlmConsole(index) { openConsoleUrl(index, 'https://bigmodel.cn/coding-plan'); }
+    function openMinimaxConsole(index) { openConsoleUrl(index, 'https://platform.minimaxi.com/console/plan'); }
 
     // 智谱用户 ID(订阅列表 customerId)图标:复制 / 已复制
     var _cidSvgCopy = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>';
