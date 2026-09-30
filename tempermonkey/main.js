@@ -1,13 +1,13 @@
 // ==UserScript==
 // @name         监控面板控制台自动登录(智谱/MiniMax)
 // @namespace    glm-usage
-// @version      1.1.0
+// @version      1.1.1
 // @description  配合 glm-usage 监控面板的「控制台」链接：智谱从 ?token= 读取 authorization 写入 bigmodel_token_production；MiniMax 从 ?ck= 读取整串 cookie(base64url) 逐个写回 .minimaxi.com。均在页面加载前完成，实现一键免登录进后台
 // @author       spanky
-// @match        *://bigmodel.cn/*
-// @match        *://*.bigmodel.cn/*
-// @match        *://minimaxi.com/*
-// @match        *://*.minimaxi.com/*
+// @match        https://bigmodel.cn/*
+// @match        https://*.bigmodel.cn/*
+// @match        https://minimaxi.com/*
+// @match        https://*.minimaxi.com/*
 // @run-at       document-start
 // @grant        none
 // ==/UserScript==
@@ -57,10 +57,10 @@
         var token = params.get('token');
         if (token) {
             // 写入官方登录 cookie（max-age 30 天，与面板侧 token 量级匹配；
-            // token 本身过期后官方会引导重新登录，属预期）
+            // token 本身过期后官方会引导重新登录，属预期；@match 仅 https,Secure 可加）
             clearVisibleCookies('bigmodel.cn', ['bigmodel_token_production']);
             document.cookie = 'bigmodel_token_production=' + token
-                + '; domain=.bigmodel.cn; path=/; max-age=2592000; SameSite=Lax';
+                + '; domain=.bigmodel.cn; path=/; max-age=2592000; SameSite=Lax; Secure';
             stripParams(['token']);
         }
         return;
@@ -90,9 +90,13 @@
     var names = pairs.map(function (p) { return p.split('=')[0].trim(); });
     clearVisibleCookies('minimaxi.com', names);
     pairs.forEach(function (pair) {
-        document.cookie = pair + '; domain=.minimaxi.com; path=/; max-age=2592000; SameSite=Lax';
+        document.cookie = pair + '; domain=.minimaxi.com; path=/; max-age=2592000; SameSite=Lax; Secure';
     });
 
-    // 4) 地址栏抹除 ck，防止泄露到历史记录 / 分享链接
+    // 4) 地址栏抹除 ck 后整页 reload：导航请求发出时 cookie 尚未写入,若 console 由
+    //    服务端按会话门控,当前文档已是登录页,带新 cookie 重载一次才能进入；
+    //    ck 已抹掉,重载后本脚本无 ?ck= 直接返回,不会循环。
+    //    (智谱分支不 reload:bigmodel 是客户端门控 SPA,现网验证无需重载,保持原行为)
     stripParams(['ck']);
+    location.reload();
 })();

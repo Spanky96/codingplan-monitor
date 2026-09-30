@@ -309,10 +309,9 @@
       // 带 cookie 凭据(?ck= base64url)的地址,油猴脚本写回 .minimaxi.com cookie;
       // 游客只给普通链接。注意:usage 缓存里不含 cookie,不能在前端直接拼。
       var admin = isAdmin();
-      var mmConsoleUrl = 'https://platform.minimaxi.com/console/plan';
       var mmConsoleHtml = admin
         ? '<a href="javascript:void(0)" onclick="openMinimaxConsole(' + index + ')" style="color:var(--accent);text-decoration:none">MiniMax 控制台 ↗</a>'
-        : '<a href="' + esc(mmConsoleUrl) + '" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none">MiniMax 控制台 ↗</a>';
+        : '<a href="' + esc(PLATFORM_CONSOLE_URLS.minimax) + '" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none">MiniMax 控制台 ↗</a>';
 
       html += '<div class="info-section"><div class="info-section-title">订阅信息</div><div class="info-grid">'
         + '<span class="info-label">套餐</span><span class="info-value">' + esc((sub && sub.planName) || '无套餐记录') + '</span>'
@@ -320,7 +319,7 @@
         + '<span class="info-label">剩余天数</span><span class="info-value">' + daysLeftTxt + '</span>'
         + '<span class="info-label">权益发放时间</span><span class="info-value">' + esc(fmtYesCodeDate(sub && sub.notifiedAt)) + '</span>'
         + '<span class="info-label">官网</span><span class="info-value">' + mmConsoleHtml + '</span>'
-        + (admin ? '<span class="info-label">自动登录</span><span class="info-value" style="font-size:12px;color:var(--text-mute)">点击后自动换取带凭据的地址并打开，油猴脚本读取后写入 cookie 进入后台；未安装脚本时会跳到登录页，属正常现象</span>' : '')
+        + (admin ? adminAutoLoginNote() : '')
         + '</div></div>';
 
       // 用量曲线:官方 usage_summary 仅支持 7/30 天口径,与智谱/千问共用图表渲染
@@ -471,23 +470,56 @@
       document.getElementById('modalBody').innerHTML = html;
     }
 
+    // 「自动登录」说明行(glm/minimax 详情共用,文案单点维护)
+    function adminAutoLoginNote() {
+      return '<span class="info-label">自动登录</span><span class="info-value" style="font-size:12px;color:var(--text-mute)">点击后自动换取带凭据的地址并打开，油猴脚本读取后写入 cookie 进入后台；未安装脚本时会跳到登录页，属正常现象</span>';
+    }
+
+    // 各平台控制台地址(与后端 CONSOLE_URLS 对应;游客链接与换取失败降级都用它,避免多处字面量漂移)
+    var PLATFORM_CONSOLE_URLS = {
+      glm: 'https://bigmodel.cn/coding-plan',
+      minimax: 'https://platform.minimaxi.com/console/plan'
+    };
+
     // 管理员点击「控制台」:先在用户手势中开窗(否则 fetch 后的 window.open 会被
     // 浏览器弹窗拦截),再经 /api/console-url 换取带登录凭据的地址;失败降级普通链接。
     // 凭据形态随平台不同(glm 是 token,minimax 是整串 cookie 的 base64url),
     // 均由油猴脚本读取参数写 cookie 后进入后台。
     function openConsoleUrl(index, fallbackUrl) {
       var win = null;
-      try { win = window.open('', '_blank'); } catch (e) { /* 弹窗被拦:下面降级 */ }
-      var jump = function(url) { if (win) { try { win.location.href = url; } catch (e) { /* 跨域窗口忽略 */ } } };
+      try { win = window.open('', '_blank'); } catch (e) { /* 弹窗被拦:win 为 null,下面同窗降级 */ }
+      if (win) { try { win.opener = null; } catch (e) { /* 老浏览器忽略 */ } }
+      // 弹窗被拦时 window.open 返回 null 且不抛错:降级为当前窗跳转,保证链路可用
+      var jump = function(url) {
+        if (win) { try { win.location.href = url; return; } catch (e) { /* 跨域窗口忽略 */ } }
+        location.href = url;
+      };
+      var closeBlank = function() { if (win) { try { win.close(); } catch (e) { /* 忽略 */ } } };
       fetch(API_PREFIX + '/api/console-url/' + index, { headers: authHeaders() })
-        .then(function(r) { return r.json(); })
+        .then(function(r) {
+          if (r.status === 401) {
+            // 密码失效:关掉空窗,走重新登录后重试(与 loadGlmCustomerId 同模式)
+            closeBlank();
+            localStorage.removeItem('glm_pwd');
+            requireAuth(function() { openConsoleUrl(index, fallbackUrl); });
+            return null;
+          }
+          if (r.status === 429) {
+            // 触发防爆破封禁:必须显式提示,静默降级会掩盖「错误密码在累积封禁」这件事
+            closeBlank();
+            alert('密码错误次数过多，已临时封禁 15 分钟，请稍后再试');
+            return null;
+          }
+          return r.json();
+        })
         .then(function(d) {
+          if (d === null) return;
           jump((d && d.url) || fallbackUrl);
         })
         .catch(function() { jump(fallbackUrl); });
     }
-    function openGlmConsole(index) { openConsoleUrl(index, 'https://bigmodel.cn/coding-plan'); }
-    function openMinimaxConsole(index) { openConsoleUrl(index, 'https://platform.minimaxi.com/console/plan'); }
+    function openGlmConsole(index) { openConsoleUrl(index, PLATFORM_CONSOLE_URLS.glm); }
+    function openMinimaxConsole(index) { openConsoleUrl(index, PLATFORM_CONSOLE_URLS.minimax); }
 
     // 智谱用户 ID(订阅列表 customerId)图标:复制 / 已复制
     var _cidSvgCopy = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>';
@@ -585,18 +617,15 @@
       // 带 authorization token 的跳转地址,油猴脚本读取 ?token= 写入
       // bigmodel_token_production cookie 后进入后台;游客只给普通链接。
       // 注意:usage 缓存里不含 authorization,不能在前端直接拼 token。
-      var glmConsoleHref = 'https://bigmodel.cn/coding-plan';
       var glmConsoleHtml = admin
         ? '<a href="javascript:void(0)" onclick="openGlmConsole(' + index + ')" style="color:var(--accent);text-decoration:none">bigmodel.cn/coding-plan ↗</a>'
-        : '<a href="' + esc(glmConsoleHref) + '" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none">bigmodel.cn/coding-plan ↗</a>';
+        : '<a href="' + esc(PLATFORM_CONSOLE_URLS.glm) + '" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none">bigmodel.cn/coding-plan ↗</a>';
 
       var html = '<div id="riskBanner-' + index + '">' + riskBannerHTML(acc) + '</div>'
         + ownerInfoSectionHTML(acc)
         + '<div class="info-section"><div class="info-section-title">控制台</div><div class="info-grid">'
         + '<span class="info-label">智谱 Coding Plan</span><span class="info-value">' + glmConsoleHtml + '</span>'
-        + (admin
-            ? '<span class="info-label">自动登录</span><span class="info-value" style="font-size:12px;color:var(--text-mute)">点击后自动换取带 token 的地址并打开，油猴脚本读取后写入 cookie 进入后台；未安装脚本时会跳到登录页，属正常现象</span>'
-            : '')
+        + (admin ? adminAutoLoginNote() : '')
         + (admin
             ? '<span class="info-label">用户 ID</span><span class="info-value" id="glmCustomerId-' + index + '" style="font-size:12px;color:var(--text-mute)">获取中...</span>'
             : '')

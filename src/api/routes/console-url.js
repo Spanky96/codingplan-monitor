@@ -25,10 +25,13 @@ var CONSOLE_CREDENTIAL = {
 };
 
 // 纯函数便于单测:平台未登记返回 null;有凭据拼参数,无凭据降级纯地址(hasToken:false)。
+// 用 hasOwnProperty 守卫:'constructor'/'__proto__' 等平台名会命中原型链,
+// 拿到 Function 基座或继承成员,产生垃圾 URL 甚至抛错,必须走未登记分支。
 function buildConsoleUrl(platform, account) {
+    if (!Object.prototype.hasOwnProperty.call(CONSOLE_URLS, platform)) return null;
     var base = CONSOLE_URLS[platform];
-    if (!base) return null;
-    var make = CONSOLE_CREDENTIAL[platform];
+    var make = Object.prototype.hasOwnProperty.call(CONSOLE_CREDENTIAL, platform)
+        ? CONSOLE_CREDENTIAL[platform] : null;
     var pair = make ? make(account || {}) : '';
     return { url: pair ? base + '?' + pair : base, hasToken: !!pair, platform: platform };
 }
