@@ -6,15 +6,19 @@ var { readAccounts } = require('../accounts');
 var { checkAuth } = require('../auth');
 
 // 各平台控制台地址(后续其他平台要做「带凭据直达」时在此扩展)
+// minimax:console 已迁移 minimax.cn 域(经 account.minimax.cn OAuth 门控)。
+// platform.minimaxi.com 会服务端 302 进该 OAuth 流——跳转发生在油猴脚本运行前,
+// 写 .minimaxi.com cookie 无从生效,故直达新域。存储 cookie 经线上实测对
+// www.minimax.cn 后端 API 与 platform.minimax.cn console 均有效(会话跨域通用)。
 var CONSOLE_URLS = {
     glm: 'https://bigmodel.cn/coding-plan',
-    minimax: 'https://platform.minimaxi.com/console/plan'
+    minimax: 'https://platform.minimax.cn/console/plan'
 };
 
 // 各平台凭据 → URL 参数:
 // GLM 的 authorization(bare JWT)即官方登录 cookie bigmodel_token_production 的值;
 // MiniMax 官方无 token 免登录,登录态就是整串浏览器 cookie,base64url 编码防止
-// 分号/等号歧义,由油猴脚本解码后逐个写回 .minimaxi.com 域下的 cookie。
+// 分号/等号歧义,由油猴脚本解码后逐个写回所在域(minimax.cn/minimaxi.com 均可)。
 var CONSOLE_CREDENTIAL = {
     glm: function(account) {
         return account.authorization ? 'token=' + encodeURIComponent(account.authorization) : '';

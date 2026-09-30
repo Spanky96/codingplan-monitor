@@ -478,7 +478,7 @@
     // 各平台控制台地址(与后端 CONSOLE_URLS 对应;游客链接与换取失败降级都用它,避免多处字面量漂移)
     var PLATFORM_CONSOLE_URLS = {
       glm: 'https://bigmodel.cn/coding-plan',
-      minimax: 'https://platform.minimaxi.com/console/plan'
+      minimax: 'https://platform.minimax.cn/console/plan'
     };
 
     // 管理员点击「控制台」:先在用户手势中开窗(否则 fetch 后的 window.open 会被

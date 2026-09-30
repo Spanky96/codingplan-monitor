@@ -1,13 +1,15 @@
 // ==UserScript==
 // @name         监控面板控制台自动登录(智谱/MiniMax)
 // @namespace    glm-usage
-// @version      1.1.1
-// @description  配合 glm-usage 监控面板的「控制台」链接：智谱从 ?token= 读取 authorization 写入 bigmodel_token_production；MiniMax 从 ?ck= 读取整串 cookie(base64url) 逐个写回 .minimaxi.com。均在页面加载前完成，实现一键免登录进后台
+// @version      1.1.2
+// @description  配合 glm-usage 监控面板的「控制台」链接：智谱从 ?token= 读取 authorization 写入 bigmodel_token_production；MiniMax 从 ?ck= 读取整串 cookie(base64url) 逐个写回所在域。均在页面加载前完成，实现一键免登录进后台
 // @author       spanky
 // @match        https://bigmodel.cn/*
 // @match        https://*.bigmodel.cn/*
 // @match        https://minimaxi.com/*
 // @match        https://*.minimaxi.com/*
+// @match        https://minimax.cn/*
+// @match        https://*.minimax.cn/*
 // @run-at       document-start
 // @grant        none
 // ==/UserScript==
@@ -15,12 +17,14 @@
 // 原理：监控面板（管理员身份）打开账号详情时，「控制台」链接经服务端
 // /api/console-url 实时换取为带凭据的地址，本脚本在该页任何脚本执行前（document-start）拦截：
 //   智谱    https://bigmodel.cn/coding-plan?token=<urlencode(authorization)>
-//   MiniMax https://platform.minimaxi.com/console/plan?ck=<base64url(整串 cookie)>
+//   MiniMax https://platform.minimax.cn/console/plan?ck=<base64url(整串 cookie)>
 // 处理流程：
 //   1) 智谱：清空 bigmodel.cn 域下已可见的其他 cookie（残留登录态/测试态，避免串号），
 //      写入本次 token 到 bigmodel_token_production（官方登录 cookie）。
 //   2) MiniMax：官方无 token 免登录，登录态即浏览器 cookie —— base64url 解码出
-//      整串 cookie，清空已可见的其他 cookie 后，把 name=value 逐个写回 .minimaxi.com 域。
+//      整串 cookie，清空已可见的其他 cookie 后，把 name=value 逐个写回所在域
+//      （console 已迁移 minimax.cn 且经 account.minimax.cn OAuth 门控；监控存储的
+//      minimaxi.com 会话经线上实测对 minimax.cn 同样有效，会话跨域通用）。
 //   3) 最后把地址栏上的凭据参数抹掉，避免泄露到历史记录与截图。
 // 无凭据参数时脚本不做任何操作，正常浏览不受影响。
 
@@ -66,10 +70,13 @@
         return;
     }
 
-    // ============ MiniMax minimaxi.com:?ck= ============
-    if (!/(^|\.)minimaxi\.com$/.test(location.hostname)) return;
+    // ============ MiniMax minimaxi.com / minimax.cn:?ck= ============
+    // console 已迁移 minimax.cn 域;存储的会话跨两域通用,写到脚本所在域即可
+    var mmHost = location.hostname.match(/minimaxi\.com$|minimax\.cn$/);
+    if (!mmHost) return;
     var ck = params.get('ck');
     if (!ck) return;                         // 无凭据：正常访问，不动 cookie
+    var mmDomain = mmHost[0];                // 父域:minimaxi.com 或 minimax.cn
 
     // 1) base64url → 标准 base64 → 解码为 UTF-8 整串 cookie，拆成 name=value 对
     //    （value 可能含中文/等号，须按字节解码，不能直接 atob 当文本用）
@@ -85,12 +92,12 @@
             .filter(function (p) { return p.indexOf('=') > 0; });
     } catch (e) { return; }                  // 解码失败：不动 cookie，仅跳过本次登录
 
-    // 2) 清残留（保留本次要写的 name，稍后覆写），3) 逐个原样写回 .minimaxi.com 域
+    // 2) 清残留（保留本次要写的 name，稍后覆写），3) 逐个原样写回所在域
     //    （pair 含 value 里的等号等特殊字符，直接透传；30 天过期与智谱侧量级一致）
     var names = pairs.map(function (p) { return p.split('=')[0].trim(); });
-    clearVisibleCookies('minimaxi.com', names);
+    clearVisibleCookies(mmDomain, names);
     pairs.forEach(function (pair) {
-        document.cookie = pair + '; domain=.minimaxi.com; path=/; max-age=2592000; SameSite=Lax; Secure';
+        document.cookie = pair + '; domain=.' + mmDomain + '; path=/; max-age=2592000; SameSite=Lax; Secure';
     });
 
     // 4) 地址栏抹除 ck 后整页 reload：导航请求发出时 cookie 尚未写入,若 console 由
