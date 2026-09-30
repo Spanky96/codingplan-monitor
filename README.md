@@ -10,16 +10,15 @@
 
 <table><tr>
   <td align="center"><a href="https://bigmodel.cn"><img src="docs/assets/zhipu.png" width="44" alt="智谱"/><br /><b>智谱 GLM</b></a></td>
-  <td align="center"><a href="https://co.yes.vg"><img src="docs/assets/yescode.ico" width="44" alt="YesCode"/><br /><b>YesCode</b></a></td>
-  <td align="center"><img src="docs/assets/sub2api.svg" width="44" alt="Sub2API"/><br /><b>Sub2API</b></td>
-</tr><tr>
-  <td align="center"><a href="https://console.volcengine.com"><img src="docs/assets/volc.png" width="44" alt="火山"/><br /><b>火山引擎</b></a></td>
-  <td align="center"><a href="https://token.telecomjs.com"><img src="docs/assets/telecom.ico" width="44" alt="智云"/><br /><b>智云·天翼</b></a></td>
   <td align="center"><a href="https://platform.qianwenai.com"><img src="docs/assets/qwen.svg" width="44" alt="千问"/><br /><b>通义千问</b></a></td>
-</tr><tr>
   <td align="center"><a href="https://platform.minimaxi.com"><img src="docs/assets/minimax.svg" width="44" alt="MiniMax"/><br /><b>MiniMax</b></a></td>
+  <td align="center"><a href="https://console.volcengine.com"><img src="docs/assets/volc.png" width="44" alt="火山"/><br /><b>火山引擎</b></a></td>
   <td align="center"><a href="https://platform.stepfun.com"><img src="docs/assets/stepfun.png" width="44" alt="阶跃星辰"/><br /><b>阶跃星辰</b></a></td>
-  <td align="center"><a href="https://zenmux.ai"><img src="docs/assets/zenmux.svg" width="44" alt="ZenMux"/><br /><b>ZenMux</b></a></td>
+</tr><tr>
+  <td align="center"><img src="docs/assets/sub2api.svg" width="44" alt="Sub2API"/><br /><b>Sub2API</b></td>
+  <td align="center"><a href="https://zenmux.ai"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/zenmux-white.svg"><img src="docs/assets/zenmux.svg" width="44" alt="ZenMux"/></picture><br /><b>ZenMux</b></a></td>
+  <td align="center"><a href="https://co.yes.vg"><img src="docs/assets/yescode.ico" width="44" alt="YesCode"/><br /><b>YesCode</b></a></td>
+  <td align="center"><a href="https://token.telecomjs.com"><img src="docs/assets/telecom.ico" width="44" alt="智云"/><br /><b>智云·天翼</b></a></td>
 </tr></table>
 
 </div>
@@ -42,14 +41,14 @@
 | 平台 | 用量/额度 | 用量曲线 | 到期展示 | 免手动续期 | API Key 管理 | IP 白名单 | 风控提示 | 重置卡 |
 |------|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
 | 智谱 GLM | ✅ | ✅ 当日/7/30 天 | ✅ | ✅ 账密重登 | ✅ | ✅ | ✅ 个人版 | ✅ 个人版 |
-| YesCode | ✅ | — | — | ✅ 账密重登 | — | — | — | — |
-| Sub2API 中转站 | ✅ 余额+今日用量 | — | ✅ | ✅ 账密重登 | — | — | — | — |
-| 火山 A / C | ✅ | — | — | — | — | — | — | — |
-| 智云·天翼 | ✅ 余额 | — | — | ✅ 扫码重登 | — | — | — | — |
 | 通义千问 | ✅ | ✅ 7/30 天 | ✅ | — | — | — | — | — |
 | MiniMax | ✅ 5h/周限额 | ✅ 7/30 天 | ✅ | — | — | — | — | — |
+| 火山 A / C | ✅ | — | — | — | — | — | — | — |
 | 阶跃星辰 | ✅ 积分+余额 | ✅ 7/30 天·积分 | ✅ | ✅ 自动续期 | — | — | — | — |
+| Sub2API 中转站 | ✅ 余额+今日用量 | — | ✅ | ✅ 账密重登 | — | — | — | — |
 | ZenMux | ✅ Flow 窗口 | ✅ 7/30 天·逐模型 | ✅ | ✅ 长期 Key | — | — | — | — |
+| YesCode | ✅ | — | — | ✅ 账密重登 | — | — | — | — |
+| 智云·天翼 | ✅ 余额 | — | — | ✅ 扫码重登 | — | — | — | — |
 
 > 全平台通用:权重徽标、深色模式、隐私模式;管理员另有控制台免登录直达(智谱 / MiniMax,配合油猴脚本)。
 
