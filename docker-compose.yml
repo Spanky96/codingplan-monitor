@@ -4,7 +4,12 @@
 # 容器内读取 .env(env_file)与挂载 ./data 持久化账号数据。
 services:
   codingplan-monitor:
-    build: .
+    build:
+      context: .
+      # INSTALL_CHROMIUM / NPM_REGISTRY 均可经 .env 覆盖(见 .env.example)
+      args:
+        INSTALL_CHROMIUM: ${INSTALL_CHROMIUM:-1}
+        NPM_REGISTRY: ${NPM_REGISTRY:-https://registry.npmmirror.com}
     image: codingplan-monitor
     container_name: codingplan-monitor
     restart: unless-stopped

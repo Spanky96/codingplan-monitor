@@ -2,7 +2,7 @@
 
 ## Docker 部署
 
-镜像基于 `node:22-alpine`,并安装 Chromium 供智云页面完成瑞数校验。账号数据通过宿主机 `./data` 目录持久化,`.env` 通过 `env_file` 注入容器。
+镜像基于 `node:22-alpine`。**Chromium(约 200MB,仅智云抓取需要)默认安装**;不部署智云账号时在 `.env` 中设置 `INSTALL_CHROMIUM=0` 可跳过——镜像更小、首次构建从 20+ 分钟降到 1-2 分钟(该开关同样影响此后每次依赖层的重建)。不装 Chromium 不影响其他平台:仅智云卡片会提示「未找到 Chrome/Chromium」。账号数据通过宿主机 `./data` 目录持久化,`.env` 通过 `env_file` 注入容器。
 
 ```bash
 cp .env.example .env          # 先准备 .env 并修改 ADMIN_PASSWORD
