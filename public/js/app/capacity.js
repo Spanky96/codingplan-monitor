@@ -36,6 +36,8 @@
     // capacityBadgeHTML 渲染「当前调度中|总容量」胶囊；
     // 悬浮 data-cap-tip 逐行列出指向同一权重的 sub2api 账号（如 glm5-周慧珍 #85：2/5）。
     function capacityBadgeHTML(name) {
+      // 仅管理员可见(悬浮会暴露内部账号名);非管理员一律不渲染
+      if (!isAdmin()) return '';
       var cap = capacityMap[name];
       // 无任何匹配的 sub2api 账号才不渲染；total=0（权重为 0 / 全部停调度）
       // 也显示 0|0，保持 UI 一致。

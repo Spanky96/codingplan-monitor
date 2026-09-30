@@ -1,14 +1,12 @@
     // ============ 权重徽标与配置(管理员)============
 
     function weightBadgeHTML(name, i) {
+      // 仅管理员可见(点击可配置);非管理员不显示权重数字
+      if (!isAdmin()) return '';
       var w = weightsMap[name];
       if (w == null) return '';
       var cls = 'weight-badge ' + (w === 0 ? 'w-0' : w <= 3 ? 'w-low' : w <= 7 ? 'w-mid' : 'w-high');
-      // 管理员:点击可配置;游客:仅展示
-      if (isAdmin()) {
-        return '<span class="' + cls + '" onclick="event.stopPropagation();openWeightConfig(' + i + ')" title="点击配置权重" style="cursor:pointer">' + w.toFixed(1) + '</span>';
-      }
-      return '<span class="' + cls + '" title="权重">' + w.toFixed(1) + '</span>';
+      return '<span class="' + cls + '" onclick="event.stopPropagation();openWeightConfig(' + i + ')" title="点击配置权重" style="cursor:pointer">' + w.toFixed(1) + '</span>';
     }
 
     function loadWeights() {
