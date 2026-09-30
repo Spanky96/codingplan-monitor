@@ -29,8 +29,12 @@ module.exports = function(app) {
                 var sfChart = await platforms.fetchStepfunModelUsage(account, i, req.query.period || '7d');
                 return res.json({ data: sfChart });
             }
+            if ((account.platform || 'glm') === 'zenmux') {
+                var zmChart = await platforms.fetchZenmuxModelUsage(account, req.query.period || '7d');
+                return res.json({ data: zmChart });
+            }
             if ((account.platform || 'glm') !== 'glm') {
-                var platName = account.platform === 'sub2api' ? 'Sub2API' : (account.platform === 'huoli' ? '火狸' : (account.platform === 'volc' ? '火山' : (account.platform === 'telecomjs' ? '智云' : (account.platform === 'qwen' ? '千问' : (account.platform === 'minimax' ? 'MiniMax' : (account.platform === 'stepfun' ? '阶跃' : 'YesCode'))))));
+                var platName = account.platform === 'sub2api' ? 'Sub2API' : (account.platform === 'huoli' ? '火狸' : (account.platform === 'volc' ? '火山' : (account.platform === 'telecomjs' ? '智云' : (account.platform === 'qwen' ? '千问' : (account.platform === 'minimax' ? 'MiniMax' : (account.platform === 'stepfun' ? '阶跃' : (account.platform === 'zenmux' ? 'ZenMux' : 'YesCode')))))));
                 return res.json({ error: platName + ' 暂不支持用量曲线' });
             }
             var period = req.query.period || '7d';

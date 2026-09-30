@@ -3,7 +3,8 @@ accounts.json
 .DS_Store
 *.log
 /tmp
-/test
+/test/*
+!/test/*.test.js
 /cclogs
 usage-cache.json
 token.telecomjs.com/

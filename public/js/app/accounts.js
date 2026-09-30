@@ -130,9 +130,10 @@
       var qwenDisp = platform === 'qwen' ? '' : 'none';
       var minimaxDisp = platform === 'minimax' ? '' : 'none';
       var stepfunDisp = platform === 'stepfun' ? '' : 'none';
+      var zenmuxDisp = platform === 'zenmux' ? '' : 'none';
       document.getElementById('mgmtBody').innerHTML = ''
         + '<div class="import-section"><div class="import-toggle" onclick="this.nextElementSibling.classList.toggle(\'open\')">&#9660; 快速导入（粘贴 fetch 命令）</div>'
-        + '<div class="import-body"><textarea class="form-input" id="f_fetch" placeholder="粘贴 fetch / cURL 命令，自动识别智谱 / YesCode / Sub2API 中转站 / 火山 / 智云 / 千问 / MiniMax / 阶跃星辰"></textarea>'
+        + '<div class="import-body"><textarea class="form-input" id="f_fetch" placeholder="粘贴 fetch / cURL 命令，自动识别智谱 / YesCode / Sub2API / 火山 / 智云 / 千问 / MiniMax / 阶跃星辰 / ZenMux"></textarea>'
         + '<div class="import-actions"><button class="btn-primary" style="padding:5px 16px;font-size:12px" onclick="parseFetch()">解析并填充</button></div></div></div>'
         + '<div class="form-row">'
         + '<div class="form-group"><label class="form-label">站点</label><select class="form-input" id="f_platform" onchange="onPlatformChange()">'
@@ -144,6 +145,7 @@
         + '<option value="qwen"' + (platform==='qwen'?' selected':'') + '>千问</option>'
         + '<option value="minimax"' + (platform==='minimax'?' selected':'') + '>MiniMax</option>'
         + '<option value="stepfun"' + (platform==='stepfun'?' selected':'') + '>阶跃星辰</option>'
+        + '<option value="zenmux"' + (platform==='zenmux'?' selected':'') + '>ZenMux</option>'
         + '</select></div>'
         + '<div class="form-group"><label class="form-label">账号名称</label><input class="form-input" id="f_name" value="' + esc(a.name||'') + '"></div>'
         + '</div>'
@@ -157,7 +159,7 @@
         + '</div>'
         + '<div id="f_yescode_fields" style="display:' + yesDisp + '">'
         + '<div class="form-group"><label class="form-label">Cookie（可不填）</label><textarea class="form-input" id="f_cookie" placeholder="完整 Cookie，用于访问 co.yes.vg；官方有效期已缩短为 24h，配置账密后会自动登录刷新">' + esc(a.cookie||'') + '</textarea></div>'
-        + '<div class="form-row"><div class="form-group"><label class="form-label">登录账号（推荐）</label><input class="form-input" id="f_yescode_username" placeholder="邮箱/用户名，Cookie 失效时自动登录" value="' + esc(a.yescode_username||'') + '" autocomplete="off"></div>'
+        + '<div class="form-row"><div class="form-group"><label class="form-label">登录邮箱（推荐）</label><input class="form-input" type="email" id="f_yescode_username" placeholder="账户邮箱，Cookie 失效时自动登录" value="' + esc(a.yescode_username||'') + '" autocomplete="off"></div>'
         + '<div class="form-group"><label class="form-label">登录密码（推荐）</label><input class="form-input" type="password" id="f_yescode_password" placeholder="与账号同时填写才启用自动重登" value="' + esc(a.yescode_password||'') + '" autocomplete="new-password"></div></div>'
         + '</div>'
         + '<div id="f_sub2api_fields" style="display:' + sub2apiDisp + '">'
@@ -192,6 +194,10 @@
         + '<div class="form-group"><label class="form-label">Cookie</label><textarea class="form-input" id="f_stepfun_cookie" placeholder="完整 Cookie，用于访问 platform.stepfun.com（建议 Copy as cURL 带出登录态，须含 Oasis-Token 双段 JWT 与 _wafdytokenv1）；access 段 30 分钟自动续期回写">' + esc(a.cookie||'') + '</textarea></div>'
         + '<div class="form-group"><label class="form-label">Webid（可选）</label><input class="form-input" id="f_stepfun_webid" placeholder="请求头 oasis-webid；留空时自动取 Cookie 中的 Oasis-Webid" value="' + esc(a.stepfun_webid||'') + '"></div>'
         + '</div>'
+        + '<div id="f_zenmux_fields" style="display:' + zenmuxDisp + '">'
+        + '<div class="form-group"><label class="form-label">Management API Key</label><textarea class="form-input" id="f_zenmux_auth" placeholder="sk-mg-v1-...（必须是个人账户 Management Key，不是 Subscription API Key）">' + esc(a.authorization||'') + '</textarea></div>'
+        + '<div style="font-size:11px;color:var(--text-faint);margin:-4px 0 12px">在 ZenMux Platform API 页面创建；用于读取订阅限额和用量统计。</div>'
+        + '</div>'
         + '<div class="form-row"><div class="form-group"><label class="form-label">负责人</label><input class="form-input" id="f_person" value="' + esc(a.responsiblePerson||'') + '"></div>'
         + '<div class="form-group"><label class="form-label">电话</label><input class="form-input" id="f_phone" value="' + esc(a.phone||'') + '"></div></div>'
         + '<div class="form-group"><label class="form-label">备注</label><input class="form-input" id="f_notes" value="' + esc(a.notes||'') + '"></div>'
@@ -209,6 +215,7 @@
       document.getElementById('f_qwen_fields').style.display = p === 'qwen' ? '' : 'none';
       document.getElementById('f_minimax_fields').style.display = p === 'minimax' ? '' : 'none';
       document.getElementById('f_stepfun_fields').style.display = p === 'stepfun' ? '' : 'none';
+      document.getElementById('f_zenmux_fields').style.display = p === 'zenmux' ? '' : 'none';
     }
 
     // 从 fetch / Node fetch / cURL 文本中提取指定 header 值
@@ -245,6 +252,16 @@
       var isQwen = /qianwenai\.com|sfm_tokenplansolo|tokenplan\/personal/i.test(t);
       var isMinimax = /minimaxi\.com|minimax_group_id/i.test(t);
       var isStepfun = /platform\.stepfun\.com|oasis-token|oasis-webid/i.test(t);
+      var isZenmux = /zenmux\.ai\/api\/v1\/management/i.test(t) || /sk-mg-v1-/i.test(t);
+
+      if (isZenmux) {
+        document.getElementById('f_platform').value = 'zenmux';
+        onPlatformChange();
+        var zmAuth = extractHeader(t, 'authorization');
+        if (zmAuth) document.getElementById('f_zenmux_auth').value = zmAuth;
+        else alert('未能解析出 Management API Key。请粘贴 ZenMux Platform API 请求的 cURL/fetch，或手动填写 sk-mg-v1-...。');
+        return;
+      }
 
       if (isTelecom && !isGlm) {
         document.getElementById('f_platform').value = 'telecomjs';
@@ -285,7 +302,7 @@
         if (ycBodyMatch) { try { var yb = JSON.parse(ycBodyMatch[1].replace(/\\"/g,'"').replace(/\\\\/g,'\\')); if (yb.username) document.getElementById('f_yescode_username').value = yb.username; if (yb.password) document.getElementById('f_yescode_password').value = yb.password; } catch(e){} }
         if (!ycBodyMatch) { try { var yb2 = t.match(/"username"\s*:\s*"([^"]+)"[^}]*"password"\s*:\s*"([^"]+)"/); if (yb2) { document.getElementById('f_yescode_username').value = yb2[1]; document.getElementById('f_yescode_password').value = yb2[2]; } } catch(e){} }
         if (!cookie && !document.getElementById('f_yescode_username').value) {
-          alert('未能解析出 cookie 或登录账密。\n\n配置账密：复制登录接口（auth/login）请求 → Copy as fetch 粘贴；\n配置 Cookie：DevTools Network 右键请求 → Copy as cURL（fetch 格式不含 Cookie）。');
+          alert('未能解析出 cookie 或登录账密。\n\n配置账密：复制登录接口（auth/login）请求 → Copy as fetch 粘贴（必须使用账户邮箱）；\n配置 Cookie：DevTools Network 右键请求 → Copy as cURL（fetch 格式不含 Cookie）。');
         }
         return;
       }
@@ -388,6 +405,7 @@
         body.yescode_username = document.getElementById('f_yescode_username').value.trim();
         body.yescode_password = document.getElementById('f_yescode_password').value;
         if (!body.name) { alert('账号名称不能为空'); return; }
+        if (body.yescode_username && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.yescode_username)) { alert('YesCode 登录账号必须填写账户邮箱，不能填写 profile 用户名'); return; }
         // 官方 Cookie 有效期仅 24h：Cookie 与账密至少配一样，配了账密即可自动续期
         if (!body.cookie && !(body.yescode_username && body.yescode_password)) { alert('Cookie 与 登录账号/密码 至少填写一项；推荐填账密，Cookie 失效后自动重登刷新'); return; }
         // 账密需成对：只填其一也允许保存，但不会触发自动重登
@@ -434,6 +452,10 @@
         if (body.cookie && !/Oasis-Token=/.test(body.cookie)) {
           if (!confirm('Cookie 中未检测到 Oasis-Token 登录态，保存后将无法抓取用量。仍要保存吗？')) return;
         }
+      } else if (platform === 'zenmux') {
+        body.authorization = document.getElementById('f_zenmux_auth').value.trim();
+        if (!body.name || !body.authorization) { alert('账号名称和 Management API Key 不能为空'); return; }
+        if (!/^(?:Bearer\s+)?sk-mg-v1-/i.test(body.authorization)) { alert('请填写个人账户的 ZenMux Management API Key（sk-mg-v1-...），普通 API Key 无法读取用量'); return; }
       } else {
         body.authorization = document.getElementById('f_auth').value.trim();
         body.organization = document.getElementById('f_org').value.trim();
@@ -460,4 +482,3 @@
         if(d.error){alert('删除失败: '+d.error);return;} renderMgmtList(); loadData();
       });
     }
-

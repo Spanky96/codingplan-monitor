@@ -379,6 +379,11 @@ function stepfunWindows(data) {
     return minimaxWindows(data);
 }
 
+// ZenMux Builder 的 5h / 7d Flow 窗口已归一化为同一 windows 契约。
+function zenmuxWindows(data) {
+    return minimaxWindows(data);
+}
+
 // ============ 多窗口取瓶颈 ============
 
 // 任一窗口耗尽 → 整体 0;否则取所有有效窗口 score 的 min(最紧张=瓶颈);无有效窗口 → null
@@ -429,6 +434,7 @@ function scoreAccount(cachedResult) {
     else if (platform === 'qwen') windows = qwenWindows(cachedResult.data);
     else if (platform === 'minimax') windows = minimaxWindows(cachedResult.data);
     else if (platform === 'stepfun') windows = stepfunWindows(cachedResult.data);
+    else if (platform === 'zenmux') windows = zenmuxWindows(cachedResult.data);
     else return null;
 
     var agg = aggregate(windows);

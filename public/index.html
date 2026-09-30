@@ -200,6 +200,8 @@
     .toolbar-btn { padding: 5px 15px; border: 1px solid var(--glass-border-soft); border-radius: 18px; background: var(--glass-soft); cursor: pointer; font-size: 12px; color: var(--text-soft); transition: all .15s; display: inline-flex; align-items: center; gap: 4px; }
     .toolbar-btn:hover { border-color: var(--accent); color: var(--accent); }
     .toolbar-btn.active { background: var(--accent-grad); border-color: transparent; color: #fff; box-shadow: 0 4px 14px var(--accent-glow); }
+    #platformFilterGroup { flex-wrap: wrap; }
+    #platformFilters { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
     .sort-arrow { font-size: 9px; line-height: 1; opacity: .85; }
     .toolbar-count { margin-left: auto; font-size: 12px; color: var(--text-mute); }
     .card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }
@@ -289,6 +291,7 @@
     .platform-qwen { background: rgba(219,39,119,.15); color: #be185d; border: 1px solid rgba(219,39,119,.3); }
     .platform-minimax { background: rgba(202,138,4,.16); color: #a16207; border: 1px solid rgba(202,138,4,.3); }
     .platform-stepfun { background: rgba(79,70,229,.16); color: #4338ca; border: 1px solid rgba(79,70,229,.3); }
+    .platform-zenmux { background: rgba(8,145,178,.16); color: #0e7490; border: 1px solid rgba(8,145,178,.3); }
     :root.dark .platform-glm { background: rgba(56,189,248,.16); color: #7dd3fc; border-color: rgba(56,189,248,.3); }
     :root.dark .platform-yescode { background: rgba(74,222,128,.16); color: #86efac; border-color: rgba(74,222,128,.3); }
     :root.dark .platform-huoli { background: rgba(251,191,36,.16); color: #fcd34d; border-color: rgba(251,191,36,.3); }
@@ -299,6 +302,7 @@
     :root.dark .platform-qwen { background: rgba(244,114,182,.16); color: #f9a8d4; border-color: rgba(244,114,182,.3); }
     :root.dark .platform-minimax { background: rgba(250,204,21,.16); color: #fde047; border-color: rgba(250,204,21,.3); }
     :root.dark .platform-stepfun { background: rgba(165,180,252,.16); color: #a5b4fc; border-color: rgba(165,180,252,.3); }
+    :root.dark .platform-zenmux { background: rgba(34,211,238,.16); color: #67e8f9; border-color: rgba(34,211,238,.3); }
 
     .card-status { font-size: 12px; padding: 2px 11px; border-radius: 11px; font-weight: 600; }
     .status-ok { background: var(--ok-bg); color: var(--ok); border: 1px solid var(--ok-bd); }
@@ -675,8 +679,8 @@
       <div class="main-col">
         <div class="toolbar" id="toolbar">
           <div class="toolbar-group" id="platformFilterGroup">
-            <span class="toolbar-label">站点</span>
-            <button class="toolbar-btn active" data-filter="all" onclick="setFilter('all')">全部</button>
+            <span class="toolbar-label" title="可同时选择多个站点">站点（可多选）</span>
+            <button class="toolbar-btn active" data-filter="all" aria-pressed="true" onclick="setFilter('all')">全部</button>
             <span id="platformFilters"></span>
           </div>
           <div class="toolbar-group">

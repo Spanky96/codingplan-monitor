@@ -1,7 +1,7 @@
 {
   "name": "codingplan-monitor",
   "version": "1.0.0",
-  "description": "智谱 GLM / YesCode / 火狸 / 火山 / 智云 / 千问 / MiniMax 多账号用量监控面板",
+  "description": "智谱 GLM / YesCode / Sub2API / 火山 / 智云 / 千问 / MiniMax / 阶跃 / ZenMux 多账号用量监控面板",
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
@@ -12,6 +12,7 @@
     "bigmodel",
     "zhipu",
     "yescode",
+    "zenmux",
     "huoli",
     "usage",
     "monitor",

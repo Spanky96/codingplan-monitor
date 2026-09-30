@@ -184,6 +184,34 @@
           + '<button class="detail-btn" onclick="showDetail(' + i + ')">详情</button></div></div>';
       }
 
+      if (platform === 'zenmux') {
+        var zData = acc.data || {};
+        var zUsage = zData.usage || { windows: [] };
+        var zSub = zData.subscription || null;
+        var zBody = zenmuxUsageRows(zUsage);
+        if (zData.today) {
+          zBody += '<div class="limit-row"><div class="limit-label"><span class="limit-name">今日 Token</span><span class="limit-value">' + fmtTokens(zData.today.tokensTotal || 0) + '</span></div>'
+            + '<div style="font-size:11px;color:var(--text-faint);margin-top:3px">输入 ' + fmtTokens(zData.today.tokensPrompt || 0) + ' · 输出 ' + fmtTokens(zData.today.tokensCompletion || 0) + ' · 请求 ' + (zData.today.requestCounts || 0) + ' 次</div></div>';
+        }
+        var zPct = minimaxMaxPct(zUsage);
+        var zStatusCls = getStatusClass(zPct), zStatusTxt = getStatusText(zPct);
+        if (zData.accountStatus === 'monitored') { zStatusCls = 'status-warn'; zStatusTxt = '受监控'; }
+        if (['abusive', 'suspended', 'banned'].indexOf(zData.accountStatus) >= 0) { zStatusCls = 'status-danger'; zStatusTxt = zenmuxAccountStatusText(zData.accountStatus); }
+        var zExpHtml = '';
+        if (zSub && zSub.expireMs) {
+          var zDays = Math.ceil((zSub.expireMs - Date.now()) / 86400000);
+          var zExpCls = zDays <= 10 ? 'expire-danger' : '';
+          var zExpHint = zDays <= 0 ? '已过期' : zDays + '天后到期';
+          zExpHtml = '<div class="expire-row" title="订阅到期"><span class="expire-label">订阅到期</span><span class="expire-value ' + zExpCls + '">' + esc(zSub.expireDate || '-') + '<span class="expire-hint">' + zExpHint + '</span></span></div>';
+        }
+        var zPlanBadge = '<span class="level-badge">' + esc((zSub && zSub.planName) || '无套餐') + '</span>';
+        return '<div class="card" id="card-' + i + '"><div class="card-header">' + headerLeft
+          + '<div class="card-header-right">' + btn + '<span class="card-status ' + zStatusCls + '">' + zStatusTxt + '</span></div></div>'
+          + '<div class="card-body">' + zBody + '</div>' + zExpHtml
+          + '<div class="card-footer"><div class="card-footer-left">' + zPlanBadge + cache + '</div>'
+          + '<button class="detail-btn" onclick="showDetail(' + i + ')">详情</button></div></div>';
+      }
+
       if (platform === 'minimax') {
         var mU = (acc.data && acc.data.usage) || null;
         var mS = (acc.data && acc.data.subscription) || null;
@@ -422,6 +450,17 @@
         return rings;
       }
 
+      if (plat === 'zenmux') {
+        var zws = (acc.data && acc.data.usage && acc.data.usage.windows) || [];
+        zws.forEach(function(w) {
+          var zpct = typeof w.usedPct === 'number' ? w.usedPct : (w.quota > 0 ? ((w.used || 0) / w.quota) * 100 : 0);
+          var zval = fmtZenmuxFlow(w.used) + '/' + fmtZenmuxFlow(w.quota) + ' Flow';
+          var zreset = w.resetMs ? new Date(w.resetMs).toISOString() : null;
+          push(w.label || '额度', zpct, zval, { segments: w.periodMs === 5 * 3600000 ? 5 : 7, theoPct: w.periodMs ? theoPctFromEnd(zreset, w.periodMs) : -1, title: (w.label || '额度') + ' ' + zval });
+        });
+        return rings;
+      }
+
       if (plat === 'minimax' || plat === 'stepfun') {
         var mws = (acc.data && acc.data.usage && acc.data.usage.windows) || [];
         mws.forEach(function(w) {
@@ -479,6 +518,9 @@
       } else if (platform === 'minimax' || platform === 'stepfun') {
         var mSub = acc.data && acc.data.subscription;
         if (mSub && mSub.expireDate) { expTime = mSub.expireDate + 'T23:59:59'; txt = esc(mSub.expireDate); }
+      } else if (platform === 'zenmux') {
+        var zSubExp = acc.data && acc.data.subscription;
+        if (zSubExp && zSubExp.expireMs) { expTime = zSubExp.expireMs; txt = esc(zSubExp.expireDate || new Date(expTime).toLocaleDateString('zh-CN')); }
       }
       if (!expTime) return '';
       var days = Math.ceil((new Date(expTime) - Date.now()) / 86400000);
@@ -521,6 +563,11 @@
       if (platform === 'minimax' || platform === 'stepfun') {
         var mSub2 = (acc.data && acc.data.subscription) || null;
         return '<span class="level-badge">' + esc((mSub2 && mSub2.planName) || '无套餐记录') + '</span>';
+      }
+      if (platform === 'zenmux') {
+        var zSubBadge = (acc.data && acc.data.subscription) || null;
+        return '<span class="level-badge">' + esc((zSubBadge && zSubBadge.planName) || '无套餐') + '</span>'
+          + '<span class="level-badge level-badge-ok">' + esc(zenmuxAccountStatusText(acc.data && acc.data.accountStatus)) + '</span>';
       }
       if (platform === 'telecomjs') {
         var td = acc.data || {};
@@ -566,6 +613,10 @@
         var okStatus = platform === 'telecomjs'
           ? '<div class="list-row-status"><span class="card-status status-ok">余额</span></div>'
           : '<div class="list-row-status"><span class="card-status ' + getStatusClass(mp) + '">' + getStatusText(mp) + '</span></div>';
+        if (platform === 'zenmux' && acc.data && acc.data.accountStatus !== 'healthy') {
+          var zListDanger = ['abusive', 'suspended', 'banned'].indexOf(acc.data.accountStatus) >= 0;
+          okStatus = '<div class="list-row-status"><span class="card-status ' + (zListDanger ? 'status-danger' : 'status-warn') + '">' + esc(zenmuxAccountStatusText(acc.data.accountStatus)) + '</span></div>';
+        }
         leftBlock = '<div class="list-row-left"><div class="list-row-title">' + pTag + '<h3>' + name + '</h3></div>' + okStatus + '</div>';
         middle = '<div class="list-rings">' + ringsHtml + '</div>';
         var cache = acc.cachedAt ? '<span class="cache-time">' + timeAgo(acc.cachedAt) + '</span>' : '';
@@ -595,6 +646,7 @@
       if (plat === 'minimax' || plat === 'stepfun') {
         return minimaxMaxPct(acc.data && acc.data.usage);
       }
+      if (plat === 'zenmux') return minimaxMaxPct(acc.data && acc.data.usage);
       if (plat === 'sub2api' || plat === 'huoli') {
         var sub = sub2apiUnpack(acc.data).sub || {};
         var grp = sub.group || {};
@@ -610,8 +662,10 @@
 
     function applyFilterSort(data) {
       var arr = data.map(function(a, i) { return { acc: a, origIdx: (a && a.index != null) ? a.index : i }; });
-      if (_filterPlatform !== 'all') {
-        arr = arr.filter(function(x) { return (x.acc && x.acc.platform || 'glm') === _filterPlatform; });
+      if (_filterPlatforms.length) {
+        arr = arr.filter(function(x) {
+          return _filterPlatforms.indexOf((x.acc && x.acc.platform) || 'glm') >= 0;
+        });
       }
       if (_sortMode === 'tension-desc' || _sortMode === 'tension-asc') {
         var asc = _sortMode === 'tension-asc';
@@ -660,7 +714,7 @@
     }
 
     // 按固定顺序展示用户实际拥有的站点，没添加的类型不显示
-    var PLATFORM_ORDER = ['glm', 'yescode', 'sub2api', 'huoli', 'volc', 'telecomjs', 'qwen', 'minimax', 'stepfun'];
+    var PLATFORM_ORDER = ['glm', 'yescode', 'sub2api', 'huoli', 'volc', 'telecomjs', 'qwen', 'minimax', 'stepfun', 'zenmux'];
     function renderPlatformFilters(data) {
       var box = document.getElementById('platformFilters');
       if (!box) return;
@@ -671,15 +725,23 @@
       });
       var html = PLATFORM_ORDER.filter(function(p) { return have[p]; })
         .map(function(p) {
-          return '<button class="toolbar-btn" data-filter="' + p + '" onclick="setFilter(\'' + p + '\')">' + platformLabel(p) + '</button>';
+          return '<button class="toolbar-btn" data-filter="' + p + '" title="可与其他站点同时选择" onclick="setFilter(\'' + p + '\')">' + platformLabel(p) + '</button>';
         }).join('');
-      // 当前选中的站点已不存在则回落到「全部」
-      if (_filterPlatform !== 'all' && !have[_filterPlatform]) {
-        _filterPlatform = 'all';
+      // 移除已不存在的站点；空集合自然回落为「全部」。
+      if (data && data.length) {
+        var availableFilters = _filterPlatforms.filter(function(p) { return have[p]; });
+        if (availableFilters.length !== _filterPlatforms.length) {
+          _filterPlatforms = availableFilters;
+          localStorage.setItem('usage_platform_filters', JSON.stringify(_filterPlatforms));
+        }
       }
       box.innerHTML = html;
       document.querySelectorAll('#platformFilterGroup [data-filter]').forEach(function(b) {
-        b.classList.toggle('active', b.dataset.filter === _filterPlatform);
+        var active = b.dataset.filter === 'all'
+          ? _filterPlatforms.length === 0
+          : _filterPlatforms.indexOf(b.dataset.filter) >= 0;
+        b.classList.toggle('active', active);
+        b.setAttribute('aria-pressed', active ? 'true' : 'false');
       });
     }
 
@@ -708,10 +770,14 @@
     }
 
     function setFilter(p) {
-      _filterPlatform = p;
-      document.querySelectorAll('#toolbar [data-filter]').forEach(function(b) {
-        b.classList.toggle('active', b.dataset.filter === p);
-      });
+      if (p === 'all') {
+        _filterPlatforms = [];
+      } else {
+        var selectedIndex = _filterPlatforms.indexOf(p);
+        if (selectedIndex >= 0) _filterPlatforms.splice(selectedIndex, 1);
+        else _filterPlatforms.push(p);
+      }
+      localStorage.setItem('usage_platform_filters', JSON.stringify(_filterPlatforms));
       if (accountsData.length) renderCards(accountsData);
     }
 

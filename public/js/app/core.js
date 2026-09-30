@@ -19,7 +19,17 @@
     var _pendingAuth = null;
     var _detailIndex = -1;
     var _chartPeriod = {};      // idx → 当前图表口径(today/7d/30d),主题切换重绘用
-    var _filterPlatform = 'all';
+    // 空数组表示“全部”；非空时展示所选站点的并集，并跨刷新保留关注范围。
+    var _filterPlatforms = (function() {
+      try {
+        var saved = JSON.parse(localStorage.getItem('usage_platform_filters') || '[]');
+        return Array.isArray(saved) ? saved.filter(function(p, i, list) {
+          return typeof p === 'string' && p !== 'all' && list.indexOf(p) === i;
+        }) : [];
+      } catch (e) {
+        return [];
+      }
+    })();
     var _sortMode = 'default';
     var _privacyMode = localStorage.getItem('usage_privacy') === 'true';
     var _privacyForced = false;   // 服务端强制隐私(/api/features.privacyForced,外网访客/全隐私)
@@ -131,6 +141,7 @@
       if (platform === 'qwen') return '千问';
       if (platform === 'minimax') return 'MiniMax';
       if (platform === 'stepfun') return '阶跃星辰';
+      if (platform === 'zenmux') return 'ZenMux';
       return '智谱';
     }
     // 团队版 level 翻译：pro→团队标准版, max→团队高级版; 非团队版原样返回
@@ -274,4 +285,3 @@
         }
       });
     }
-

@@ -70,6 +70,7 @@
       if (platform === 'qwen') return '<span class="platform-tag platform-qwen">千问</span>';
       if (platform === 'minimax') return '<span class="platform-tag platform-minimax">MiniMax</span>';
       if (platform === 'stepfun') return '<span class="platform-tag platform-stepfun">阶跃星辰</span>';
+      if (platform === 'zenmux') return '<span class="platform-tag platform-zenmux">ZenMux</span>';
       return '<span class="platform-tag platform-glm">智谱</span>';
     }
 
@@ -411,6 +412,52 @@
         if (w.weightExcluded) return 0; // 视频赠送等赠送额度不参与紧张度
         return typeof w.usedPct === 'number' ? w.usedPct : (w.quota > 0 ? Math.min(100, ((w.used || 0) / w.quota) * 100) : 0);
       }));
+    }
+
+    function fmtZenmuxFlow(value) {
+      var n = Number(value) || 0;
+      return n.toFixed(2).replace(/\.00$/, '').replace(/(\.\d)0$/, '$1');
+    }
+
+    function zenmuxWindowRow(w) {
+      var used = Number(w && w.used) || 0, quota = Number(w && w.quota) || 0;
+      var pct = typeof w.usedPct === 'number' ? w.usedPct : (quota > 0 ? used / quota * 100 : 0);
+      pct = Math.max(0, Math.min(100, pct));
+      var resetMs = Number(w && w.resetMs) || 0;
+      var periodMs = Number(w && w.periodMs) || 0;
+      var theoPct = -1;
+      if (resetMs && periodMs) {
+        theoPct = Math.max(0, Math.min(100, (Date.now() - (resetMs - periodMs)) / periodMs * 100));
+      }
+      var segments = periodMs === 5 * 3600000 ? 5 : (periodMs === 7 * 86400000 ? 7 : 0);
+      var value = fmtZenmuxFlow(used) + '/' + fmtZenmuxFlow(quota) + ' Flow (' + pct.toFixed(1).replace(/\.0$/, '') + '%)';
+      var html = '<div class="limit-row"><div class="limit-label"><span class="limit-name">' + esc((w && w.label) || '额度') + '</span><span class="limit-value">' + value + '</span></div>';
+      if (segments) {
+        var segPct = 100 / segments, segHtml = '';
+        for (var i = 0; i < segments; i++) {
+          var start = i * segPct, end = (i + 1) * segPct, fill = pct >= end ? 100 : (pct > start ? (pct - start) / segPct * 100 : 0);
+          segHtml += '<div class="seg"><div class="seg-fill ' + getColorClass(pct) + '" style="width:' + fill + '%"></div></div>';
+        }
+        html += '<div class="limit-bar-wrap"><div class="limit-bar-seg">' + segHtml + '</div>';
+      } else {
+        html += '<div class="limit-bar-wrap"><div class="limit-bar"><div class="limit-fill ' + getColorClass(pct) + '" style="width:' + pct + '%"></div></div>';
+      }
+      if (theoPct >= 0) html += '<div class="theo-marker" style="left:' + theoPct + '%"></div>';
+      html += '</div>';
+      if (theoPct >= 0) {
+        var ti = tensionInfo(pct, theoPct);
+        html += '<div class="tension-row"><span style="color:' + ti.color + ';font-weight:500">' + ti.text + '</span><span style="color:var(--text-faint)">理论 ' + theoPct.toFixed(0) + '%</span></div>';
+      }
+      if (resetMs) html += '<div style="font-size:11px;color:var(--text-faint);margin-top:2px">重置 ' + formatTime(resetMs) + '</div>';
+      return html + '</div>';
+    }
+
+    function zenmuxUsageRows(usage) {
+      return ((usage && usage.windows) || []).map(zenmuxWindowRow).join('');
+    }
+
+    function zenmuxAccountStatusText(status) {
+      return ({ healthy: '正常', monitored: '受监控', abusive: '受限', suspended: '已暂停', banned: '已封禁' })[status] || (status || '-');
     }
 
     // 阶跃 credit 大数缩写：>=1e8 → x.xx亿，>=1e4 → x.x万，否则原样（如 2930）

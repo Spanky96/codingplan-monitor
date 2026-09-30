@@ -336,6 +336,48 @@
       document.getElementById('modalBody').innerHTML = html;
     }
 
+    function renderZenmuxDetail(index, acc) {
+      var data = acc.data || {};
+      var sub = data.subscription || {};
+      var monthly = data.monthlyQuota || {};
+      var today = data.today || null;
+      var daysLeft = sub.expireMs ? Math.ceil((sub.expireMs - Date.now()) / 86400000) : null;
+      var daysText = daysLeft == null ? '-' : (daysLeft <= 0 ? '已过期' : daysLeft + ' 天');
+
+      var html = ownerInfoSectionHTML(acc);
+      html += '<div class="info-section"><div class="info-section-title">订阅信息</div><div class="info-grid">'
+        + '<span class="info-label">套餐</span><span class="info-value">' + esc(sub.planName || '无套餐') + '</span>'
+        + '<span class="info-label">月费</span><span class="info-value">$' + (+sub.amountUsd || 0).toFixed(2) + ' / 月</span>'
+        + '<span class="info-label">账户状态</span><span class="info-value">' + esc(zenmuxAccountStatusText(data.accountStatus)) + '</span>'
+        + '<span class="info-label">到期时间</span><span class="info-value">' + esc(fmtYesCodeDate(sub.expireMs)) + '</span>'
+        + '<span class="info-label">剩余天数</span><span class="info-value">' + daysText + '</span>'
+        + '<span class="info-label">月度上限</span><span class="info-value">' + fmtZenmuxFlow(monthly.maxFlows) + ' Flow · $' + (+monthly.maxValueUsd || 0).toFixed(2) + ' 等价 API 价值</span>'
+        + '<span class="info-label">Flow 汇率</span><span class="info-value">1 Flow = $' + (+data.effectiveUsdPerFlow || 0).toFixed(5) + (data.baseUsdPerFlow !== data.effectiveUsdPerFlow ? '（基础 $' + (+data.baseUsdPerFlow || 0).toFixed(5) + '）' : '') + '</span>'
+        + '<span class="info-label">官网</span><span class="info-value"><a href="https://zenmux.ai/platform/subscription" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none">ZenMux Subscription API ↗</a></span>'
+        + '</div></div>';
+
+      html += '<div class="info-section"><div class="info-section-title">Flow 窗口</div>' + zenmuxUsageRows(data.usage) + '</div>';
+      if (today) {
+        html += '<div class="info-section"><div class="info-section-title">今日用量（UTC+8）</div><div class="info-grid">'
+          + '<span class="info-label">总 Token</span><span class="info-value">' + fmtTokens(today.tokensTotal || 0) + '</span>'
+          + '<span class="info-label">输入 Token</span><span class="info-value">' + fmtTokens(today.tokensPrompt || 0) + '</span>'
+          + '<span class="info-label">输出 Token</span><span class="info-value">' + fmtTokens(today.tokensCompletion || 0) + '</span>'
+          + '<span class="info-label">请求数</span><span class="info-value">' + (today.requestCounts || 0) + ' 次</span>'
+          + '</div></div>';
+      }
+
+      html += '<div class="info-section"><div class="info-section-title">逐模型 Token 曲线</div>'
+        + '<div class="chart-controls">'
+        + '<button class="period-btn active" id="period-7d-' + index + '" onclick="loadUsageChart(' + index + ',\'7d\')">近7天</button>'
+        + '<button class="period-btn" id="period-30d-' + index + '" onclick="loadUsageChart(' + index + ',\'30d\')">近30天</button>'
+        + '<div class="chart-summary" id="chartSummary-' + index + '"></div>'
+        + '</div>'
+        + '<div class="chart-wrap"><div id="chartContainer-' + index + '" style="width:100%;height:320px"></div>'
+        + '<div class="chart-loading" id="chartLoading-' + index + '"></div></div></div>';
+
+      document.getElementById('modalBody').innerHTML = html;
+    }
+
     // 阶跃详情：基本信息 / 订阅 / 今日模型用量 / 按量余额 / 用量曲线（积分）
     function renderStepfunDetail(index, acc) {
       var sub = (acc.data && acc.data.subscription) || null;
@@ -608,6 +650,13 @@
         return;
       }
 
+      if ((acc.platform || 'glm') === 'zenmux') {
+        renderZenmuxDetail(index, acc);
+        document.getElementById('modalOverlay').classList.add('active');
+        loadUsageChart(index, '7d');
+        return;
+      }
+
       var admin = isAdmin();
       var createRow = admin
         ? '<div class="keys-create"><input id="newKeyName" placeholder="Key 名称"><button onclick="createKey(' + index + ')">创建</button></div>'
@@ -867,4 +916,3 @@
       document.getElementById('keysContainer').innerHTML =
         '<table class="keys-table"><tr><th>名称</th><th>Secret Key</th><th>最后使用</th>' + adminCol + '</tr>' + rows + '</table>';
     }
-
