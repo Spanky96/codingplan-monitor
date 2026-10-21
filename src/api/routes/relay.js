@@ -94,5 +94,30 @@ module.exports = function(app) {
         } catch (err) { res.status(500).json({ error: err.message }); }
     });
 
+    // ---- 今日按小时 × 用户 × 模型聚合(代理拉取 + 60s 内存缓存)----
+    // 折线图数据(按模型/按用户透视);站内中转口径,外部渠道为日粒度不计入。
+    // 小时粒度按小时才变化,缓存比榜单(4min)短但避免每次开图都打中转站。
+    var _relayUsageHourlyCache = { at: 0, data: null };
+    app.get('/api/relay/usage-hourly', function(req, res) {
+        try {
+            if (!config.relayEnabled) return res.status(404).json({ error: 'SUB2API_BASE_URL 未配置,中转站功能未启用' });
+            if (req.query.password !== PASSWORD) return res.status(401).json({ error: 'unauthorized' });
+            var now = Date.now();
+            if (req.query.force !== '1' && _relayUsageHourlyCache.data && now - _relayUsageHourlyCache.at < 60 * 1000) {
+                return res.json(_relayUsageHourlyCache.data);
+            }
+            httpGetJSON(relaySnapshotUrl('/api/user-usage-hourly-snapshot'), 15000).then(function(envelope) {
+                var data = (envelope && envelope.code === 0 && envelope.data) ? envelope.data : null;
+                if (!data || !Array.isArray(data.rows)) {
+                    return res.status(502).json({ error: 'unexpected relay hourly snapshot shape' });
+                }
+                _relayUsageHourlyCache = { at: Date.now(), data: data };
+                res.json(data);
+            }).catch(function(err) {
+                res.status(502).json({ error: 'relay hourly snapshot fetch failed: ' + err.message });
+            });
+        } catch (err) { res.status(500).json({ error: err.message }); }
+    });
+
     // 权重配置读取(管理员):每个账号的 weightConfig + 当前 base/final
 };
