@@ -66,6 +66,11 @@
       return h >>> 0;
     }
 
+    /* 核心模型钉槽:公司主力 glm-5.3(直连)与 glm-5.3-flash(转发目标)固定
+     * 蓝色系一深一亮,优先于哈希分配(槽索引在亮/暗两套色板中同位对应);
+     * 其余槽位照常哈希,这两个槽不参与空槽搜索自然被让出 */
+    var ACTIVITY_PINNED_SLOTS = { 'glm-5.3': 5, 'glm-5.3-flash': 14 };
+
     /* 模型颜色 = 槽位解析,而非按当前集合排序定位:
      * 首次出现的模型按名字哈希拿偏好槽,被占则按固定顺序找空槽,分配结果
      * 持久化 —— 之后无论快照里出现/消失哪些其他模型,颜色都不再漂移
@@ -73,14 +78,24 @@
      * 不同槽,直连/转发(glm-5.3 vs glm-5.3-flash)依旧异色;历史累计超
      * 20 种后新模型折叠为灰(不入表,槽位保留给既有模型)。 */
     function activityModelColor(name) {
+      var pal = activityPalette();
+      if (Object.prototype.hasOwnProperty.call(ACTIVITY_PINNED_SLOTS, name)) {
+        return pal[ACTIVITY_PINNED_SLOTS[name]];
+      }
       var map = {};
       try { map = JSON.parse(localStorage.getItem(ACTIVITY_SLOTS_KEY)) || {}; } catch (e) { map = {}; }
       if (!map || typeof map !== 'object') map = {};
-      var pal = activityPalette();
+      // 旧分配若占了钉住槽(会与 glm 蓝色撞色),剔除让它重新走下方空槽分配
+      var pinnedVals = {};
+      Object.keys(ACTIVITY_PINNED_SLOTS).forEach(function(k) { pinnedVals[ACTIVITY_PINNED_SLOTS[k]] = true; });
+      Object.keys(map).forEach(function(k) {
+        if (pinnedVals[map[k]]) delete map[k];
+      });
       if (Object.prototype.hasOwnProperty.call(map, name)) {
         return map[name] >= 0 && map[name] < pal.length ? pal[map[name]] : ACTIVITY_MODEL_GRAY;
       }
       var used = {};
+      Object.keys(pinnedVals).forEach(function(v) { used[v] = true; });   // 钉住槽不参与分配
       Object.keys(map).forEach(function(k) { used[map[k]] = true; });
       var slot = -1;
       var preferred = activityNameHash(name) % pal.length;

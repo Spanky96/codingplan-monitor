@@ -135,8 +135,9 @@
       var hasExternal = users.some(function(u) { return (u.today.external_tokens || 0) > 0; });
       var totalTokens = 0;
       users.forEach(function(u) { totalTokens += u.today.total_tokens || 0; });
-      summaryEl.textContent = users.length
-        ? ('合计 ' + fmtTokensMB(totalTokens) + ' · ' + users.length + ' 人有消费' + (hasExternal ? ' · 含外部' : ''))
+      // 合计数字用强调色加粗(其余说明文字保持弱灰)
+      summaryEl.innerHTML = users.length
+        ? ('<b class="rank-total-hl">合计 ' + fmtTokensMB(totalTokens) + '</b> · ' + users.length + ' 人有消费' + (hasExternal ? ' · 含外部' : ''))
         : '';
 
       if (!users.length) {

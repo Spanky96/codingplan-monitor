@@ -231,6 +231,7 @@
     .activity-sub { font-size: 12px; font-weight: 600; color: var(--text-soft); margin: 2px 0 8px; display: flex; align-items: baseline; gap: 6px; }
     .activity-sub + .activity-sub, #activityRankList + .activity-sub { margin-top: 14px; }
     .activity-sub-extra { font-size: 11px; font-weight: 400; color: var(--text-faint); }
+    .rank-total-hl { color: var(--accent); font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; }
     .activity-empty { font-size: 12px; color: var(--text-faint); padding: 6px 0 2px; }
     .activity-error { font-size: 12px; color: #f5222d; padding: 6px 0 2px; }
     .dp-row { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px dashed var(--glass-border-soft); }
@@ -416,13 +417,12 @@
     .activity-sub-click:hover { color: var(--accent); }
     .relay-chart { display: flex; flex-direction: column; gap: 12px; }
     .rc-controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-    .rc-seg { display: inline-flex; border: 1px solid var(--glass-border); border-radius: 9px; overflow: hidden; }
+    .rc-seg { display: inline-flex; border: 1px solid var(--text-faint); border-radius: 9px; overflow: hidden; }
     .rc-seg button { border: none; background: none; padding: 6px 14px; font-size: 12.5px; color: var(--text-mute); cursor: pointer; font-family: inherit; transition: background .12s, color .12s; }
     .rc-seg button:hover { color: var(--text); }
     .rc-seg button.active { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
     .rc-meta { font-size: 11.5px; color: var(--text-faint); margin-left: auto; font-variant-numeric: tabular-nums; }
-    .rc-box { height: 400px; width: 100%; }
-    .rc-note { font-size: 11.5px; color: var(--text-faint); line-height: 1.6; }
+    .rc-box { height: 430px; width: 100%; }
     .rc-empty { padding: 60px 0; text-align: center; color: var(--text-faint); font-size: 13px; }
     .rc-error { padding: 40px 0; text-align: center; color: #f5222d; font-size: 13px; }
     .rc-retry { margin-top: 10px; }
@@ -772,7 +772,7 @@
 
   <!-- 中转站今日折线图 Modal(独立 overlay:不与详情弹层的图表清理逻辑纠缠) -->
   <div class="modal-overlay" id="relayChartOverlay">
-    <div class="modal" style="width:880px">
+    <div class="modal" style="width:1080px">
       <div class="modal-header">
         <h3>今日中转用量 · 按小时</h3>
         <button class="modal-close" onclick="closeModal('relayChartOverlay')">&times;</button>

@@ -6,6 +6,9 @@
 
     var _relayChartState = { mode: 'model', metric: 'tokens', data: null, fetchedAt: 0, loading: false, error: false, chart: null };
 
+    // 用户模式默认仅绘制总量前 5 名,其余点图例名加选(用户多时全画挤成一团)
+    var RELAY_CHART_DEFAULT_SERIES = 5;
+
     function relayChartInk(name, fallback) {
       var v = getComputedStyle(document.documentElement).getPropertyValue(name);
       v = (v || '').trim();
@@ -117,7 +120,6 @@
         + '<span class="rc-meta">' + meta + '</span>'
         + '</div>'
         + '<div class="rc-box" id="relayChartBox"></div>'
-        + '<div class="rc-note">口径:站内中转用量(外部资源为日粒度,未计入小时拆分,榜单数字中另行标注);小时为中转站服务器时区,无数据的小时段留空。</div>'
         + '</div>';
 
       if (!list.length) {
@@ -137,53 +139,112 @@
       var ink = relayChartInk('--text', '#1f2937');
       var inkMute = relayChartInk('--text-mute', '#6b7280');
       var inkFaint = relayChartInk('--text-faint', '#9ca3af');
-      var gridLine = relayChartInk('--glass-border-soft', 'rgba(127,127,127,.2)');
+      // 轴线/网格比旧版(--glass-border-soft)加深一档:太淡读不出坐标系
+      var axisColor = inkFaint;
+      var gridColor = relayChartInk('--line', 'rgba(127,127,127,.32)');
       var isTokens = _relayChartState.metric === 'tokens';
+      var byMode = _relayChartState.mode === 'model';
 
       var hours = [];
       for (var h = 0; h < 24; h++) hours.push((h < 10 ? '0' + h : '' + h) + ':00');
 
+      var colors = list.map(function(s) { return activityModelColor(s.colorKey); });
+
+      // 图例文字与色点同色:rich text 按系列逐个上色(formatter name → 槽位)
+      var rich = {}, nameIdx = {};
+      list.forEach(function(s, i) {
+        nameIdx[s.label] = i;
+        rich['c' + i] = { color: colors[i], fontSize: 11 };
+      });
+
+      // 用户模式默认只画前 5 名,其余点图例名加选;模型模式默认全画
+      var legendSelected = {};
+      if (!byMode) {
+        list.forEach(function(s, i) {
+          if (i >= RELAY_CHART_DEFAULT_SERIES) legendSelected[s.label] = false;
+        });
+      }
+
       _relayChartState.chart.setOption({
         animationDuration: 250,
-        color: list.map(function(s) { return activityModelColor(s.colorKey); }),
+        color: colors,
         tooltip: {
           trigger: 'axis',
           axisPointer: { type: 'cross', label: { backgroundColor: ink } },
           backgroundColor: relayChartInk('--glass-strong', '#fff'),
           borderColor: relayChartInk('--glass-border', 'rgba(127,127,127,.3)'),
           textStyle: { color: ink, fontSize: 12 },
-          valueFormatter: function(v) { return v == null ? '-' : (isTokens ? fmtTokensMB(v) : String(v)); }
+          confine: true,
+          // 自定义 formatter:该时段没调用的系列整行省略(默认会列全系列占满 '-');
+          // confine 保证用户多时 tooltip 不溢出画布
+          formatter: function(params) {
+            if (!params || !params.length) return '';
+            var fmtVal = function(v) { return isTokens ? fmtTokensMB(v) : String(v); };
+            var html = params[0].axisValue + '<br/>';
+            params.forEach(function(p) {
+              if (p.value == null) return;
+              html += p.marker + ' ' + p.name + '&nbsp;&nbsp;<b>' + fmtVal(p.value) + '</b><br/>';
+            });
+            return html;
+          }
         },
         legend: {
           type: 'scroll',
           top: 0,
-          textStyle: { color: inkMute, fontSize: 11 },
+          icon: 'circle',
+          itemWidth: 10,
+          itemHeight: 10,
+          itemGap: 14,
+          inactiveColor: inkFaint,
+          selected: legendSelected,
+          formatter: function(name) {
+            var i = nameIdx[name];
+            return i == null ? name : ('{c' + i + '|' + name + '}');
+          },
+          textStyle: { color: inkMute, fontSize: 11, rich: rich },
           pageIconColor: inkMute,
           pageIconInactiveColor: inkFaint,
           pageTextStyle: { color: inkMute }
         },
-        grid: { left: 56, right: 18, top: 40, bottom: 26 },
+        grid: { left: 60, right: 20, top: 44, bottom: 58 },
         xAxis: {
           type: 'category',
           data: hours,
-          axisLine: { lineStyle: { color: gridLine } },
+          boundaryGap: false,
+          axisLine: { show: true, lineStyle: { color: axisColor, width: 1.2 } },
           axisTick: { show: false },
-          axisLabel: { color: inkMute, fontSize: 11, interval: 2 }
+          axisLabel: { color: inkMute, fontSize: 11.5, interval: 2 }
         },
         yAxis: {
           type: 'value',
-          axisLabel: { color: inkMute, fontSize: 11, formatter: function(v) { return isTokens ? fmtTokensMB(v) : (v >= 1000 ? fmtTokensMB(v) : String(v)); } },
-          splitLine: { lineStyle: { color: gridLine } }
+          axisLine: { show: true, lineStyle: { color: axisColor, width: 1 } },
+          axisLabel: { color: inkMute, fontSize: 11.5, formatter: function(v) { return isTokens ? fmtTokensMB(v) : (v >= 1000 ? fmtTokensMB(v) : String(v)); } },
+          splitLine: { lineStyle: { color: gridColor } }
         },
+        dataZoom: [
+          { type: 'inside', xAxisIndex: 0, zoomOnMouseWheel: true, moveOnMouseWheel: true },
+          { type: 'slider', xAxisIndex: 0, height: 16, bottom: 10,
+            borderColor: 'transparent', backgroundColor: 'rgba(127,127,127,.08)',
+            fillerColor: 'rgba(127,127,127,.18)',
+            handleIcon: 'circle', handleSize: '70%',
+            handleStyle: { color: inkMute },
+            moveHandleSize: 5, moveHandleStyle: { color: inkFaint },
+            dataBackground: { lineStyle: { color: inkFaint }, areaStyle: { color: 'rgba(127,127,127,.12)' } },
+            selectedDataBackground: { lineStyle: { color: inkMute }, areaStyle: { color: 'rgba(127,127,127,.2)' } },
+            textStyle: { color: inkFaint, fontSize: 10 },
+            brushSelect: false }
+        ],
         series: list.map(function(s) {
           return {
             name: s.label,
             type: 'line',
             data: s.values,
+            smooth: 0.3,
             lineStyle: { width: 2 },
             itemStyle: { borderWidth: 1.5 },
             symbol: 'circle',
             symbolSize: 6,
+            sampling: 'lttb',
             emphasis: { focus: 'series', symbolSize: 8 }
           };
         })
