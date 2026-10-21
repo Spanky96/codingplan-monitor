@@ -133,8 +133,10 @@
       users.sort(function(a, b) { return (b.today.total_tokens || 0) - (a.today.total_tokens || 0); });
 
       var hasExternal = users.some(function(u) { return (u.today.external_tokens || 0) > 0; });
+      var totalTokens = 0;
+      users.forEach(function(u) { totalTokens += u.today.total_tokens || 0; });
       summaryEl.textContent = users.length
-        ? (users.length + ' 人有消费' + (hasExternal ? ' · 含外部' : ''))
+        ? ('合计 ' + fmtTokensMB(totalTokens) + ' · ' + users.length + ' 人有消费' + (hasExternal ? ' · 含外部' : ''))
         : '';
 
       if (!users.length) {

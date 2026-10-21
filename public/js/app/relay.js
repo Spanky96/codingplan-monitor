@@ -28,14 +28,26 @@
       return u.username || String(u.email || '').split('@')[0] || ('用户' + u.user_id);
     }
 
-    // 模型色板:亮/暗各一套(同 8 个色相、按表面色分档,dataviz 六项校验通过;
-    // claude 主题复用亮色版,奶油色表面同样通过)。灰色仅用于「未知模型」
-    // 与槽位耗尽后的新模型
-    var ACTIVITY_COLORS_LIGHT = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#4a3aa7', '#e34948'];
-    var ACTIVITY_COLORS_DARK = ['#3987e5', '#d95926', '#199e70', '#c98500', '#d55181', '#008300', '#9085e9', '#e66767'];
+    // 大数缩写(≥1e9 → B,≥1e6 → M,≥1e3 → K):今日合计/折线图纵轴用。
+    // fmtTokens 定义在 detail.js 且无 B 分支(全局共用,不改动它)
+    function fmtTokensMB(v) {
+      if (v >= 1e9) return (v / 1e9).toFixed(2).replace(/\.?0+$/, '') + 'B';
+      if (v >= 1e6) return (v / 1e6).toFixed(1).replace(/\.0$/, '') + 'M';
+      if (v >= 1e3) return (v / 1e3).toFixed(1).replace(/\.0$/, '') + 'K';
+      return String(v);
+    }
+
+    // 模型色板:亮/暗各一套 20 槽(OKLCH 生成,dataviz 六项校验通过:
+    // 相邻 CVD ΔE 8.7/8.5、normal 21.6/20.2、色度带全过;暗色表面对比全 ≥3:1,
+    // 亮色 9 槽 <3:1 走 relief 规则——图例色块旁始终有模型名文字,排行条有
+    // tooltip 与榜单数字兜底。claude 主题复用亮色版)。灰色仅用于「未知模型」
+    // 与槽位耗尽(20 个并发模型以上)后的新模型
+    var ACTIVITY_COLORS_LIGHT = ['#e1789b', '#6b7f0c', '#e47f5b', '#8d5baf', '#d38e2e', '#127abe', '#aba22a', '#6669c1', '#58b670', '#b34d6a', '#19b5ae', '#926e0c', '#18aeda', '#9f549a', '#61a1f0', '#b65142', '#9691ee', '#448735', '#c381d2', '#a95f0c'];
+    var ACTIVITY_COLORS_DARK = ['#d56c87', '#327522', '#d77157', '#904081', '#c28412', '#0f66ac', '#98991e', '#804797', '#4ba964', '#9b4808', '#16a7a1', '#5d54ac', '#16a2c3', '#a03b51', '#6091e4', '#5b6c09', '#9980dc', '#a23c42', '#b675c5', '#3d5eaf'];
     var ACTIVITY_MODEL_GRAY = '#94a3b8';
-    // 模型名 → 色板槽位的持久分配表(localStorage),键名与页面其他本地键同风格
-    var ACTIVITY_SLOTS_KEY = 'usage_activity_model_slots_v1';
+    // 模型名 → 色板槽位的持久分配表(localStorage),键名与页面其他本地键同风格;
+    // v2:色板从 8 槽扩到 20 槽,旧分配表作废重分
+    var ACTIVITY_SLOTS_KEY = 'usage_activity_model_slots_v2';
 
     function activityPalette() {
       return document.documentElement.classList.contains('dark')
@@ -59,7 +71,7 @@
      * 持久化 —— 之后无论快照里出现/消失哪些其他模型,颜色都不再漂移
      * (旧实现按排序位次取色,集合一变全体换色)。哈希冲突的模型必然分到
      * 不同槽,直连/转发(glm-5.3 vs glm-5.3-flash)依旧异色;历史累计超
-     * 8 种后新模型折叠为灰(不入表,槽位保留给既有模型)。 */
+     * 20 种后新模型折叠为灰(不入表,槽位保留给既有模型)。 */
     function activityModelColor(name) {
       var map = {};
       try { map = JSON.parse(localStorage.getItem(ACTIVITY_SLOTS_KEY)) || {}; } catch (e) { map = {}; }
