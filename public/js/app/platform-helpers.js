@@ -60,17 +60,23 @@
     }
 
     // 平台标签 mini logo(/logo/* 由 server 映射到 docs/assets,与 README 共用同一份图标)
+    // 路径带 API_PREFIX:子路径部署(域名/glm/)时页面不在根目录,
+    // 绝对路径 /logo/* 会打到域名根导致 404,与前缀同源才能命中 server 的 /logo 路由
+    function ptLogoSrc(name) {
+      return API_PREFIX + '/logo/' + name;
+    }
+
     var PLATFORM_LOGOS = {
-      glm: '/logo/zhipu.png',
-      yescode: '/logo/yescode.ico',
-      sub2api: '/logo/sub2api.svg',
-      huoli: '/logo/sub2api.svg',
-      volc: '/logo/volc.png',
-      volcc: '/logo/volc.png',
-      telecomjs: '/logo/telecom.ico',
-      qwen: '/logo/qwen.svg',
-      minimax: '/logo/minimax.svg',
-      stepfun: '/logo/stepfun.png'
+      glm: ptLogoSrc('zhipu.png'),
+      yescode: ptLogoSrc('yescode.ico'),
+      sub2api: ptLogoSrc('sub2api.svg'),
+      huoli: ptLogoSrc('sub2api.svg'),
+      volc: ptLogoSrc('volc.png'),
+      volcc: ptLogoSrc('volc.png'),
+      telecomjs: ptLogoSrc('telecom.ico'),
+      qwen: ptLogoSrc('qwen.svg'),
+      minimax: ptLogoSrc('minimax.svg'),
+      stepfun: ptLogoSrc('stepfun.png')
     };
 
     function ptLogo(key) {
@@ -80,8 +86,8 @@
 
     // ZenMux 黑章鱼在深色主题下不可见,按主题切换黑/白两版
     function ptZenmuxLogo() {
-      return '<img class="pt-logo pt-light-only" src="/logo/zenmux.svg" alt="" aria-hidden="true">'
-        + '<img class="pt-logo pt-dark-only" src="/logo/zenmux-white.svg" alt="" aria-hidden="true">';
+      return '<img class="pt-logo pt-light-only" src="' + ptLogoSrc('zenmux.svg') + '" alt="" aria-hidden="true">'
+        + '<img class="pt-logo pt-dark-only" src="' + ptLogoSrc('zenmux-white.svg') + '" alt="" aria-hidden="true">';
     }
 
     function platformTag(platform, planType, alias) {
