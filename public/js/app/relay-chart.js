@@ -150,13 +150,6 @@
 
       var colors = list.map(function(s) { return activityModelColor(s.colorKey); });
 
-      // 图例文字与色点同色:rich text 按系列逐个上色(formatter name → 槽位)
-      var rich = {}, nameIdx = {};
-      list.forEach(function(s, i) {
-        nameIdx[s.label] = i;
-        rich['c' + i] = { color: colors[i], fontSize: 11 };
-      });
-
       // 用户模式默认只画前 5 名,其余点图例名加选;模型模式默认全画
       var legendSelected = {};
       if (!byMode) {
@@ -164,6 +157,21 @@
           if (i >= RELAY_CHART_DEFAULT_SERIES) legendSelected[s.label] = false;
         });
       }
+
+      // 图例文字与色点同色:rich text 按系列逐个上色(formatter name → 槽位)。
+      // rich 会盖掉 ECharts 的 inactiveColor,未选中系列的文字要显式置灰,
+      // 并在 legendselectchanged 时同步刷新,否则未选中项看着仍像选中
+      var selectedMap = {};
+      list.forEach(function(s) { selectedMap[s.label] = legendSelected[s.label] !== false; });
+      var nameIdx = {};
+      list.forEach(function(s, i) { nameIdx[s.label] = i; });
+      var buildRich = function() {
+        var r = {};
+        list.forEach(function(s, i) {
+          r['c' + i] = { color: selectedMap[s.label] === false ? inkFaint : colors[i], fontSize: 11 };
+        });
+        return r;
+      };
 
       _relayChartState.chart.setOption({
         animationDuration: 250,
@@ -183,7 +191,8 @@
             var html = params[0].axisValue + '<br/>';
             params.forEach(function(p) {
               if (p.value == null) return;
-              html += p.marker + ' ' + p.name + '&nbsp;&nbsp;<b>' + fmtVal(p.value) + '</b><br/>';
+              // 注意:tooltip params 里 p.name 是类目轴值(时间),系列名是 p.seriesName
+              html += p.marker + ' ' + p.seriesName + '&nbsp;&nbsp;<b>' + fmtVal(p.value) + '</b><br/>';
             });
             return html;
           }
@@ -201,7 +210,7 @@
             var i = nameIdx[name];
             return i == null ? name : ('{c' + i + '|' + name + '}');
           },
-          textStyle: { color: inkMute, fontSize: 11, rich: rich },
+          textStyle: { color: inkMute, fontSize: 11, rich: buildRich() },
           pageIconColor: inkMute,
           pageIconInactiveColor: inkFaint,
           pageTextStyle: { color: inkMute }
@@ -248,6 +257,13 @@
             emphasis: { focus: 'series', symbolSize: 8 }
           };
         })
+      });
+
+      // 图例选中变化 → 未选中系列文字同步置灰(rich 覆盖了 inactiveColor)
+      _relayChartState.chart.off('legendselectchanged');
+      _relayChartState.chart.on('legendselectchanged', function(e) {
+        selectedMap = e.selected;
+        _relayChartState.chart.setOption({ legend: { textStyle: { rich: buildRich() } } });
       });
     }
 
