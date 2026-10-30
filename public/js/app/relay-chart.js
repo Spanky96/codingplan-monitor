@@ -1,6 +1,8 @@
     // ============ 今日中转用量折线图(弹层;按模型/按用户 × Token/次数) ============
     // 数据来自 /api/relay/usage-hourly(中转站按小时 × 用户 × 模型稀疏行),
     // 前端透视成两套序列:x 轴 0-23 时(中转站服务器时区),y 轴按小时增量。
+    // 稀疏行有洞:系列活动范围内缺口补 0 保证折线连续;默认缩放窗口贴合数据
+    // 活动范围(空凌晨时段不默认展开),滑块仍可拖回全天。
     // 模型色沿用 activityModelColor(名字哈希稳定分配,与调度色块/榜单一致);
     // 用户色按 user_id 哈希取同一色板(键加前缀避免与模型名撞键)。
 
@@ -89,7 +91,38 @@
         entry.total += v;
       });
       return Object.keys(series).map(function(k) { return series[k]; })
-        .sort(function(a, b) { return b.total - a.total; });
+        .sort(function(a, b) { return b.total - a.total; })
+        .map(relayChartFillGaps);
+    }
+
+    // 小时行是稀疏的(没调用的小时没有行):null 起的 values 直接画会断成孤立散点。
+    // 记录该系列首个/末个有用量的小时,把中间的 null 补成 0 —— 活动范围内折线
+    // 连续(没调用的小时沉到 0),范围之外仍为 null(线不向两侧空时段延伸)。
+    function relayChartFillGaps(entry) {
+      var first = -1, last = -1;
+      entry.values.forEach(function(v, i) {
+        if (v != null) { if (first < 0) first = i; last = i; }
+      });
+      entry.firstHour = first;
+      entry.lastHour = last;
+      for (var i = first + 1; i < last; i++) {
+        if (entry.values[i] == null) entry.values[i] = 0;
+      }
+      return entry;
+    }
+
+    // 默认缩放窗口 [start,end](类目下标,含端点):取系列活动范围首尾各留 1 小时,
+    // 钳制到 0-23;无有效小时(异常数据)退回全天
+    function relayChartZoomWindow(list, isSelected) {
+      var minHour = 23, maxHour = 0;
+      list.forEach(function(s) {
+        if (s.firstHour == null || s.firstHour < 0) return;
+        if (isSelected && !isSelected(s)) return;
+        if (s.firstHour < minHour) minHour = s.firstHour;
+        if (s.lastHour > maxHour) maxHour = s.lastHour;
+      });
+      if (maxHour < minHour) return [0, 23];
+      return [Math.max(0, minHour - 1), Math.min(23, maxHour + 1)];
     }
 
     function relayChartRender() {
@@ -158,6 +191,12 @@
         });
       }
 
+      // 默认时间段贴合数据:初始缩放窗口取当前选中系列的活动范围(如凌晨 0-7 点
+      // 无数据就不默认展开空轴);滑块仍可拖回全天 0-23
+      var zoomWindow = relayChartZoomWindow(list, function(s) {
+        return legendSelected[s.label] !== false;
+      });
+
       // 图例文字与色点同色:rich text 按系列逐个上色(formatter name → 槽位)。
       // rich 会盖掉 ECharts 的 inactiveColor,未选中系列的文字要显式置灰,
       // 并在 legendselectchanged 时同步刷新,否则未选中项看着仍像选中
@@ -190,7 +229,8 @@
             var fmtVal = function(v) { return isTokens ? fmtTokensMB(v) : String(v); };
             var html = params[0].axisValue + '<br/>';
             params.forEach(function(p) {
-              if (p.value == null) return;
+              // 中途补 0 的小时同样是"该系列没调用",与 null 一样整行省略
+              if (p.value == null || p.value === 0) return;
               // 注意:tooltip params 里 p.name 是类目轴值(时间),系列名是 p.seriesName
               html += p.marker + ' ' + p.seriesName + '&nbsp;&nbsp;<b>' + fmtVal(p.value) + '</b><br/>';
             });
@@ -231,8 +271,10 @@
           splitLine: { lineStyle: { color: gridColor } }
         },
         dataZoom: [
-          { type: 'inside', xAxisIndex: 0, zoomOnMouseWheel: true, moveOnMouseWheel: true },
+          { type: 'inside', xAxisIndex: 0, zoomOnMouseWheel: true, moveOnMouseWheel: true,
+            startValue: zoomWindow[0], endValue: zoomWindow[1] },
           { type: 'slider', xAxisIndex: 0, height: 16, bottom: 10,
+            startValue: zoomWindow[0], endValue: zoomWindow[1],
             borderColor: 'transparent', backgroundColor: 'rgba(127,127,127,.08)',
             fillerColor: 'rgba(127,127,127,.18)',
             handleIcon: 'circle', handleSize: '70%',
