@@ -36,22 +36,68 @@
     document.getElementById('mgmtBtn').addEventListener('click', function() { requireAuth(openMgmtInner); });
 
     var editingIndex = -1;
+    var _mgmtIpSelect = false;   // 管理列表的「批量 IP 白名单」勾选模式
 
     function openMgmtInner() {
       editingIndex = -1;
+      _mgmtIpSelect = false;
       renderMgmtList();
       document.getElementById('mgmtOverlay').classList.add('active');
+    }
+
+    // 进入/退出勾选模式。rerender=false 仅供 closeModal 复位标志(弹层已关无需渲染)
+    function enterMgmtIpSelect() {
+      _mgmtIpSelect = true;
+      renderMgmtList();
+    }
+    function exitMgmtIpSelect(rerender) {
+      _mgmtIpSelect = false;
+      if (rerender) renderMgmtList();
+    }
+
+    // 勾选模式下点行切换勾选(点 checkbox 本身时跳过,避免双切换)
+    function mgmtIpRowToggle(el, ev) {
+      var cb = el.querySelector('input[type=checkbox]');
+      if (!cb || cb.disabled) return;
+      if (ev && ev.target === cb) { updateMgmtIpCount(); return; }
+      cb.checked = !cb.checked;
+      updateMgmtIpCount();
+    }
+
+    function mgmtIpToggleAll(on) {
+      document.querySelectorAll('.mgmt-ip-check').forEach(function(cb) {
+        if (!cb.disabled) cb.checked = on;
+      });
+      updateMgmtIpCount();
+    }
+
+    function updateMgmtIpCount() {
+      var total = document.querySelectorAll('.mgmt-ip-check:not([disabled])').length;
+      var n = document.querySelectorAll('.mgmt-ip-check:checked').length;
+      var el = document.getElementById('mgmtIpCount');
+      if (el) el.textContent = '已选 ' + n + ' / ' + total + ' 个智谱账号';
+    }
+
+    // 下一步:带着勾选的账号索引打开批量弹层
+    function mgmtIpNext() {
+      var indexes = Array.prototype.map.call(document.querySelectorAll('.mgmt-ip-check:checked'), function(cb) {
+        return parseInt(cb.value, 10);
+      });
+      if (!indexes.length) { alert('请至少勾选一个智谱账号'); return; }
+      openBatchIp(indexes);
     }
 
     var _dragSrcIdx = null;
     var _svgGrip = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="6" r="1"/><circle cx="15" cy="6" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="9" cy="18" r="1"/><circle cx="15" cy="18" r="1"/></svg>';
 
     function renderMgmtList() {
-      document.getElementById('mgmtTitle').textContent = '账号管理';
+      document.getElementById('mgmtTitle').textContent = _mgmtIpSelect ? '账号管理 · 勾选账号设置 IP' : '账号管理';
+      document.getElementById('mgmtBatchIpBtn').style.display = _mgmtIpSelect ? 'none' : '';
       fetch(API_PREFIX + '/api/accounts', { headers: authHeaders() })
         .then(function(r) { if (r.status===401){localStorage.removeItem('glm_pwd');alert('密码已失效');closeModal('mgmtOverlay');refreshPrivacyState();loadData();loadExpire();return null;} return r.json(); })
         .then(function(accounts) {
           if (!accounts) return;
+          if (_mgmtIpSelect) { renderMgmtIpSelectList(accounts); return; }
           var html = '';
           if (!accounts.length) html += '<div style="text-align:center;padding:24px;color:var(--text-mute);font-size:13px">暂无账号</div>';
           accounts.forEach(function(a, i) {
@@ -64,6 +110,28 @@
           document.getElementById('mgmtBody').innerHTML = html;
           initDragSort();
         });
+    }
+
+    // 勾选模式列表:仅智谱账号可勾选,其余置灰禁用;此模式下不提供编辑/排序,避免误触
+    function renderMgmtIpSelectList(accounts) {
+      var glmTotal = accounts.filter(function(a) { return (a.platform || 'glm') === 'glm'; }).length;
+      var html = '<div class="batch-toolbar"><span id="mgmtIpCount">已选 0 / ' + glmTotal + ' 个智谱账号</span>'
+        + '<button type="button" onclick="mgmtIpToggleAll(true)">全选智谱</button>'
+        + '<button type="button" onclick="mgmtIpToggleAll(false)">清空</button></div>';
+      if (!glmTotal) html += '<div style="text-align:center;padding:24px;color:var(--text-mute);font-size:13px">暂无智谱账号</div>';
+      accounts.forEach(function(a, i) {
+        var isGlm = (a.platform || 'glm') === 'glm';
+        html += '<div class="acct-item select-mode' + (isGlm ? '' : ' select-disabled') + '" data-idx="' + i + '"'
+          + (isGlm ? ' onclick="mgmtIpRowToggle(this,event)"' : '') + '>'
+          + '<input type="checkbox" class="mgmt-ip-check" value="' + i + '"' + (isGlm ? '' : ' disabled') + '>'
+          + '<div class="acct-info"><div class="acct-name">' + platformTag(a.platform || 'glm', null, a.alias) + ' ' + esc(a.name||'未命名') + '</div>'
+          + '<div class="acct-meta">' + esc(a.responsiblePerson||'') + (a.phone?' &middot; '+esc(a.phone):'') + '</div></div></div>';
+      });
+      html += '<div class="form-actions" style="margin-top:12px">'
+        + '<button class="btn-sm" onclick="exitMgmtIpSelect(true)">取消</button>'
+        + '<button class="btn-primary" onclick="mgmtIpNext()">下一步:填写 IP</button></div>';
+      document.getElementById('mgmtBody').innerHTML = html;
+      updateMgmtIpCount();
     }
 
     function initDragSort() {

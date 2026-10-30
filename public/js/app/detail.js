@@ -700,7 +700,7 @@
         + '<div class="chart-loading" id="chartLoading-' + index + '"></div></div>'
         + '</div>'
         + (admin ? '<div id="dpanel-ip-' + index + '" style="display:none">'
-          + '<div class="keys-section"><div class="keys-header"><div class="keys-title">IP 白名单</div>'
+          + '<div class="keys-section"><div class="keys-header"><div class="keys-title">IP 白名单 <a href="javascript:void(0)" onclick="openBatchIp([' + index + '])" style="font-size:12px;font-weight:400;color:var(--accent);margin-left:8px">批量设置…</a></div>'
           + '<div class="keys-create"><input id="newIpAddr" placeholder="如 1.2.3.4 或 10.0.0.0/8" style="width:200px"><button onclick="addIpWhitelist(' + index + ')">添加</button></div>'
           + '</div>'
           + '<p style="font-size:12px;color:var(--text-mute);margin:-6px 0 12px">未配置时不限制 IP;添加后仅白名单内 IP 可调用本账号 API。</p>'

@@ -15,6 +15,8 @@
 | POST | `/api/keys/:index` | ✅ | 创建 Key |
 | DELETE | `/api/keys/:index/:apiKey` | ✅ | 删除 Key |
 | GET / POST / DELETE | `/api/ip-whitelist/:index[...]` | ✅ | 智谱 IP 白名单查看 / 添加(支持 IPv4 与 CIDR)/ 删除 |
+| POST | `/api/ip-whitelist-batch` | ✅ | 批量设置智谱 IP 白名单(勾选多账号一键替换/追加,长任务返回 `taskId`,账号间节流 400ms 防风控) |
+| GET  | `/api/ip-whitelist-batch/:taskId` | ✅ | 查询批量任务进度(逐账号 成功/失败 + 增删明细;任务存内存,服务重启后 404) |
 | GET  | `/api/risk/:index` | - | 智谱风控/异常提示(仅个人版;每次打开详情刷新,结果持久化并同步用量缓存) |
 | GET  | `/api/reset-cards/:index` | ✅ | 智谱重置卡列表(仅个人版 Coding Plan) |
 | POST | `/api/reset-cards/:index/use` | ✅ | 使用一张重置卡(用前以官方最新列表校验有效性) |

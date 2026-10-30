@@ -109,6 +109,28 @@ function persistGlmResetCards(i, cards) {
     return accounts[i].resetCards;
 }
 
+// 批量设置白名单的变更计划:目标列表去重保序后与现存行(rows=[{id,ipAddress}])做 diff。
+// mode='replace'(默认)替换——不在目标里的现存 IP 全删;'append' 仅补缺,不删任何现存 IP。
+// kept 返回目标中已存在的 IP(无需操作的交集),供前端展示「已保持 N 条」。
+function planIpWhitelistChanges(rows, targetIps, mode) {
+    var seen = {};
+    var targets = [];
+    (Array.isArray(targetIps) ? targetIps : []).forEach(function(ip) {
+        var v = String(ip || '').trim();
+        if (!v || seen[v]) return;
+        seen[v] = true;
+        targets.push(v);
+    });
+    var list = (Array.isArray(rows) ? rows : []).filter(function(r) { return r && r.ipAddress; });
+    var existing = {};
+    list.forEach(function(r) { existing[r.ipAddress] = true; });
+    return {
+        toAdd: targets.filter(function(ip) { return !existing[ip]; }),
+        toRemove: mode === 'append' ? [] : list.filter(function(r) { return !seen[r.ipAddress]; }),
+        kept: targets.filter(function(ip) { return existing[ip]; })
+    };
+}
+
 // 校验 IP 地址格式:支持 IPv4 或 IPv4/CIDR(如 1.2.3.4 / 10.0.0.0/8)
 function isValidIp(ip) {
     var m = String(ip).match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})(\/(\d{1,2}))?$/);
@@ -283,6 +305,7 @@ module.exports = {
     glmActiveSubscription: glmActiveSubscription,
     persistGlmResetCards: persistGlmResetCards,
     isValidIp: isValidIp,
+    planIpWhitelistChanges: planIpWhitelistChanges,
     uuidV4: uuidV4,
     isGlmAuthError: isGlmAuthError,
     hasGlmLoginCredentials: hasGlmLoginCredentials,

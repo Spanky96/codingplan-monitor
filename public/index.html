@@ -450,6 +450,25 @@
     .keys-table .key-hidden td:first-child::after { content: '(隐藏)'; font-size: 11px; color: var(--text-faint); margin-left: 4px; }
     .keys-loading { text-align: center; padding: 20px; color: var(--text-mute); font-size: 13px; }
 
+    /* ===== 批量 IP 白名单(账号管理弹窗勾选模式 + 批量弹层) ===== */
+    .acct-item.select-mode { cursor: pointer; }
+    .acct-item.select-disabled { opacity: .45; cursor: default; }
+    .acct-item.select-mode input[type=checkbox] { accent-color: var(--accent); flex-shrink: 0; margin-right: 10px; width: 15px; height: 15px; }
+    .batch-selected { margin: 0 0 12px; padding: 9px 12px; border: 1px solid var(--glass-border-soft); border-radius: 10px; background: var(--glass-soft); font-size: 12px; color: var(--text-mute); line-height: 1.7; word-break: break-all; }
+    .batch-selected b { color: var(--text); font-size: 13px; }
+    .batch-toolbar { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--text-mute); margin-bottom: 4px; }
+    .batch-toolbar button { background: none; border: none; color: var(--accent); cursor: pointer; font-size: 12px; padding: 2px 4px; }
+    .batch-toolbar button:hover { text-decoration: underline; }
+    .batch-results { margin-top: 10px; border: 1px solid var(--line); border-radius: 10px; padding: 4px 14px; max-height: 300px; overflow-y: auto; }
+    .batch-result-row { display: flex; gap: 8px; align-items: baseline; padding: 7px 0; font-size: 13px; border-bottom: 1px solid var(--line); }
+    .batch-result-row:last-child { border-bottom: none; }
+    .batch-result-state { min-width: 44px; font-size: 12px; color: var(--text-mute); }
+    .batch-result-row.is-ok .batch-result-state { color: var(--ok); }
+    .batch-result-row.is-error .batch-result-state { color: var(--danger); }
+    .batch-result-row.is-error .batch-result-detail { color: var(--danger); }
+    .batch-result-detail { color: var(--text-mute); font-size: 12px; word-break: break-all; }
+    .batch-summary { margin-top: 12px; font-size: 13px; color: var(--text); }
+
     .key-actions { display: flex; gap: 6px; align-items: center; }
     .icon-btn { background: none; border: none; cursor: pointer; color: var(--text-mute); padding: 4px; border-radius: 6px; transition: color .15s, background .15s; display: inline-flex; align-items: center; justify-content: center; }
     .icon-btn:hover { color: var(--accent); background: var(--glass-soft); }
@@ -785,10 +804,22 @@
   <div class="modal-overlay" id="mgmtOverlay">
     <div class="modal" style="width:640px">
       <div class="modal-header">
-        <h3 id="mgmtTitle">账号管理</h3>
+        <h3 id="mgmtTitle" style="flex:1">账号管理</h3>
+        <button class="btn-sm" id="mgmtBatchIpBtn" onclick="enterMgmtIpSelect()" style="margin-right:10px" title="勾选多个智谱账号,批量替换/追加白名单 IP">IP 白名单</button>
         <button class="modal-close" onclick="closeModal('mgmtOverlay')">&times;</button>
       </div>
       <div class="modal-body" id="mgmtBody"></div>
+    </div>
+  </div>
+
+  <!-- 批量 IP 白名单 Modal(管理员):勾选智谱账号,一键替换/追加白名单 IP -->
+  <div class="modal-overlay" id="batchIpOverlay">
+    <div class="modal" style="width:680px">
+      <div class="modal-header">
+        <h3>批量设置 IP 白名单</h3>
+        <button class="modal-close" onclick="closeModal('batchIpOverlay')">&times;</button>
+      </div>
+      <div class="modal-body" id="batchIpBody"></div>
     </div>
   </div>
 
@@ -840,6 +871,7 @@
   <script src="js/app/accounts.js"></script>
   <script src="js/app/telecom-login.js"></script>
   <script src="js/app/modals.js"></script>
+  <script src="js/app/batch-ip.js"></script>
   <script src="js/app/weights.js"></script>
   <script src="js/app/capacity.js"></script>
   <script src="js/app/relay.js"></script>
