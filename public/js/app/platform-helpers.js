@@ -282,7 +282,7 @@
       return Math.max(dPct, w, m);
     }
 
-    // sub2api 数据解包:新形状 {me, subscriptions, current, stats};旧 huoli 缓存为裸数组。
+    // sub2api 数据解包:新形状 {me, subscriptions, current, stats, checkin};旧 huoli 缓存为裸数组。
     // 注意 current 可能为 null(过期超 3 天已隐藏)——仅在旧缓存缺 current 键时才回退 subs[0]
     function sub2apiUnpack(d) {
       if (Array.isArray(d)) return { me: null, subs: d, sub: d[0] || null, stats: null };
@@ -290,6 +290,25 @@
       var subs = d.subscriptions || [];
       var sub = ('current' in d) ? (d.current || null) : (subs[0] || null);
       return { me: d.me || null, subs: subs, sub: sub, stats: d.stats || null };
+    }
+
+    // 签到徽标:今日已签到 ✓ / 未签到 / 签到 ✕(状态接口报错,如 Token 过期)
+    function sub2apiCheckinBadge(ck) {
+      if (!ck) return '';
+      if (ck.checkedInToday === true) {
+        var tip = ck.streakCurrent != null ? '连续签到 ' + ck.streakCurrent + ' 天' : '今日已签到';
+        if (ck.todayBalanceCny != null || ck.todayNbPoints != null) {
+          tip += ' · 今日奖励 ¥' + (+(ck.todayBalanceCny || 0)).toFixed(2) + (ck.todayNbPoints ? ' + ' + ck.todayNbPoints + ' NB点' : '');
+        }
+        return '<span class="level-badge level-badge-ok" title="' + esc(tip) + '">已签到 ✓</span>';
+      }
+      if (ck.checkedInToday === false) {
+        return '<span class="level-badge level-badge-warn" title="等待服务端自动签到(约半小时内生效)">未签到</span>';
+      }
+      if (ck.error) {
+        return '<span class="level-badge level-badge-err" title="' + esc(ck.error) + '">签到 ✕</span>';
+      }
+      return '';
     }
 
     // fmtTokens 定义在 detail.js(线上生效版本:无 B 分支),跨文件共享

@@ -74,6 +74,53 @@
       document.getElementById('modalBody').innerHTML = html;
     }
 
+    // 签到活动区块(数据来自 data.checkin,配置签到信息接口后展示)
+    function sub2apiCheckinSection(index, ck) {
+      var stateHtml = ck.checkedInToday === true ? '<span style="color:var(--ok);font-weight:600">已签到 ✓</span>'
+        : (ck.checkedInToday === false ? '<span style="color:#d48806;font-weight:600">未签到</span>' : '<span style="color:var(--text-faint)">未知</span>');
+      var reward = (ck.todayBalanceCny != null || ck.todayNbPoints != null)
+        ? '¥' + (+(ck.todayBalanceCny || 0)).toFixed(2) + (ck.todayNbPoints ? ' + ' + ck.todayNbPoints + ' NB点' : '') : '-';
+      var tomorrow = (ck.tomorrowBalanceCny != null || ck.tomorrowNbPoints != null)
+        ? '¥' + (+(ck.tomorrowBalanceCny || 0)).toFixed(2) + (ck.tomorrowNbPoints ? ' + ' + ck.tomorrowNbPoints + ' NB点' : '') : '-';
+      var msHtml = (ck.milestones || []).map(function(m) {
+        return '<span class="info-label">' + esc(m.label) + (m.achieved ? ' ✓' : '') + '</span><span class="info-value">' + esc(m.statusText || '-') + '</span>';
+      }).join('');
+      var errHtml = ck.error
+        ? '<span class="info-label">状态获取</span><span class="info-value" style="color:#cf1322">' + esc(ck.error) + '</span>' : '';
+      var runBtn = isAdmin()
+        ? '<div style="margin-top:10px"><button class="btn-primary" style="padding:5px 16px;font-size:12px" onclick="runCheckinNow(' + index + ', this)">立即签到</button>'
+          + '<span style="font-size:11px;color:var(--text-faint);margin-left:8px">服务端每半小时自动签到一次,此处可立即触发</span></div>' : '';
+      return '<div class="info-section"><div class="info-section-title">签到活动</div><div class="info-grid">'
+        + '<span class="info-label">今日状态</span><span class="info-value">' + stateHtml + '</span>'
+        + '<span class="info-label">连续签到</span><span class="info-value">' + (ck.streakCurrent != null ? ck.streakCurrent + ' 天' : '-') + '</span>'
+        + '<span class="info-label">累计签到</span><span class="info-value">' + (ck.cumulativeDays != null ? ck.cumulativeDays + ' 天' : '-') + '</span>'
+        + '<span class="info-label">签到月份</span><span class="info-value">' + esc(ck.monthLabel || '-') + '</span>'
+        + '<span class="info-label">今日奖励</span><span class="info-value">' + reward + '</span>'
+        + '<span class="info-label">明日奖励</span><span class="info-value">' + tomorrow + '</span>'
+        + errHtml + msHtml
+        + '</div>' + runBtn + '</div>';
+    }
+
+    // 立即签到:触发服务端一轮签到(幂等),完成后强刷该卡并重渲染详情
+    function runCheckinNow(index, btn) {
+      var old = btn ? btn.textContent : '';
+      if (btn) { btn.disabled = true; btn.textContent = '签到中…'; }
+      fetch(API_PREFIX + '/api/checkin/run', { method: 'POST', headers: authHeaders() })
+        .then(function(r){return r.json()})
+        .then(function(d) {
+          var mine = (d.results || []).filter(function(x){return x.index === index;})[0];
+          if (d.error) alert('签到失败: ' + d.error);
+          else if (!mine) alert('该账号未配置签到接口');
+          else if (mine.state === 'done') { if (btn) btn.textContent = '已完成'; setTimeout(function(){ showDetail(index); }, 600); }
+          else { alert('签到失败: ' + (mine.message || '未知错误')); if (btn) { btn.disabled = false; btn.textContent = old; } }
+          refreshCard(index);
+        })
+        .catch(function(e) {
+          alert('请求失败: ' + e.message);
+          if (btn) { btn.disabled = false; btn.textContent = old; }
+        });
+    }
+
     function renderSub2apiDetail(index, acc) {
       var s2a = sub2apiUnpack(acc.data);
       var me = s2a.me, sub = s2a.sub || {}, grp = sub.group || {};
@@ -97,6 +144,9 @@
         + '<span class="info-label">并发</span><span class="info-value">' + ((me && me.concurrency != null) ? me.concurrency : '-') + '</span>'
         + '<span class="info-label">账户状态</span><span class="info-value">' + esc((me && me.status) || '-') + '</span>'
         + '</div></div>';
+
+      var ckD = (acc.data && acc.data.checkin) || null;
+      if (ckD) { html += sub2apiCheckinSection(index, ckD); }
 
       if (s2a.stats) {
         var stD = s2a.stats;

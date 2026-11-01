@@ -17,6 +17,7 @@ var registerAccounts = require('./routes/accounts');
 var registerModelUsage = require('./routes/model-usage');
 var registerExpire = require('./routes/expire');
 var registerConsoleUrl = require('./routes/console-url');
+var registerCheckin = require('./routes/checkin');
 
 module.exports = function(app) {
     registerAuth(app);
@@ -33,6 +34,7 @@ module.exports = function(app) {
     registerModelUsage(app);
     registerExpire(app);
     registerConsoleUrl(app);
+    registerCheckin(app);
 };
 
 // 供单测覆盖的纯函数与内部状态(不走 HTTP 路由)。
@@ -95,3 +97,11 @@ module.exports._planIpWhitelistChanges = registerIpWhitelistBatch._planIpWhiteli
 module.exports._applyIpWhitelist = registerIpWhitelistBatch._applyIpWhitelist;
 module.exports._runIpBatchTask = registerIpWhitelistBatch._runIpBatchTask;
 module.exports._ipBatchWithTimeout = registerIpWhitelistBatch._withTimeout;
+var checkin = require('./checkin');
+module.exports._checkinDayKey = checkin.checkinDayKey;
+module.exports._checkinConfigured = checkin.checkinConfigured;
+module.exports._resolveCheckinUrl = checkin.resolveCheckinUrl;
+module.exports._normalizeCheckinStatus = checkin.normalizeCheckinStatus;
+module.exports._fetchCheckinStatus = checkin.fetchCheckinStatus;
+module.exports._runCheckinCycle = checkin.runCheckinCycle;
+module.exports._resetCheckinState = checkin._resetCheckinState;

@@ -40,12 +40,19 @@ function saveSub2apiToken(index, newAuth) {
     } catch (e) { /* ignore write errors */ }
 }
 
-// sub2api GET,401(或无 token)且有账密时自动重登后重试。
+// sub2api 请求(GET/POST),401(或无 token)且有账密时自动重登后重试。
 // 每次调用都从 account 取最新 token(前一次调用重登后已回写 account.authorization),避免携带过期 token 重复登录。
-async function sub2apiGet(account, index, baseUrl, path, headers) {
+// url 支持绝对地址(签到活动等站内其他模块)或以 / 开头的路径(拼 baseUrl)。
+async function sub2apiCall(account, index, baseUrl, method, url, headers, body) {
+    var full = /^https?:\/\//i.test(url) ? url : baseUrl + url;
     var h = Object.assign({}, headers, { authorization: account.authorization || (headers && headers.authorization) || '' });
+    var send = function(authz) {
+        return method === 'POST'
+            ? httpsRequest('POST', full, Object.assign({}, h, { authorization: authz }), body || {})
+            : httpsGet(full, Object.assign({}, h, { authorization: authz }));
+    };
     try {
-        return await httpsGet(baseUrl + path, h);
+        return await send(h.authorization);
     } catch (authErr) {
         var creds = sub2apiCreds(account);
         var isAuthErr = authErr.message && authErr.message.indexOf('HTTP 401') >= 0;
@@ -54,8 +61,16 @@ async function sub2apiGet(account, index, baseUrl, path, headers) {
         saveSub2apiToken(index, newAuth);
         // 本进程内后续请求立即用新 token（accounts.json 也可能被其他写覆盖，以内存更新为准）
         account.authorization = newAuth;
-        return await httpsGet(baseUrl + path, Object.assign({}, h, { authorization: newAuth }));
+        return await send(newAuth);
     }
+}
+
+async function sub2apiGet(account, index, baseUrl, path, headers) {
+    return sub2apiCall(account, index, baseUrl, 'GET', path, headers, null);
+}
+
+async function sub2apiPost(account, index, baseUrl, url, headers, body) {
+    return sub2apiCall(account, index, baseUrl, 'POST', url, headers, body || {});
 }
 
 async function fetchSub2apiUsage(account, index) {
@@ -74,6 +89,12 @@ async function fetchSub2apiUsage(account, index) {
             var statsJson = await sub2apiGet(account, index, baseUrl, '/api/v1/usage/dashboard/stats?timezone=Asia%2FShanghai', headers);
             stats = (statsJson && statsJson.data) || null;
         } catch (statsErr) { /* 无用量统计接口时忽略 */ }
+        // 签到活动状态(账号配 checkin_info_url 才拉):软失败仅置 error,不影响主数据
+        var checkinData = null;
+        if (account.checkin_info_url) {
+            var checkin = require('../checkin');   // 惰性 require:checkin 顶层引用本模块,需打破环
+            checkinData = await checkin.fetchCheckinStatus(account, index);
+        }
         var subs = (subsJson && Array.isArray(subsJson.data)) ? subsJson.data : [];
         // 当前订阅:active 优先;已过期的仅 3 天内保留展示,超过则视为无订阅(卡片以余额用量为主)
         var current = subs.filter(function(s) { return s && s.status === 'active'; })[0] || null;
@@ -96,7 +117,7 @@ async function fetchSub2apiUsage(account, index) {
             isPublic: account.isPublic,
             alias: account.alias || undefined,
             baseUrl: baseUrl,
-            data: { me: (meJson && meJson.data) || null, subscriptions: subs, current: current, stats: stats },
+            data: { me: (meJson && meJson.data) || null, subscriptions: subs, current: current, stats: stats, checkin: checkinData },
             success: true,
             cachedAt: Date.now()
         };
@@ -126,5 +147,7 @@ module.exports = {
     sub2apiCreds: sub2apiCreds,
     loginSub2api: loginSub2api,
     saveSub2apiToken: saveSub2apiToken,
+    sub2apiGet: sub2apiGet,
+    sub2apiPost: sub2apiPost,
     fetchSub2apiUsage: fetchSub2apiUsage
 };

@@ -236,6 +236,9 @@
         + '<div class="form-group"><label class="form-label">Authorization Token（可不填）</label><textarea class="form-input" id="f_sub2api_auth" placeholder="Bearer eyJ...；官方有效期仅 24h，配置账密后会自动登录刷新">' + esc(a.authorization||'') + '</textarea></div>'
         + '<div class="form-row"><div class="form-group"><label class="form-label">登录邮箱（推荐）</label><input class="form-input" id="f_sub2api_email" placeholder="用于 Token 过期时自动登录" value="' + esc(a.sub2api_email||a.huoli_email||'') + '"></div>'
         + '<div class="form-group"><label class="form-label">登录密码（推荐）</label><input class="form-input" type="password" id="f_sub2api_password" placeholder="与邮箱同时填写才启用自动重登" value="' + esc(a.sub2api_password||a.huoli_password||'') + '" autocomplete="new-password"></div></div>'
+        + '<div class="form-row"><div class="form-group"><label class="form-label">签到接口（可选）</label><input class="form-input" id="f_checkin" placeholder="POST https://super-nb.me/activity/v1/checkin" value="' + esc(a.checkin_url||'') + '"></div>'
+        + '<div class="form-group"><label class="form-label">签到信息接口（可选）</label><input class="form-input" id="f_checkin_info" placeholder="GET https://super-nb.me/activity/v1/checkin/status" value="' + esc(a.checkin_info_url||'') + '"></div></div>'
+        + '<div style="font-size:11px;color:var(--text-faint);margin:-4px 0 12px">站点有签到活动时配置：卡片显示 今日已签到/未签到，服务端每日自动签到（可填完整 URL 或以 / 开头的路径；签到信息接口用于显示状态，建议一并配置）。</div>'
         + '</div>'
         + '<div id="f_volc_fields" style="display:' + volcDisp + '">'
         + '<div class="form-group"><label class="form-label">套餐类型</label><div style="display:flex;gap:18px;align-items:center;flex-wrap:wrap">'
@@ -313,7 +316,8 @@
     function parseFetch() {
       var t = document.getElementById('f_fetch').value; if (!t.trim()) return;
       var isYescode = /yes\.vg/i.test(t);
-      var isSub2api = /\/api\/v1\/(auth\/login|auth\/me|subscriptions)/i.test(t);
+      // sub2api:任意 /api/v1/* 端点或站内活动模块 /activity/v1/*(如 super-nb 签到)
+      var isSub2api = /\/(?:api|activity)\/v1\//i.test(t);
       var isVolc = /volcengine\.com|console\.volcengine/i.test(t);
       var isTelecom = /token\.telecomjs\.com|card-with-time-range|satoken/i.test(t);
       var isGlm = /bigmodel\.cn|bigmodel-organization|bigmodel-project/i.test(t);
@@ -375,21 +379,28 @@
         return;
       }
 
-      if (isSub2api && !isGlm && !isYescode) {
+      if (isSub2api && !isGlm && !isYescode && !isVolc && !isTelecom && !isQwen && !isMinimax && !isStepfun && !isZenmux) {
         document.getElementById('f_platform').value = 'sub2api';
         onPlatformChange();
-        // 站点地址取 fetch URL 的 origin
-        var s2Base = t.match(/https?:\/\/[^\/"'\s]+\/api\/v1\//);
-        if (s2Base) { document.getElementById('f_sub2api_base').value = s2Base[0].replace(/\/api\/v1\/$/, ''); }
+        // 站点地址取第一个 URL 的 origin(fetch/cURL 中请求 URL 总在最前)
+        var s2Base = t.match(/https?:\/\/[^\/"'\s]+/);
+        if (s2Base) { document.getElementById('f_sub2api_base').value = s2Base[0]; }
         var auth = extractHeader(t, 'authorization');
         if (auth) { document.getElementById('f_sub2api_auth').value = auth; }
+        // 签到活动(super-nb 模式 /activity/v1/checkin):自动补全签到接口与签到信息接口
+        var ckUrl = t.match(/https?:\/\/[^"'\s]+\/activity\/v1\/checkin/i);
+        if (ckUrl) {
+          var ckBase = ckUrl[0].replace(/\/activity\/v1\/checkin.*$/i, '');
+          document.getElementById('f_checkin').value = ckBase + '/activity/v1/checkin';
+          document.getElementById('f_checkin_info').value = ckBase + '/activity/v1/checkin/status';
+        }
         // 尝试从 body 中解析 email/password（登录接口）
         var bodyMatch = t.match(/"body"\s*:\s*"({[^"]+})"/);
         if (bodyMatch) { try { var b = JSON.parse(bodyMatch[1].replace(/\\"/g,'"').replace(/\\\\/g,'\\')); if (b.email) document.getElementById('f_sub2api_email').value = b.email; if (b.password) document.getElementById('f_sub2api_password').value = b.password; } catch(e){} }
         if (!bodyMatch) { try { var b2 = t.match(/"email"\s*:\s*"([^"]+)"[^}]*"password"\s*:\s*"([^"]+)"/); if (b2) { document.getElementById('f_sub2api_email').value = b2[1]; document.getElementById('f_sub2api_password').value = b2[2]; } } catch(e){} }
         if (!s2Base) { alert('未能解析出站点地址，请手动填写 BaseUrl。'); }
         else if (!auth && !document.getElementById('f_sub2api_email').value) {
-          alert('未能解析出 Authorization 或登录账密。\n\n推荐复制登录接口（auth/login）请求 → Copy as fetch 粘贴，\n邮箱密码会自动解析；Token 失效后自动重登续期。');
+          alert('未能解析出 Authorization 或登录账密。\n\n推荐复制登录接口（auth/login）请求 → Copy as fetch 粘贴，\n邮箱密码会自动解析；Token 失效后自动重登续期。\n\n仅更新 Token 也可复制任意已登录接口（如签到 status）的请求粘贴。');
         }
         return;
       }
@@ -447,6 +458,14 @@
         return;
       }
 
+      // 兜底:仅当确有智谱特征(URL 域名或 bigmodel 专属头),或用户当前就选的智谱时,才按智谱填充;
+      // 否则保留用户当前选择的平台,不强行切回智谱。
+      var glmOrg = extractHeader(t, 'bigmodel-organization');
+      var curPlat = document.getElementById('f_platform').value;
+      if (!isGlm && !glmOrg && curPlat !== 'glm') {
+        alert('未能识别出已知平台特征，已保留当前选择的平台；\n请手动选择平台并填写，或改用 Copy as cURL 复制请求后再粘贴。');
+        return;
+      }
       document.getElementById('f_platform').value = 'glm';
       onPlatformChange();
       var n = 0;
@@ -486,6 +505,11 @@
         body.authorization = document.getElementById('f_sub2api_auth').value.trim();
         body.sub2api_email = document.getElementById('f_sub2api_email').value.trim();
         body.sub2api_password = document.getElementById('f_sub2api_password').value;
+        // 签到活动:两个接口都可配,信息接口缺失时仅自动签到、卡片不显示状态
+        body.checkin_url = document.getElementById('f_checkin').value.trim() || undefined;
+        body.checkin_info_url = document.getElementById('f_checkin_info').value.trim() || undefined;
+        if (body.checkin_url && !/^(https?:\/\/|\/)/.test(body.checkin_url)) { alert('签到接口需以 http(s):// 或 / 开头'); return; }
+        if (body.checkin_info_url && !/^(https?:\/\/|\/)/.test(body.checkin_info_url)) { alert('签到信息接口需以 http(s):// 或 / 开头'); return; }
         if (!body.name) { alert('账号名称不能为空'); return; }
         if (!body.base_url || !/^https?:\/\//.test(body.base_url)) { alert('站点地址必填，需以 http(s):// 开头'); return; }
         // token 24h 过期:token 与账密至少配一样,配了账密即可自动续期

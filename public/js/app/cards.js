@@ -105,6 +105,7 @@
         var mpH = Math.max(dPctH, wPctH, mPctH);
         var planBadgeH = sub ? '<span class="level-badge">' + esc(grp.name || '-') + '</span>' : '';
         var balanceBadgeH = (me && me.balance != null) ? '<span class="level-badge level-badge-ok">余额 $' + (+me.balance).toFixed(2) + '</span>' : '';
+        var checkinBadgeH = sub2apiCheckinBadge(acc.data && acc.data.checkin);
         var expHtmlH = '';
         if (sub && sub.expires_at) {
           var expDateH = new Date(sub.expires_at);
@@ -117,7 +118,7 @@
         return '<div class="card" id="card-' + i + '"><div class="card-header">' + headerLeft
           + '<div class="card-header-right">' + btn + '<span class="card-status ' + getStatusClass(mpH) + '">' + getStatusText(mpH) + '</span></div></div>'
           + '<div class="card-body">' + bodyHtml + '</div>' + expHtmlH
-          + '<div class="card-footer"><div class="card-footer-left">' + balanceBadgeH + planBadgeH + cache + '</div>'
+          + '<div class="card-footer"><div class="card-footer-left">' + checkinBadgeH + balanceBadgeH + planBadgeH + cache + '</div>'
           + '<button class="detail-btn" onclick="showDetail(' + i + ')">详情</button></div></div>';
       }
 

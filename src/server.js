@@ -19,6 +19,9 @@ require('./minimax-proxy')(app);
 // 用量监控 API(路由前缀 /api/...)
 api(app);
 
+// 每日自动签到(账号配 checkin_url 才生效;定时器 unref,不影响进程退出)
+require('./api/checkin').startCheckinScheduler();
+
 const server = app.listen(port, host, () => {
   console.log('用量监控已启动:');
   console.log('  本机访问:  http://localhost:' + port);
