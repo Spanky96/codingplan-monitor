@@ -87,9 +87,16 @@
       }).join('');
       var errHtml = ck.error
         ? '<span class="info-label">状态获取</span><span class="info-value" style="color:#cf1322">' + esc(ck.error) + '</span>' : '';
-      var runBtn = isAdmin()
-        ? '<div style="margin-top:10px"><button class="btn-primary" style="padding:5px 16px;font-size:12px" onclick="runCheckinNow(' + index + ', this)">立即签到</button>'
-          + '<span style="font-size:11px;color:var(--text-faint);margin-left:8px">服务端每半小时自动签到一次,此处可立即触发</span></div>' : '';
+      // 已签到时不再显示「立即签到」(站点只会 409),只留自动签到说明;未签到/状态异常才可手动触发
+      var runBtn = '';
+      if (isAdmin()) {
+        runBtn = '<div style="margin-top:10px">'
+          + (ck.checkedInToday === true
+            ? '<span style="font-size:11px;color:var(--text-faint)">今日已完成,明日 0 点后服务端会自动签到(约半小时内)</span>'
+            : '<button class="btn-primary" style="padding:5px 16px;font-size:12px" onclick="runCheckinNow(' + index + ', this)">立即签到</button>'
+              + '<span style="font-size:11px;color:var(--text-faint);margin-left:8px">服务端每半小时自动签到一次,此处可立即触发</span>')
+          + '</div>';
+      }
       return '<div class="info-section"><div class="info-section-title">签到活动</div><div class="info-grid">'
         + '<span class="info-label">今日状态</span><span class="info-value">' + stateHtml + '</span>'
         + '<span class="info-label">连续签到</span><span class="info-value">' + (ck.streakCurrent != null ? ck.streakCurrent + ' 天' : '-') + '</span>'
@@ -101,7 +108,7 @@
         + '</div>' + runBtn + '</div>';
     }
 
-    // 立即签到:触发服务端一轮签到(幂等),完成后强刷该卡并重渲染详情
+    // 立即签到:触发服务端一轮签到(幂等),成功后强刷该卡数据再重渲染详情(按钮随之隐藏)
     function runCheckinNow(index, btn) {
       var old = btn ? btn.textContent : '';
       if (btn) { btn.disabled = true; btn.textContent = '签到中…'; }
@@ -109,11 +116,15 @@
         .then(function(r){return r.json()})
         .then(function(d) {
           var mine = (d.results || []).filter(function(x){return x.index === index;})[0];
-          if (d.error) alert('签到失败: ' + d.error);
-          else if (!mine) alert('该账号未配置签到接口');
-          else if (mine.state === 'done') { if (btn) btn.textContent = '已完成'; setTimeout(function(){ showDetail(index); }, 600); }
-          else { alert('签到失败: ' + (mine.message || '未知错误')); if (btn) { btn.disabled = false; btn.textContent = old; } }
-          refreshCard(index);
+          if (d.error) { alert('签到失败: ' + d.error); if (btn) { btn.disabled = false; btn.textContent = old; } return; }
+          if (!mine) { alert('该账号未配置签到接口'); if (btn) { btn.disabled = false; btn.textContent = old; } return; }
+          if (mine.state !== 'done') { alert('签到失败: ' + (mine.message || '未知错误')); if (btn) { btn.disabled = false; btn.textContent = old; } return; }
+          if (btn) btn.textContent = '已完成';
+          // 等强刷数据回来再重渲染,避免详情仍显示未签到
+          fetch(API_PREFIX + '/api/usage/' + index + '?force=1', { headers: authHeaders() })
+            .then(function(r){return r.json()})
+            .then(function(acc){ updateCard(index, acc); showDetail(index); })
+            .catch(function(){ showDetail(index); });
         })
         .catch(function(e) {
           alert('请求失败: ' + e.message);
