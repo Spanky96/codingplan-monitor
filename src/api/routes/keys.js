@@ -191,22 +191,26 @@ module.exports = function(app) {
             if (!useType || !Number.isInteger(recordId) || recordId <= 0) {
                 return res.status(400).json({ error: '参数不正确,需要 type 与 recordId' });
             }
-            // 用前校验:页面上的卡可能已被使用或过期,以官方最新列表为准
+            // 用前校验:页面上的卡可能已被使用或过期,以官方最新列表为准;
+            // 同时取该卡 grantType 一并透传(官方 use 接口已强制要求,
+            // 缺失时报「指定的重置次数不可用,请刷新后重试」——不信任前端传值)
             var listJson = await withGlmAuthRetry(account, i, function(acc) {
                 return httpsGet(resetCardsUrl(), makeHeaders(acc));
             });
-            var stillValid = parseGlmResetCards(listJson && listJson.data).some(function(c) {
+            var matched = parseGlmResetCards(listJson && listJson.data).find(function(c) {
                 return c.type === cardType && c.recordId === recordId;
             });
-            if (!stillValid) return res.status(409).json({ error: '该重置卡已使用、已过期或不存在,请刷新后重试' });
+            if (!matched) return res.status(409).json({ error: '该重置卡已使用、已过期或不存在,请刷新后重试' });
 
+            var useBody = {
+                targetType: 'PERSONAL',
+                resetType: useType,
+                recordId: recordId,
+                requestId: uuidV4()
+            };
+            if (matched.grantType) useBody.grantType = matched.grantType;
             var json = await withGlmAuthRetry(account, i, function(acc) {
-                return httpsRequest('POST', resetCardUseUrl(), makeHeaders(acc), {
-                    targetType: 'PERSONAL',
-                    resetType: useType,
-                    recordId: recordId,
-                    requestId: uuidV4()
-                });
+                return httpsRequest('POST', resetCardUseUrl(), makeHeaders(acc), useBody);
             });
             if (json && json.code != null && json.code !== 200) throw new Error(json.msg || '使用失败');
 

@@ -170,12 +170,18 @@
       var text = esc(title);
       return '<span class="reset-badge" title="" data-tooltip="' + text + '" aria-label="' + text + '" tabindex="0">需要重置</span>';
     }
+    // 重置卡类型标记:DIRECT=定向发放(新一批,大 recordId)/ GLOBAL=全员通用(老一批);旧缓存无该字段不显示
+    function resetCardGrantTag(c) {
+      if (c && c.grantType === 'DIRECT') return ' [定向]';
+      if (c && c.grantType === 'GLOBAL') return ' [通用]';
+      return '';
+    }
     // 重置卡(Coding Plan):卡片与列表徽章,hover 显示各卡到期时间;无有效卡返回空串
     function resetCardBadgeHTML(acc) {
       var rc = acc && acc.resetCards;
       if (!rc || !rc.count) return '';
       var lines = (rc.cards || []).map(function(c) {
-        return (c.type === 'fiveHour' ? '5小时卡' : '周卡') + (c.expireTime ? ' · ' + c.expireTime + ' 到期' : '');
+        return (c.type === 'fiveHour' ? '5小时卡' : '周卡') + resetCardGrantTag(c) + (c.expireTime ? ' · ' + c.expireTime + ' 到期' : '');
       });
       var tip = '有效重置卡 ' + rc.count + ' 张' + (lines.length ? ':\n' + lines.join('\n') : '');
       if (rc.checkedAt) tip += '\n检查于 ' + formatTime(rc.checkedAt);
@@ -194,7 +200,7 @@
           ? '<button class="use-card-btn" onclick="useResetCard(this,' + index + ',\'' + esc(c.type) + '\',' + c.recordId + ')">使用</button>'
           : '';
         return '<span class="info-label">' + (c.type === 'fiveHour' ? '5小时重置卡' : '周重置卡') + ' ' + (n + 1) + '</span>'
-          + '<span class="info-value">' + esc(c.expireTime || '-') + ' 到期 ' + useBtn + '</span>';
+          + '<span class="info-value">' + esc(c.expireTime || '-') + ' 到期 ' + esc(resetCardGrantTag(c).trim()) + ' ' + useBtn + '</span>';
       }).join('');
       var checked = rc.checkedAt ? '<span class="info-label">检查时间</span><span class="info-value">' + esc(formatTime(rc.checkedAt)) + '</span>' : '';
       return '<div class="info-section"><div class="info-section-title">重置卡 · ' + rc.count + ' 张有效</div>'

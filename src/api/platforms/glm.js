@@ -73,7 +73,8 @@ function decodeJwtUserType(authorization) {
 }
 
 // 解析重置卡列表:合并 5小时/周两类卡,仅保留 available 的有效卡
-// recordId 供 use 接口定位具体卡片,必须透传
+// recordId 供 use 接口定位具体卡片;grantType(GLOBAL 全员老卡 / DIRECT 定向新卡)
+// 官方 use 接口已强制要求透传,缺失时报「指定的重置次数不可用,请刷新后重试」
 function parseGlmResetCards(data) {
     var cards = [];
     var groups = [['fiveHourResets', 'fiveHour'], ['weekResets', 'week']];
@@ -82,7 +83,12 @@ function parseGlmResetCards(data) {
         if (!Array.isArray(list)) return;
         list.forEach(function(c) {
             if (c && c.available) {
-                cards.push({ type: g[1], recordId: c.recordId != null ? c.recordId : null, expireTime: c.expireTime || null });
+                cards.push({
+                    type: g[1],
+                    recordId: c.recordId != null ? c.recordId : null,
+                    grantType: c.grantType || null,
+                    expireTime: c.expireTime || null
+                });
             }
         });
     });
