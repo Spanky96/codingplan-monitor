@@ -7,7 +7,7 @@ var { encryptSecret, decryptSecretOrNull } = require('../lib/crypto');
 var glmAccountsFile = config.accountsFile;
 
 // 需要加密落盘的凭证字段(密码类 + 登录态类)
-var CREDENTIAL_SECRET_FIELDS = ['glm_password', 'yescode_password', 'sub2api_password', 'cookie', 'authorization', 'satoken'];
+var CREDENTIAL_SECRET_FIELDS = ['glm_password', 'yescode_password', 'sub2api_password', 'sub2api_refresh_token', 'cookie', 'authorization', 'satoken'];
 
 function decryptAccounts(accounts) {
     return accounts.map(function(acc) {

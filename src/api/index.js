@@ -50,6 +50,7 @@ module.exports._yescodeLogin = require('./platforms/yescode').yescodeLogin;
 module.exports._fetchYesCodeUsage = require('./platforms/yescode').fetchYesCodeUsage;
 module.exports._hasYescodeLoginCredentials = require('./platforms/yescode').hasYescodeLoginCredentials;
 module.exports._loginSub2api = require('./platforms/sub2api').loginSub2api;
+module.exports._refreshSub2apiToken = require('./platforms/sub2api').refreshSub2apiToken;
 module.exports._fetchSub2apiUsage = require('./platforms/sub2api').fetchSub2apiUsage;
 module.exports._sub2apiCreds = require('./platforms/sub2api').sub2apiCreds;
 module.exports._sub2apiBaseUrl = require('./platforms/sub2api').sub2apiBaseUrl;

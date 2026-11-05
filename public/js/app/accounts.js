@@ -233,7 +233,8 @@
         + '<div id="f_sub2api_fields" style="display:' + sub2apiDisp + '">'
         + '<div class="form-row"><div class="form-group"><label class="form-label">站点别名</label><input class="form-input" id="f_sub2api_alias" placeholder="如 SUPER·NB，卡片平台角标显示用" value="' + esc(a.alias||'') + '"></div>'
         + '<div class="form-group"><label class="form-label">站点地址</label><input class="form-input" id="f_sub2api_base" placeholder="https://super-nb.me" value="' + esc(a.base_url || (origPlatform === 'huoli' ? 'https://huolilink.com' : '')) + '"></div></div>'
-        + '<div class="form-group"><label class="form-label">Authorization Token（可不填）</label><textarea class="form-input" id="f_sub2api_auth" placeholder="Bearer eyJ...；官方有效期仅 24h，配置账密后会自动登录刷新">' + esc(a.authorization||'') + '</textarea></div>'
+        + '<div class="form-group"><label class="form-label">Authorization Token（可不填）</label><textarea class="form-input" id="f_sub2api_auth" placeholder="Bearer eyJ...；官方有效期仅 24h，配置 Refresh Token 或账密后自动续期">' + esc(a.authorization||'') + '</textarea></div>'
+        + '<div class="form-group"><label class="form-label">Refresh Token（可选，推荐）</label><textarea class="form-input" id="f_sub2api_refresh" placeholder="rt_...；复制 auth/refresh 接口请求（Copy as fetch）粘贴可自动识别；Token 过期时免账密自动续期">' + esc(a.sub2api_refresh_token||'') + '</textarea></div>'
         + '<div class="form-row"><div class="form-group"><label class="form-label">登录邮箱（推荐）</label><input class="form-input" id="f_sub2api_email" placeholder="用于 Token 过期时自动登录" value="' + esc(a.sub2api_email||a.huoli_email||'') + '"></div>'
         + '<div class="form-group"><label class="form-label">登录密码（推荐）</label><input class="form-input" type="password" id="f_sub2api_password" placeholder="与邮箱同时填写才启用自动重登" value="' + esc(a.sub2api_password||a.huoli_password||'') + '" autocomplete="new-password"></div></div>'
         + '<div class="form-row"><div class="form-group"><label class="form-label">签到接口（可选）</label><input class="form-input" id="f_checkin" placeholder="POST https://super-nb.me/activity/v1/checkin" value="' + esc(a.checkin_url||'') + '"></div>'
@@ -394,13 +395,16 @@
           document.getElementById('f_checkin').value = ckBase + '/activity/v1/checkin';
           document.getElementById('f_checkin_info').value = ckBase + '/activity/v1/checkin/status';
         }
-        // 尝试从 body 中解析 email/password（登录接口）
+        // 尝试从 body 中解析 refresh_token（auth/refresh 接口）与 email/password（登录接口）
+        // fetch/cURL 复制的 body 是转义 JSON(\"key\":\"value\")，正则容忍可选反斜杠
+        var rtMatch = t.match(/\\?"refresh_token\\?"\s*:\s*\\?"([^"\\]+)/);
+        if (rtMatch) { document.getElementById('f_sub2api_refresh').value = rtMatch[1]; }
         var bodyMatch = t.match(/"body"\s*:\s*"({[^"]+})"/);
-        if (bodyMatch) { try { var b = JSON.parse(bodyMatch[1].replace(/\\"/g,'"').replace(/\\\\/g,'\\')); if (b.email) document.getElementById('f_sub2api_email').value = b.email; if (b.password) document.getElementById('f_sub2api_password').value = b.password; } catch(e){} }
-        if (!bodyMatch) { try { var b2 = t.match(/"email"\s*:\s*"([^"]+)"[^}]*"password"\s*:\s*"([^"]+)"/); if (b2) { document.getElementById('f_sub2api_email').value = b2[1]; document.getElementById('f_sub2api_password').value = b2[2]; } } catch(e){} }
+        if (bodyMatch) { try { var b = JSON.parse(bodyMatch[1].replace(/\\"/g,'"').replace(/\\\\/g,'\\')); if (b.refresh_token) document.getElementById('f_sub2api_refresh').value = b.refresh_token; if (b.email) document.getElementById('f_sub2api_email').value = b.email; if (b.password) document.getElementById('f_sub2api_password').value = b.password; } catch(e){} }
+        if (!bodyMatch) { try { var b2 = t.match(/\\?"email\\?"\s*:\s*\\?"([^"\\]+)[^}]*\\?"password\\?"\s*:\s*\\?"([^"\\]+)/); if (b2) { document.getElementById('f_sub2api_email').value = b2[1]; document.getElementById('f_sub2api_password').value = b2[2]; } } catch(e){} }
         if (!s2Base) { alert('未能解析出站点地址，请手动填写 BaseUrl。'); }
-        else if (!auth && !document.getElementById('f_sub2api_email').value) {
-          alert('未能解析出 Authorization 或登录账密。\n\n推荐复制登录接口（auth/login）请求 → Copy as fetch 粘贴，\n邮箱密码会自动解析；Token 失效后自动重登续期。\n\n仅更新 Token 也可复制任意已登录接口（如签到 status）的请求粘贴。');
+        else if (!auth && !rtMatch && !document.getElementById('f_sub2api_email').value) {
+          alert('未能解析出 Authorization、Refresh Token 或登录账密。\n\n推荐复制 auth/refresh（或 auth/login）接口请求 → Copy as fetch 粘贴，\nrefresh_token / 邮箱密码会自动解析；Token 失效后自动续期。\n\n仅更新 Token 也可复制任意已登录接口（如签到 status）的请求粘贴。');
         }
         return;
       }
@@ -503,6 +507,7 @@
         body.alias = document.getElementById('f_sub2api_alias').value.trim();
         body.base_url = document.getElementById('f_sub2api_base').value.trim().replace(/\/+$/, '');
         body.authorization = document.getElementById('f_sub2api_auth').value.trim();
+        body.sub2api_refresh_token = document.getElementById('f_sub2api_refresh').value.trim();
         body.sub2api_email = document.getElementById('f_sub2api_email').value.trim();
         body.sub2api_password = document.getElementById('f_sub2api_password').value;
         // 签到活动:两个接口都可配,信息接口缺失时仅自动签到、卡片不显示状态
@@ -512,8 +517,8 @@
         if (body.checkin_info_url && !/^(https?:\/\/|\/)/.test(body.checkin_info_url)) { alert('签到信息接口需以 http(s):// 或 / 开头'); return; }
         if (!body.name) { alert('账号名称不能为空'); return; }
         if (!body.base_url || !/^https?:\/\//.test(body.base_url)) { alert('站点地址必填，需以 http(s):// 开头'); return; }
-        // token 24h 过期:token 与账密至少配一样,配了账密即可自动续期
-        if (!body.authorization && !(body.sub2api_email && body.sub2api_password)) { alert('Authorization Token 与 登录邮箱/密码 至少填写一项；推荐填账密，Token 失效后自动重登刷新'); return; }
+        // token 24h 过期:token/refresh_token/账密至少配一样,配了 refresh_token 或账密即可自动续期
+        if (!body.authorization && !body.sub2api_refresh_token && !(body.sub2api_email && body.sub2api_password)) { alert('Authorization Token / Refresh Token / 登录邮箱密码 至少填写一项；推荐配 Refresh Token 或账密，Token 失效后自动续期'); return; }
         if ((body.sub2api_email && !body.sub2api_password) || (!body.sub2api_email && body.sub2api_password)) {
           if (!confirm('登录邮箱/密码需同时填写才会在 Token 失效时自动重登。当前只填了一项，仍要保存吗？')) return;
         }
