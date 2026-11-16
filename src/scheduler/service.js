@@ -45,7 +45,8 @@ function compute(state = store.read()) {
     const accounts = readAccounts();
     const usage = accounts.map((_, i) => cache.getCachedLastKnown(i));
     const previous = Object.fromEntries(((state.plan || {}).rows || []).map(r => [r.name, r]));
-    const result = plan({ config: state.config, accounts, usage, telemetry: aggregate(accounts), previous, now: Date.now() });
+    const result = plan({ config: state.config, accounts, usage, telemetry: aggregate(accounts), previous,
+        previousSummary: (state.plan || {}).summary || {}, now: Date.now() });
     result.rows.forEach(r => {
         const pending = state.pendingResets && state.pendingResets[r.name];
         if (pending) {

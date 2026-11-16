@@ -132,6 +132,29 @@ test('early dilution requires opt-in timing and all primary accounts to be quota
     p.config.allowDilution = false;
     assert.equal(row(p, 'Mini').weight, 0);
 });
+test('confirmed forecast enables only the fallback channel at a small weight budget, preserving native MiniMax', () => {
+    const p=withNativeMini();p.config.allowDilution=true;p.config.fallbackWhen='pressure';
+    for(const [i,name] of ['A','B'].entries()) {
+        p.usage[i].data.limits[0].percentage=i===0?70:40;
+        p.previous||(p.previous={});
+        p.previous[name]={shortRatePerHour:i===0?120:0,shortRateSamples:4};
+    }
+    let planned=plan(p);
+    assert.equal(planned.summary.fallbackAssessment.active,false);
+    p.previousSummary=planned.summary;p.now+=60000;
+    planned=plan(p);const mini=planned.rows.find(r=>r.name==='Mini');
+    assert.equal(planned.summary.fallbackAssessment.fraction,0.05);
+    assert.ok(mini.fallbackWeight>0);assert.ok(mini.nativeWeight>0);
+    assert.ok(mini.fallbackWeight<=planned.rows.filter(r=>r.role==='primary').reduce((n,r)=>n+r.weight,0)*0.05);
+    assert.match(mini.reasons.join('；'),/备用分流已启用/);
+    p.config.allowDilution=false;assert.equal(row(p,'Mini').fallbackWeight,0);
+});
+test('a paid placeholder without balance data is not reported as confirmed empty balance or silently enabled',()=>{
+    const p=fixture();p.config.allowPaid=true;p.config.fallbackWhen='pressure';p.usage[2].data={};
+    p.usage[0].data.limits[0].percentage=p.usage[1].data.limits[0].percentage=90;
+    assert.equal(row(p,'Paid').weight,0);assert.match(row(p,'Paid').reasons.join('；'),/未提供余额数据/);
+    p.config.accounts[2].unmetered=true;assert.ok(row(p,'Paid').weight>0);assert.equal(row(p,'Mini').fallbackWeight,0);
+});
 test('automatic decisions may replenish with opt-in; slow mode and missing permission do not', () => {
     const p = exhaustedWithCards(); p.config.accounts[0].mode = 'auto';
     assert.ok(row(p, 'A').reset);

@@ -1,0 +1,63 @@
+'use strict';
+const MINUTE = 60000, HOUR = 60 * MINUTE;
+
+// Forecast capacity, not token consumption. Only official quota deltas contribute.
+function assessFallback({ rows, previous = {}, config, now, recentDemand }) {
+    const primary = rows.filter(r => r.role === 'primary' && r.nativeChannels);
+    const ready = primary.filter(r => r.raw > 0 && !r.limited);
+    const capacity = ready.reduce((sum, r) => sum + r.concurrency, 0);
+    const current = primary.reduce((sum, r) => sum + (r.observedConcurrency || 0), 0);
+    const consecutive = previous.at && now >= previous.at && now - previous.at <= 90000;
+    const old = consecutive ? previous : {};
+    const demand = Math.max(current, (old.demand || 0) * 0.8 + current * 0.2);
+    const horizon = now + 45 * MINUTE, events = [];
+    let atRiskCapacity = 0;
+    for (const r of ready) {
+        const losses = ['short', 'weekly'].map(label => {
+            const used = r[label + 'Used'], rate = r[label + 'RatePerHour'];
+            const resetAt = r[label + 'ResetAt'];
+            if (!(used >= 50 && used < 100 && rate > 0 && r[label + 'RateSamples'] >= 3 && resetAt > now)) return Infinity;
+            const end = now + (100 - used) / rate * HOUR;
+            return end + 15 * MINUTE < resetAt ? end : Infinity;
+        });
+        const end = Math.min(...losses);
+        if (end < horizon) {
+            atRiskCapacity += r.concurrency;
+            events.push({ at: end, delta: -r.concurrency });
+        }
+    }
+    for (const r of primary.filter(r => r.state === 'exhausted')) {
+        const blocked = ['short', 'weekly'].filter(label => r[label + 'Used'] >= 100);
+        if (!blocked.length) continue;
+        const recoverAt = Math.max(...blocked.map(label => r[label + 'ResetAt'] || Infinity));
+        if (recoverAt > now && recoverAt < horizon) {
+            // Estimate the conservative initial capacity; actual reopening still requires fresh usage.
+            events.push({ at: recoverAt, delta: Math.min(2, r.maxConcurrency) });
+        }
+    }
+    events.sort((a, b) => a.at - b.at);
+    let projected = capacity, minimum = capacity;
+    for (let i = 0; i < events.length; i++) {
+        projected += events[i].delta;
+        const until = i + 1 < events.length ? events[i + 1].at : horizon;
+        // A brief gap immediately before natural recovery does not justify model substitution.
+        if (until - events[i].at >= 5 * MINUTE) minimum = Math.min(minimum, projected);
+    }
+    const allTight = ready.length > 0 && ready.every(r => r.shortUsed >= 85 || r.weeklyUsed >= 95);
+    const overloaded = capacity > 0 && demand >= capacity * 0.85;
+    const forecast = capacity > 0 && atRiskCapacity >= capacity * 0.4 && minimum < capacity && demand >= minimum * 0.75;
+    const permitted = config.fallbackWhen === 'pressure' && recentDemand && capacity > 0 && (config.allowPaid || config.allowDilution);
+    const triggered = permitted && (allTight || overloaded || forecast);
+    const pendingSince = triggered ? old.pendingSince || now : 0;
+    const confirmed = triggered && (allTight || now - pendingSince >= MINUTE);
+    const calmSince = !triggered && old.active ? old.calmSince || now : 0;
+    const retained = permitted && old.active && (!calmSince || now - calmSince < 3 * MINUTE);
+    const active = !!(confirmed || retained);
+    const fraction = active ? confirmed ? allTight ? 0.15 : overloaded ? 0.10 : 0.05 : old.fraction : 0;
+    const reason = active && !confirmed ? '恢复观察，暂时保留小比例分流' : allTight ? '可用主力额度普遍偏紧'
+        : overloaded ? '主力并发持续接近承接上限' : forecast ? '预计 45 分钟内可用并发下降至 ' + minimum + '，已计入临近自然恢复' : '主力承接余量足够';
+    return { at: now, active, pendingSince, calmSince, fraction, reason, demand, capacity,
+        projectedCapacity: minimum, atRiskCapacity, horizonMinutes: 45 };
+}
+
+module.exports = { assessFallback };

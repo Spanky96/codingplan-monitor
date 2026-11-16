@@ -4,6 +4,7 @@
 const { channelCounts } = require('./channels');
 const { scoreAccount } = require('../weights');
 const { concurrencyCeiling, resetAllowed, quotaLink, chooseMode, chooseConcurrency } = require('./adaptation');
+const { assessFallback } = require('./fallback');
 const HOUR = 3600000;
 const EXHAUSTED = 100;
 const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
@@ -38,7 +39,7 @@ function validCards(account, now) {
     ).map(c => ({ ...c, expiresAt: timestamp(c.expireTime) })).sort((a, b) => a.expiresAt - b.expiresAt);
 }
 
-function plan({ config, accounts, usage, telemetry = {}, previous = {}, now }) {
+function plan({ config, accounts, usage, telemetry = {}, previous = {}, previousSummary = {}, now }) {
     const primaryPolicies = config.accounts.filter(p => p.role === 'primary' && !p.paused);
     const observed = primaryPolicies.reduce((n, p) => n + ((telemetry[p.name] || {}).current || 0), 0);
     const lastDemandAt = Math.max(0, ...primaryPolicies.map(p => (telemetry[p.name] || {}).demandAt || 0),
@@ -123,6 +124,7 @@ function plan({ config, accounts, usage, telemetry = {}, previous = {}, now }) {
         }
         if (policy.role === 'paid' && !policy.unmetered) {
             const d = cached.data || {};
+            if (d.balance == null && d.platformGiftBalance == null) return stop('stale', '未提供余额数据，需允许无余额数据的按量占位才可兜底');
             if (!(Number(d.balance || 0) + Number(d.platformGiftBalance || 0) > 0)) return stop('exhausted', '按量账号无可用余额');
         }
         if (genericScore) {
@@ -157,8 +159,9 @@ function plan({ config, accounts, usage, telemetry = {}, previous = {}, now }) {
     });
     const primaryReady = rows.filter(r => r.role === 'primary' && r.nativeChannels && r.raw > 0 && !r.limited);
     const hasPrimary = primaryReady.length > 0;
-    const quotaTight = hasPrimary && primaryReady.every(r => r.shortUsed >= 85 || r.weeklyUsed >= 95);
-    const earlyFallback = config.fallbackWhen === 'pressure' && observed > 0 && quotaTight;
+    const fallbackAssessment = assessFallback({ rows, previous: previousSummary.fallbackAssessment,
+        config, now, recentDemand: demandNow });
+    const earlyFallback = fallbackAssessment.active;
     rows.forEach(r => {
         if (r.raw && r.role === 'paid' && hasPrimary && !earlyFallback) {
             r.raw = 0; r.state = 'standby'; r.reasons = ['按量渠道待命'];
@@ -184,7 +187,7 @@ function plan({ config, accounts, usage, telemetry = {}, previous = {}, now }) {
     });
     const primaryWeight = rows.filter(r => r.role === 'primary' && r.nativeChannels).reduce((n, r) => n + r.weight, 0);
     const fallbackPools = rows.filter(r => r.weight > 0 && (r.fallbackChannels || r.role === 'paid')).length;
-    const fallbackCap = hasPrimary ? primaryWeight * 0.15 / Math.max(1, fallbackPools) : Infinity;
+    const fallbackCap = hasPrimary ? primaryWeight * (fallbackAssessment.fraction || 0.15) / Math.max(1, fallbackPools) : Infinity;
     rows.forEach(r => {
         if (r.role === 'paid' && hasPrimary) r.weight = Math.floor(Math.min(r.weight, fallbackCap) * 10) / 10;
         const total = r.nativeChannels + (fallbackAllowed ? r.fallbackChannels : 0);
@@ -192,7 +195,12 @@ function plan({ config, accounts, usage, telemetry = {}, previous = {}, now }) {
             ? Math.floor(Math.min(r.weight * r.fallbackChannels / total, fallbackCap) * 10) / 10 : 0;
         r.nativeWeight = r.nativeChannels ? Math.round((r.weight - r.fallbackWeight) * 10) / 10 : 0;
         r.weight = Math.round((r.nativeWeight + r.fallbackWeight) * 10) / 10;
-        if (r.fallbackWeight > 0 && !r.nativeChannels) { r.state = 'fallback'; r.reasons = ['主力额度紧张，启用备用分流']; }
+        if (r.fallbackWeight > 0) {
+            const reason = '备用分流已启用：' + (hasPrimary ? fallbackAssessment.reason : '主力当前不可用');
+            if (!r.nativeChannels) { r.state = 'fallback'; r.reasons = [reason]; }
+            else r.reasons.push(reason);
+        }
+        if (r.role === 'paid' && r.weight > 0) r.reasons.push('按量兜底已启用：' + (hasPrimary ? fallbackAssessment.reason : '主力当前不可用'));
     });
     rows.sort((a, b) => b.weight - a.weight || a.name.localeCompare(b.name));
     const sum = rows.reduce((v, r) => v + r.weight, 0);
@@ -211,7 +219,7 @@ function plan({ config, accounts, usage, telemetry = {}, previous = {}, now }) {
         return (shortHours < 1 && r.shortResetAt - now > HOUR) || (weeklyHours < 1 && r.weeklyResetAt - now > HOUR);
     });
     const pressure = recentDemand && (available.length === 0 ||
-        (capacity > 0 && current / capacity >= 0.75) || imminent);
+        (capacity > 0 && current / capacity >= 0.75) || imminent || fallbackAssessment.active);
     const stock = { week: 0, fiveHour: 0 };
     config.accounts.forEach(p => {
         const a = accounts.find(a => a.name === p.name);
@@ -239,7 +247,7 @@ function plan({ config, accounts, usage, telemetry = {}, previous = {}, now }) {
         if (hold) r.reset = null;
     });
     return { generatedAt: now, rows, summary: {
-        pressure, recentDemand, cardStock: stock,
+        pressure, recentDemand, cardStock: stock, fallbackAssessment,
         active: rows.filter(r => r.weight > 0).length,
         capacity: rows.filter(r => r.weight > 0).reduce((v, r) => v + r.concurrency, 0),
         paid: rows.some(r => r.role === 'paid' && r.weight > 0),
