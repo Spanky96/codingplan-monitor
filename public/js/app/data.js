@@ -1,9 +1,8 @@
     // ============ 数据加载(调度 15s 高频 / 榜单 5min 低频 + 手动) ============
 
     function loadActivityDispatch() {
-      var p = localStorage.getItem('glm_pwd') || '';
-      if (!p) { activityDispatchData = null; return; }
-      fetch(API_PREFIX + '/api/relay/activity?password=' + encodeURIComponent(p))
+      if (!canViewRelayActivity()) { activityDispatchData = null; return; }
+      fetch(API_PREFIX + '/api/relay/activity', { headers: authHeaders(), cache: 'no-store' })
         .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
         .then(function(data) {
           activityDispatchData = data; _activityDispatchError = false;
@@ -16,11 +15,10 @@
     }
 
     function loadActivityUsage(manual) {
-      var p = localStorage.getItem('glm_pwd') || '';
-      if (!p) { activityUsageData = null; return; }
+      if (!canViewRelayActivity()) { activityUsageData = null; return; }
       var btn = document.getElementById('activityUsageRefreshBtn');
       if (manual && btn) btn.classList.add('spinning');
-      fetch(API_PREFIX + '/api/relay/usage?password=' + encodeURIComponent(p) + (manual ? '&force=1' : ''))
+      fetch(API_PREFIX + '/api/relay/usage' + (manual ? '?force=1' : ''), { headers: authHeaders(), cache: 'no-store' })
         .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
         .then(function(data) {
           activityUsageData = data; _activityUsageError = false;
@@ -39,7 +37,7 @@
     }
 
     function renderActivityDispatch() {
-      if (!isAdmin()) return;
+      if (!canViewRelayActivity()) return;
       var dispatchList = document.getElementById('activityDispatchList');
       var legend = document.getElementById('activityLegend');
       var timeEl = document.getElementById('activityTime');
@@ -114,7 +112,7 @@
     }
 
     function renderActivityUsage() {
-      if (!isAdmin()) return;
+      if (!canViewRelayActivity()) return;
       var rankList = document.getElementById('activityRankList');
       var summaryEl = document.getElementById('activityTokenSummary');
       var moreBtn = document.getElementById('activityMoreBtn');
@@ -130,14 +128,14 @@
       }
 
       var users = (activityUsageData.users || []).filter(function(u) { return u.today && (u.today.total_tokens || 0) > 0; });
-      users.sort(function(a, b) { return (b.today.total_tokens || 0) - (a.today.total_tokens || 0); });
+      users.sort(function(a, b) { return (b.today.total_tokens || 0) - (a.today.total_tokens || 0) || a.user_id - b.user_id; });
 
       var hasExternal = users.some(function(u) { return (u.today.external_tokens || 0) > 0; });
-      var totalTokens = 0;
-      users.forEach(function(u) { totalTokens += u.today.total_tokens || 0; });
-      // 合计数字用强调色加粗(其余说明文字保持弱灰)
+      var totalTokens = 0, externalTokens = 0;
+      users.forEach(function(u) { totalTokens += u.today.total_tokens || 0; externalTokens += u.today.external_tokens || 0; });
+      var totalComparison = activityTokenComparison(totalTokens, externalTokens, activityUsageData.comparison);
       summaryEl.innerHTML = users.length
-        ? ('<b class="rank-total-hl">合计 ' + fmtTokensMB(totalTokens) + '</b> · ' + users.length + ' 人有消费' + (hasExternal ? ' · 含外部' : ''))
+        ? ('<b class="rank-total-hl' + totalComparison.className + '" tabindex="0" data-tooltip="' + escapeHtml(totalComparison.tooltip) + '">合计 ' + fmtTokensMB(totalTokens) + '</b> · ' + users.length + ' 人有消费' + (hasExternal ? ' · 含外部' : ''))
         : '';
 
       if (!users.length) {
@@ -170,13 +168,15 @@
             + ' data-tooltip="其他模型 ' + fmtTokens(restTokens) + '"></span>';
         }
         var extBadge = (u.today.external_tokens || 0) > 0
-          ? '<span class="rank-ext" data-tooltip="含外部资源用量 ' + fmtTokens(u.today.external_tokens) + '">外 ' + fmtTokens(u.today.external_tokens) + '</span>'
+          ? '<span class="rank-ext" data-tooltip="含外部资源用量 ' + fmtTokens(u.today.external_tokens) + '">外</span>'
           : '';
+        var tokenComparison = activityTokenComparison(u.today.total_tokens, u.today.external_tokens || 0, u.comparison);
         rhtml += '<div class="rank-row">'
           + '<div class="rank-line">'
           + '<span class="rank-no' + (i < 3 ? ' top' : '') + '">' + (i + 1) + '</span>'
+          + activityRankMovement(u, i + 1)
           + '<span class="rank-name" data-tooltip="' + escapeHtml(activityDisplayName(u)) + '">' + escapeHtml(activityDisplayName(u)) + '</span>' + extBadge
-          + '<span class="rank-val">' + fmtTokens(u.today.total_tokens)
+          + '<span class="rank-val"><span class="rank-tokens' + tokenComparison.className + '" tabindex="0" data-tooltip="' + escapeHtml(tokenComparison.tooltip) + '">' + fmtTokensMB(u.today.total_tokens) + '</span>'
           + '<span class="rank-cost">$' + (u.today.actual_cost || 0).toFixed(2) + '</span></span>'
           + '</div>'
           + '<div class="rank-bar">' + segsHtml + '</div>'
@@ -248,6 +248,8 @@
         .then(function(r) { return r.ok ? r.json() : null; })
         .then(function(f) {
           if (f && typeof f.relayEnabled === 'boolean') FEATURES.relayEnabled = f.relayEnabled;
+          FEATURES.relayViewerAllowed = !!(f && f.relayViewerAllowed);
+          activityApplyVisibility();
           if (f && typeof f.privacyForced === 'boolean') applyPrivacyForced(f.privacyForced);
         })
         .catch(function() { /* 拉取失败按未启用/不强制处理(安全默认;脱敏在后端兜底) */ })
@@ -258,17 +260,17 @@
       loadData();
       loadExpire();
       activityApplyVisibility();
-      if (FEATURES.relayEnabled && isAdmin()) { loadActivityDispatch(); loadActivityUsage(); }
+      if (canViewRelayActivity()) { loadActivityDispatch(); loadActivityUsage(); }
     });
     setInterval(function(){ loadData(); }, 5 * 60 * 1000);
     setInterval(function(){ if (isAdmin() && FEATURES.relayEnabled && !document.hidden) loadAccountTokens(); }, 60000);
     // 容量快照轻量（后端 5s 缓存）：管理员打开页面时 30s 刷新一次胶囊
     setInterval(function(){ if (isAdmin() && accountsData.length) loadCapacity(); }, 30 * 1000);
-    setInterval(function(){ if (FEATURES.relayEnabled && isAdmin() && !_activityCollapsed && !document.hidden) loadActivityDispatch(); }, 15 * 1000);
-    setInterval(function(){ if (FEATURES.relayEnabled && isAdmin() && !document.hidden) loadActivityUsage(); }, 5 * 60 * 1000);
+    setInterval(function(){ if (canViewRelayActivity() && !_activityCollapsed && !document.hidden) loadActivityDispatch(); }, 15 * 1000);
+    setInterval(function(){ if (canViewRelayActivity() && !document.hidden) loadActivityUsage(); }, 5 * 60 * 1000);
     document.addEventListener('visibilitychange', function() {
-      if (!document.hidden && FEATURES.relayEnabled && isAdmin()) {
-        loadAccountTokens();
+      if (!document.hidden && canViewRelayActivity()) {
+        if (isAdmin()) loadAccountTokens();
         if (!_activityCollapsed) loadActivityDispatch();
         loadActivityUsage();
       }

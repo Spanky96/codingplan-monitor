@@ -74,5 +74,5 @@ test('features endpoint reports disabled state', function() {
     var handler = routes['get /api/features'][0];
     var res = mockRes();
     handler({}, res);
-    assert.deepEqual(res.body, { relayEnabled: false, modelsGatewayUrl: '', privacyForced: false });
+    assert.deepEqual(res.body, { relayEnabled: false, modelsGatewayUrl: '', privacyForced: false, relayViewerAllowed: false });
 });

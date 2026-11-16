@@ -38,6 +38,7 @@ var PASSWORD = 'test-password';
 
 function mockRes() {
     var r = { statusCode: 200, body: null, ended: false };
+    r.set = function () { return r; };
     r.status = function (c) { r.statusCode = c; return r; };
     r.json = function (b) { r.body = b; r.ended = true; return r; };
     return r;

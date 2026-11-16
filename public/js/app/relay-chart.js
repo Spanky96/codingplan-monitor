@@ -23,7 +23,7 @@
     }
 
     function openRelayChart() {
-      if (!FEATURES.relayEnabled || !isAdmin()) return;
+      if (!canViewRelayActivity()) return;
       document.getElementById('relayChartOverlay').classList.add('active');
       relayChartSkeleton();
       var stale = !_relayChartState.data || (Date.now() - _relayChartState.fetchedAt) > 60 * 1000;
@@ -32,10 +32,10 @@
     }
 
     function relayChartLoad() {
-      var p = localStorage.getItem('glm_pwd') || '';
+      if (!canViewRelayActivity()) return;
       _relayChartState.loading = true;
       _relayChartState.error = false;
-      fetch(API_PREFIX + '/api/relay/usage-hourly?password=' + encodeURIComponent(p))
+      fetch(API_PREFIX + '/api/relay/usage-hourly', { headers: authHeaders(), cache: 'no-store' })
         .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
         .then(function(data) {
           _relayChartState.data = data;

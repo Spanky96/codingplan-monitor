@@ -60,5 +60,5 @@ test('features endpoint reports enabled state and gateway url', function() {
     var handler = routes['get /api/features'][0];
     var res = mockRes();
     handler({}, res);
-    assert.deepEqual(res.body, { relayEnabled: true, modelsGatewayUrl: 'https://gw.example/v1', privacyForced: false });
+    assert.deepEqual(res.body, { relayEnabled: true, modelsGatewayUrl: 'https://gw.example/v1', privacyForced: false, relayViewerAllowed: false });
 });

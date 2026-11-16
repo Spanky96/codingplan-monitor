@@ -6,6 +6,7 @@
 var config = require('../../config');
 var { httpGetJSON } = require('../../lib/http');
 var { checkAuth } = require('../auth');
+var { canViewRelayActivity } = require('../privacy');
 
 var PASSWORD = config.adminPassword;
 var SUB2API_BASE = config.sub2apiBaseUrl;
@@ -72,8 +73,9 @@ module.exports = function(app) {
     });
     app.get('/api/relay/activity', function(req, res) {
         try {
+            res.set('Cache-Control', 'private, no-store');
             if (!config.relayEnabled) return res.status(404).json({ error: 'SUB2API_BASE_URL 未配置,中转站功能未启用' });
-            if (req.query.password !== PASSWORD) return res.status(401).json({ error: 'unauthorized' });
+            if (!canViewRelayActivity(req)) return res.status(401).json({ error: 'unauthorized' });
             var now = Date.now();
             if (_relayActivityCache.data && now - _relayActivityCache.at < 10000) {
                 return res.json(_relayActivityCache.data);
@@ -92,23 +94,26 @@ module.exports = function(app) {
         } catch (err) { res.status(500).json({ error: err.message }); }
     });
 
-    var _relayUsageCache = { at: 0, data: null };
+    var _relayUsageCache = { at: 0, data: null }, relayUsagePending = null;
     app.get('/api/relay/usage', function(req, res) {
         try {
+            res.set('Cache-Control', 'private, no-store');
             if (!config.relayEnabled) return res.status(404).json({ error: 'SUB2API_BASE_URL 未配置,中转站功能未启用' });
-            if (req.query.password !== PASSWORD) return res.status(401).json({ error: 'unauthorized' });
+            if (!canViewRelayActivity(req)) return res.status(401).json({ error: 'unauthorized' });
             var now = Date.now();
-            if (req.query.force !== '1' && _relayUsageCache.data && now - _relayUsageCache.at < 4 * 60 * 1000) {
+            if (req.query.force !== '1' && _relayUsageCache.data && now - _relayUsageCache.at < 4 * 60 * 1000 &&
+                (!_relayUsageCache.data.day_end || now < Date.parse(_relayUsageCache.data.day_end))) {
                 return res.json(_relayUsageCache.data);
             }
-            httpGetJSON(relaySnapshotUrl('/api/user-usage-snapshot'), 15000).then(function(envelope) {
+            if (!relayUsagePending) relayUsagePending = httpGetJSON(relaySnapshotUrl('/api/user-usage-snapshot'), 15000).then(function(envelope) {
                 var data = (envelope && envelope.code === 0 && envelope.data) ? envelope.data : null;
                 if (!data || !Array.isArray(data.users)) {
-                    return res.status(502).json({ error: 'unexpected relay usage snapshot shape' });
+                    throw new Error('unexpected relay usage snapshot shape');
                 }
                 _relayUsageCache = { at: Date.now(), data: data };
-                res.json(data);
-            }).catch(function(err) {
+                return data;
+            }).finally(function() { relayUsagePending = null; });
+            relayUsagePending.then(function(data) { res.json(data); }).catch(function(err) {
                 res.status(502).json({ error: 'relay usage snapshot fetch failed: ' + err.message });
             });
         } catch (err) { res.status(500).json({ error: err.message }); }
@@ -120,8 +125,9 @@ module.exports = function(app) {
     var _relayUsageHourlyCache = { at: 0, data: null };
     app.get('/api/relay/usage-hourly', function(req, res) {
         try {
+            res.set('Cache-Control', 'private, no-store');
             if (!config.relayEnabled) return res.status(404).json({ error: 'SUB2API_BASE_URL 未配置,中转站功能未启用' });
-            if (req.query.password !== PASSWORD) return res.status(401).json({ error: 'unauthorized' });
+            if (!canViewRelayActivity(req)) return res.status(401).json({ error: 'unauthorized' });
             var now = Date.now();
             if (req.query.force !== '1' && _relayUsageHourlyCache.data && now - _relayUsageHourlyCache.at < 60 * 1000) {
                 return res.json(_relayUsageHourlyCache.data);

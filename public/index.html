@@ -206,7 +206,12 @@
     .toolbar-count { margin-left: auto; font-size: 12px; color: var(--text-mute); }
     .card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }
 
-    /* ===== 管理员右侧:中转站实时活动面板 ===== */
+    /* ===== 右侧:中转站实时活动面板 ===== */
+    * { scrollbar-width: thin; scrollbar-color: var(--text-faint) transparent; }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--text-faint); border-radius: 8px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--text-mute); }
     .main-layout { display: flex; gap: 16px; align-items: flex-start; }
     .main-col { flex: 1; min-width: 0; }
     .activity-panel { width: 300px; flex-shrink: 0; position: sticky; top: 12px; display: flex; flex-direction: column; gap: 10px; }
@@ -247,15 +252,23 @@
     .dp-legend-item span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     :root.dark .dp-wait { background: rgba(245,34,45,.2); color: #ff7875; }
     :root.claude .dp-wait { background: rgba(160,60,50,.14); color: #a03c32; }
-    .rank-row { padding: 6px 0 7px; }
+    .rank-row { padding: 8px 0; border-radius: 5px; }
+    .rank-row:hover { background: var(--glass-soft); }
     .rank-row + .rank-row { border-top: 1px dashed var(--glass-border-soft); }
-    .rank-line { display: flex; align-items: baseline; gap: 7px; }
+    .rank-line { display: flex; align-items: center; gap: 5px; }
     .rank-no { font-size: 11px; font-weight: 700; color: var(--text-faint); width: 14px; flex-shrink: 0; font-style: italic; }
     .rank-no.top { color: var(--accent); }
+    .rank-move { min-width: 23px; font-size: 10px; color: var(--text-faint); font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .rank-move.changed { color: var(--text-soft); font-weight: 600; }
     .rank-name { font-size: 12.5px; font-weight: 550; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
     .rank-val { font-size: 12px; font-weight: 650; color: var(--text); margin-left: auto; white-space: nowrap; font-variant-numeric: tabular-nums; }
-    .rank-cost { font-size: 10.5px; color: var(--text-faint); margin-left: 6px; font-weight: 400; white-space: nowrap; }
-    .rank-bar { display: flex; gap: 2px; height: 5px; margin-top: 5px; }
+    .rank-cost { display: block; text-align: right; font-size: 10px; color: var(--text-faint); margin-top: 1px; font-weight: 400; white-space: nowrap; }
+    .rank-tokens, .rank-move, .rank-total-hl { cursor: help; }
+    .token-less { color: #21834f; }
+    .token-more { color: #c94343; }
+    :root.dark .token-less { color: #73d6a0; }
+    :root.dark .token-more { color: #ff9292; }
+    .rank-bar { display: flex; gap: 2px; height: 4px; margin-top: 6px; overflow: hidden; border-radius: 3px; }
     .rank-bar-seg { height: 100%; border-radius: 2px; min-width: 2px; flex-shrink: 0; }
     .rank-ext { font-size: 10px; color: var(--text-mute); background: var(--glass-soft); border: 1px solid var(--glass-border-soft);
       border-radius: 7px; padding: 1px 5px; margin-left: 5px; font-weight: 400; white-space: nowrap; }
@@ -746,7 +759,7 @@
         <div class="schedule-categories" id="scheduleCategories" style="display:none"></div>
         <div class="card-grid" id="cardGrid"></div>
       </div>
-      <!-- 管理员专属:中转站用户实时调度 + 今日Token 排行(默认隐藏,登录后显示) -->
+      <!-- 中转站实时调度与今日 Token：管理员或服务端允许的内网访客可见 -->
       <aside class="activity-panel" id="activityPanel" style="display:none">
         <div class="activity-card">
           <div class="activity-head">
@@ -882,7 +895,7 @@
     </div>
   </div>
   <script src="js/app/core.js"></script>
-  <script src="js/app/theme.js"></script>
+  <script src="js/app/theme.js?v=20261116-comparison"></script>
   <script src="js/app/glm-model.js"></script>
   <script src="js/app/platform-helpers.js"></script>
   <script src="js/app/status.js"></script>
@@ -895,10 +908,10 @@
   <script src="js/app/batch-ip.js"></script>
   <script src="js/app/weights.js"></script>
   <script src="js/app/capacity.js?v=20261116-startup"></script>
-  <script src="js/app/relay.js"></script>
+  <script src="js/app/relay.js?v=20261116-comparison"></script>
   <script src="js/app/account-tokens.js?v=20261116-tokens"></script>
-  <script src="js/app/relay-chart.js"></script>
+  <script src="js/app/relay-chart.js?v=20261116-comparison"></script>
   <script src="js/app/scheduler.js?v=20261116-startup"></script>
-  <script src="js/app/data.js?v=20261116-tokens"></script>
+  <script src="js/app/data.js?v=20261116-comparison"></script>
 </body>
 </html>

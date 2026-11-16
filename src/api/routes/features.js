@@ -9,6 +9,7 @@ module.exports = function(app) {
         res.set('Cache-Control', 'no-store');
         res.json({
             relayEnabled: config.relayEnabled,
+            relayViewerAllowed: config.relayEnabled && privacy.canViewRelayActivity(req),
             modelsGatewayUrl: config.modelsGatewayUrl,
             privacyForced: privacy.forcedPrivacy(req)
         });

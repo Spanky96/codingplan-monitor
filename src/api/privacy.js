@@ -182,6 +182,7 @@ function maskUsageResult(result, alias) {
 }
 
 module.exports = {
+    canViewRelayActivity: function(req) { return !isExternalRequest(req) || isAdminRequest(req); },
     isPrivateIp: isPrivateIp,
     isExternalRequest: isExternalRequest,
     isAdminRequest: isAdminRequest,

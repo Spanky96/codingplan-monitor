@@ -27,7 +27,7 @@
       var cont = _detailIndex >= 0 ? document.getElementById('chartContainer-' + _detailIndex) : null;
       if (cont && cont._chartLoaded && _chartPeriod[_detailIndex]) loadUsageChart(_detailIndex, _chartPeriod[_detailIndex]);
       // 中转站面板模型色随主题切换色阶(槽位不变,仅色值换档)
-      if (FEATURES.relayEnabled && isAdmin() && typeof renderActivityPanel === 'function') renderActivityPanel();
+      if (canViewRelayActivity() && typeof renderActivityPanel === 'function') renderActivityPanel();
     }
 
     function syncThemePicker() {
