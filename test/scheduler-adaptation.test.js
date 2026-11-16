@@ -127,6 +127,33 @@ test('automatic mode resets only truly depleted quota and still waits near natur
     p.usage[0].data.limits[1].nextResetTime=NOW+96*H;
     Object.assign(p.usage[0].data.limits[1],{usage:140000,currentValue:139999,remaining:1});assert.equal(row(p).reset,null);
 });
+test('glm1 waits for 5h recovery with weekly quota left, then burns the remainder before selecting a weekly card',()=>{
+    for(const mode of ['auto','burst']) {
+        const p=fixture();p.config.accounts[0].mode=mode;
+        const [short,week]=p.usage[0].data.limits;
+        short.percentage=96;short.nextResetTime=NOW+2*H;week.percentage=80;
+        p.previous={A:row(p)};
+        short.percentage=100;
+        const waiting=row(p);
+        assert.equal(waiting.state,'exhausted');assert.equal(waiting.weight,0);
+        assert.equal(waiting.reset,null); // Two windows cannot borrow each other's reset cards.
+        p.previous={A:waiting};p.now=short.nextResetTime+1;
+        assert.equal(row(p).state,'stale');assert.equal(row(p).weight,0);assert.equal(row(p).reset,null);
+        p.usage[0].cachedAt=p.now-30000; // Last reading immediately before the reset clock.
+        assert.equal(row(p).state,'refreshing');assert.equal(row(p).reset,null);
+
+        // The upstream confirms a new short window; the weekly window still has 20%.
+        short.percentage=0;short.nextResetTime=p.now+5*H;
+        p.usage[0].cachedAt=p.now;p.accounts[0].resetCards.checkedAt=p.now;
+        const resumed=row(p);
+        assert.equal(resumed.effectiveMode,'burst');assert.notEqual(resumed.accelerationActive,false);
+        assert.ok(resumed.weight>0);assert.equal(resumed.reset,null);
+        p.previous={A:resumed};short.percentage=60;week.percentage=99;
+        assert.equal(row(p).reset,null);
+        week.percentage=100;
+        assert.equal(row(p).reset.type,'week');assert.equal(row(p).weight,0);
+    }
+});
 test('a single busy reading cannot increase concurrency; consecutive busy samples can',()=>{
     const p=fixture();p.config.accounts[0].autoReset=false;p.telemetry.A.current=2;
     p.previous={A:{adaptiveConcurrency:2,concurrency:2,adjustedAt:NOW-300000}};

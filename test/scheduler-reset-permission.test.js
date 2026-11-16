@@ -39,6 +39,22 @@ test('slow mode pauses card execution while retaining stored permission',async()
 test('fresh official remaining credit cancels a reset despite a rounded 100%',async()=>{
     fixture();remaining=1;await assert.rejects(reset.use(0,'week',1,true),/最新额度已恢复/);assert.equal(calls,0);
 });
+test('executor rejects a weekly reset when only the 5h window is exhausted, even with a stale approved plan',async()=>{
+    const original=cache.ensureUsageFetch;
+    try {
+        for(const mode of ['auto','burst']) for(const meter of ['TOKENS_LIMIT','CREDIT_LIMIT']) {
+            fixture(mode,true);
+            cache.ensureUsageFetch=async()=>({name:'A',platform:'glm',success:true,cachedAt:Date.now(),data:{limits:[
+                {type:meter,unit:3,percentage:100,nextResetTime:Date.now()+2*3600000},
+                {type:meter,unit:6,percentage:80,nextResetTime:Date.now()+96*3600000,
+                    ...(meter==='CREDIT_LIMIT'?{usage:140000,currentValue:112000,remaining:28000}:{})}
+            ]}});
+            await assert.rejects(reset.use(0,'week',1,true),/最新额度已恢复/);
+            assert.equal(calls,0);assert.equal(Object.keys(store.read().journal).length,0);
+            assert.equal(Object.keys(store.read().pendingResets||{}).length,0);
+        }
+    } finally { cache.ensureUsageFetch=original; }
+});
 test('permission revoked during async validation prevents the upstream POST',async()=>{
     fixture();duringTelemetry=()=>store.update(s=>{s.config.accounts[0].autoReset=false;});
     await assert.rejects(reset.use(0,'week',1,true),/自动重置已关闭/);assert.equal(calls,0);assert.equal(Object.keys(store.read().journal).length,0);
