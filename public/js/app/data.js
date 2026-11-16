@@ -215,13 +215,17 @@
       var grid = document.getElementById('cardGrid');
       var url = force ? API_PREFIX + '/api/usage?force=1' : API_PREFIX + '/api/usage';
       if (!accountsData.length) grid.innerHTML = '<div class="loading"><div class="loading-spinner"></div><p style="margin-top:12px">加载中...</p></div>';
+      // Dispatch metadata is independent of slow provider usage. Request it first
+      // so it can be present when the initial account list is painted.
+      loadCapacity();
+      loadWeights();
+      if (typeof loadScheduler === 'function') loadScheduler();
       fetch(url, { headers: authHeaders() })
         .then(function(r){return r.json()}).then(function(data){
-        accountsData = data; renderCards(data);
+        accountsData = data;
+        if (_capacitySnapshot) applyCapacitySnapshot(_capacitySnapshot, _capacityUpdatedAt);
+        renderCards(data);
         document.getElementById('lastUpdated').textContent = '更新于 ' + new Date().toLocaleTimeString('zh-CN');
-        loadWeights();
-        if (typeof loadScheduler === 'function') loadScheduler();   // 拉取权重渲染徽标(游客仅公开账号,管理员全量)
-        loadCapacity();  // 拉取 sub2api 容量快照渲染胶囊(仅管理员)
         // 慢账号(智云等)后台补齐:列表接口已触发抓取,这里 force=false 会优先 join inflight
         (data || []).forEach(function(acc, i) {
           if (!acc) return;
@@ -252,7 +256,6 @@
       loadData();
       loadExpire();
       activityApplyVisibility();
-      loadScheduler();
       if (FEATURES.relayEnabled && isAdmin()) { loadActivityDispatch(); loadActivityUsage(); }
     });
     setInterval(function(){ loadData(); }, 5 * 60 * 1000);

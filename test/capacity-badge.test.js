@@ -4,12 +4,15 @@ const fs = require('node:fs'), vm = require('node:vm'), path = require('node:pat
 
 function fixture() {
     let password = 'test-admin';
+    const timers = new Map(); let timerId = 0;
     const c = {
         Date, FEATURES: { relayEnabled: true }, API_PREFIX: '', capacityMap: {},
         accountsData: [{ name: 'glm1' }, { name: 'glm12' }, { name: 'MiniMax' }],
         document: { createElement: () => ({}), body: { appendChild() {} }, addEventListener() {} },
         localStorage: { getItem: () => password }, isAdmin: () => !!password,
-        renderCards() {}, fetch: async () => ({ ok: true, json: async () => ({ accounts: [] }) })
+        renderCards() {}, fetch: async () => ({ ok: true, json: async () => ({ accounts: [] }) }),
+        setTimeout(fn, ms) { timers.set(++timerId, { fn, ms }); return timerId; },
+        clearTimeout(id) { timers.delete(id); }, timers
     };
     vm.createContext(c);
     vm.runInContext(fs.readFileSync(path.join(__dirname, '../public/js/app/capacity.js'), 'utf8'), c);
@@ -31,6 +34,28 @@ test('missing relay weight matching keeps badges using the longest monitored pre
     assert.equal(c.capacityMap.MiniMax.items.length, 2);
     assert.match(c.capacityBadgeHTML('MiniMax'), /1\|4/);
     assert.equal(Object.keys(c.capacityMap).length, 2);
+});
+test('first-load failures retry after one and two seconds instead of waiting for polling', async () => {
+    const c = fixture(); let attempts = 0;
+    c.fetch = async () => { if (++attempts < 3) throw new Error('temporary'); return { ok: true, json: async () => ({ accounts: [account('glm1', 'glm1')] }) }; };
+    await c.loadCapacity(); assert.equal(attempts, 1);
+    for (const delay of [1000, 2000]) {
+        const [id, timer] = c.timers.entries().next().value; c.timers.delete(id);
+        assert.equal(timer.ms, delay); timer.fn(); await new Promise(setImmediate);
+    }
+    assert.equal(attempts, 3); assert.match(c.capacityBadgeHTML('glm1'), /1\|4/); assert.equal(c.timers.size, 0);
+});
+test('early capacity responses are retained until names arrive and fresh scheduler telemetry can seed first paint', async () => {
+    const c = fixture(), names = c.accountsData; c.accountsData = [];
+    c.respond([account('glm12-main')]); await c.loadCapacity();
+    c.accountsData = names; c.applyCapacitySnapshot(c._capacitySnapshot, c._capacityUpdatedAt);
+    assert.match(c.capacityBadgeHTML('glm12'), /1\|4/);
+    const now = Date.now();
+    c.capacityFromScheduler({ observedAt: now + 1, candidates: [{ name: 'MiniMax', channels: [{ name: 'MiniMax-backup', current: 2, capacity: 3, enabled: true }] }] });
+    assert.match(c.capacityBadgeHTML('MiniMax'), /2\|3/);
+    c.capacityFromScheduler({ observedAt: now - 100000, candidates: [{ name: 'MiniMax', channels: [{ name: 'MiniMax-backup', current: 0, capacity: 1 }] }] });
+    assert.equal(c.capacityMap.MiniMax.current, 2);
+    c.logout(); c.loadCapacity(); assert.equal(c._capacitySnapshot, null);
 });
 test('invalid snapshots and outages preserve last values with a stale hint; recovery clears it', async () => {
     const c = fixture(); c.respond([account('glm1', 'glm1')]); await c.loadCapacity();

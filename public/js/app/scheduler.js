@@ -105,6 +105,7 @@ async function loadScheduler() {
   if (!isAdmin() || !FEATURES.relayEnabled) return;
   try {
     schedulerState = await schedulerRequest();
+    capacityFromScheduler(schedulerState);
     renderSchedulerSummary();
     if (accountsData.length) renderCards(accountsData);
     if (document.getElementById('schedulerOverlay').classList.contains('active')) renderSchedulerDecisions();

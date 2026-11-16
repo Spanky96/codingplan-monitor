@@ -862,12 +862,24 @@
 
     // 后台补齐:列表接口秒回后,对 loading/pending 账号逐个等待 /api/usage/:index
     var _pendingFills = {};
+    var _pendingFillQueue = [];
+    var _pendingFillActive = 0;
+    function drainPendingFills() {
+      // Plain HTTP has a small per-origin connection pool. Keep slow official
+      // usage requests from occupying every connection needed by live metadata.
+      while (_pendingFillActive < 2 && _pendingFillQueue.length) {
+        _pendingFillActive++;
+        _pendingFillQueue.shift()();
+      }
+    }
     function fillPendingCard(index, force) {
       if (_pendingFills[index]) return _pendingFills[index];
       var btn = document.getElementById('refresh-' + index);
       if (btn) btn.classList.add('spinning');
       var url = API_PREFIX + '/api/usage/' + index + (force ? '?force=1' : '');
-      var p = fetch(url, { headers: authHeaders() })
+      var p = new Promise(function(resolve) {
+        _pendingFillQueue.push(resolve);
+      }).then(function() { return fetch(url, { headers: authHeaders() }); })
         .then(function(r) { return r.json(); })
         .then(function(acc) {
           updateCard(index, acc);
@@ -881,8 +893,11 @@
         })
         .finally(function() {
           delete _pendingFills[index];
+          _pendingFillActive--;
+          drainPendingFills();
         });
       _pendingFills[index] = p;
+      drainPendingFills();
       return p;
     }
 

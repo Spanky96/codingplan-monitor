@@ -2,6 +2,8 @@
     var _capacityRequestId = 0;
     var _capacityError = false;
     var _capacityUpdatedAt = 0;
+    var _capacitySnapshot = null;
+    var _capacityRetryTimer = null;
 
     // 全局容量悬浮气泡：fixed 定位挂在 body 下，卡片 overflow:hidden / hover transform
     // 都不会裁剪或位移；卡片 innerHTML 重渲染也无损（事件委托到 document）。
@@ -57,48 +59,71 @@
         + cap.current + '|' + cap.total + '</span>';
     }
 
-    function loadCapacity() {
+    function applyCapacitySnapshot(data, observedAt) {
+      if (!data || !Array.isArray(data.accounts)) throw new Error('容量快照格式无效');
+      if (observedAt < _capacityUpdatedAt) return;
+      // The snapshot can arrive before the usage list on first load. Keep it and
+      // rebuild matching once account names are available, without another fetch.
+      var names = accountsData.filter(function(a) { return a && a.name; })
+        .map(function(a) { return a.name; }).sort(function(a, b) { return b.length - a.length; });
+      var next = {};
+      data.accounts.forEach(function(a) {
+        if (!a) return;
+        var key = a.matched_key && (!names.length || names.indexOf(a.matched_key) >= 0) ? a.matched_key : names.find(function(name) {
+          return typeof a.name === 'string' && a.name.trim().indexOf(name) === 0;
+        });
+        if (!key) return;
+        var g = next[key];
+        if (!g) g = next[key] = { current: 0, total: 0, items: [] };
+        var active = a.schedulable && a.status === 'active';
+        var cur = a.current_concurrency || 0, tot = a.concurrency || 0;
+        g.current += cur; g.total += tot;
+        g.items.push({ name: a.name, current: cur, total: tot, off: !active });
+      });
+      _capacitySnapshot = data; capacityMap = next; _capacityUpdatedAt = observedAt;
+    }
+
+    function capacityFromScheduler(state) {
+      if (!isAdmin() || !FEATURES.relayEnabled || !state || !state.observedAt || Date.now() - state.observedAt > 90000) return;
+      var rows = [];
+      (state.candidates || []).forEach(function(a) {
+        (a.channels || []).forEach(function(c) {
+          rows.push({ name: c.name, matched_key: a.name, current_concurrency: c.current,
+            concurrency: c.capacity, schedulable: c.enabled, status: 'active' });
+        });
+      });
+      if (rows.length) applyCapacitySnapshot({ accounts: rows }, state.observedAt);
+    }
+
+    function loadCapacity(retry) {
+      retry = retry || 0;
+      if (_capacityRetryTimer) { clearTimeout(_capacityRetryTimer); _capacityRetryTimer = null; }
       var requestId = ++_capacityRequestId;
       // 服务端未配置 SUB2API_BASE_URL 时整体禁用(不请求、不渲染胶囊)
-      if (!FEATURES.relayEnabled) { capacityMap = {}; return; }
+      if (!FEATURES.relayEnabled) { capacityMap = {}; _capacitySnapshot = null; return; }
       // 仅管理员展示；暂时失败保留最近的快照，并在悬浮中标注。
       var p = localStorage.getItem('glm_pwd') || '';
-      if (!p) { capacityMap = {}; return; }
-      return fetch(API_PREFIX + '/api/sub2api/capacity?password=' + encodeURIComponent(p))
+      if (!p) { capacityMap = {}; _capacitySnapshot = null; return; }
+      var ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+      var timeout = ctrl ? setTimeout(function() { ctrl.abort(); }, 8000) : null;
+      return fetch(API_PREFIX + '/api/sub2api/capacity?password=' + encodeURIComponent(p), { cache: 'no-store', signal: ctrl ? ctrl.signal : undefined })
         .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
         .then(function(data) {
           if (requestId !== _capacityRequestId || p !== localStorage.getItem('glm_pwd') || !FEATURES.relayEnabled) return;
-          if (!data || !Array.isArray(data.accounts)) throw new Error('容量快照格式无效');
-          // matched_key depends on a second request from the relay to the weight
-          // source. The account snapshot is still valid if that request fails.
-          // Use the same longest-prefix rule as scheduling to recover its key.
-          var names = accountsData.filter(function(a) { return a && a.name; })
-            .map(function(a) { return a.name; }).sort(function(a, b) { return b.length - a.length; });
-          var next = {};
-          data.accounts.forEach(function(a) {
-            if (!a) return;
-            var key = names.indexOf(a.matched_key) >= 0 ? a.matched_key : names.find(function(name) {
-              return typeof a.name === 'string' && a.name.trim().indexOf(name) === 0;
-            });
-            if (!key) return;
-            var g = next[key];
-            if (!g) g = next[key] = { current: 0, total: 0, items: [] };
-            var active = a.schedulable && a.status === 'active';
-            var cur = a.current_concurrency || 0;
-            var tot = a.concurrency || 0;
-            // 容量按全部匹配账号聚合（与 sub2api 管理页一致，停调度也在悬浮里标注），
-            // 否则卡片 0|0 与悬浮明细 0/1 对不上。
-            g.current += cur;
-            g.total += tot;
-            g.items.push({ name: a.name, current: cur, total: tot, off: !active });
-          });
-          capacityMap = next; _capacityError = false; _capacityUpdatedAt = Date.now();
+          applyCapacitySnapshot(data, Date.now()); _capacityError = false;
           if (accountsData.length) renderCards(accountsData);
         })
         .catch(function() {
           if (requestId !== _capacityRequestId || p !== localStorage.getItem('glm_pwd')) return;
           _capacityError = true;
           if (accountsData.length) renderCards(accountsData);
-        });
+          // A failed first request has no previous values to retain. Retry soon;
+          // do not make the user wait for one or two 30-second polling intervals.
+          if (retry < 3 && FEATURES.relayEnabled) _capacityRetryTimer = setTimeout(function() {
+            _capacityRetryTimer = null;
+            if (requestId === _capacityRequestId && p === localStorage.getItem('glm_pwd')) loadCapacity(retry + 1);
+          }, 1000 * Math.pow(2, retry));
+        })
+        .finally(function() { if (timeout) clearTimeout(timeout); });
     }
 
