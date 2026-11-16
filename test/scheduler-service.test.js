@@ -73,4 +73,23 @@ test('export clamps legacy plans to the GLM safety ceiling immediately', () => {
     assert.equal(service.controls(state,now).A.concurrency,4);
     state.config.accounts[0].maxConcurrency=1; assert.equal(service.controls(state,now).A.concurrency,1);
 });
+test('reset inventory counts valid cards across all accounts, independent of spending permission', () => {
+    const {now,state}=fixture();
+    state.config.accounts.push({name:'placeholder',role:'paid',unmetered:true});store.write(state);
+    const card=(type,expiry)=>({type,recordId:1,expireTime:expiry});
+    fs.writeFileSync(process.env.ACCOUNTS_FILE,JSON.stringify({accounts:[
+        {name:'A',platform:'glm',resetCards:{checkedAt:now,cards:[card('week',now+3600000),card('fiveHour',now-1)]}},
+        {name:'unmanaged',resetCards:{checkedAt:now-60000,cards:[card('week',now+3600000),card('fiveHour',now+3600000)]}},
+        {name:'unknown',platform:'glm'},
+        {name:'empty',platform:'glm',resetCards:{checkedAt:now,cards:[],count:0}},
+        {name:'placeholder',platform:'glm'},
+        {name:'team',platform:'glm',teamEdition:true,resetCards:{checkedAt:now,cards:[card('week',now+3600000)]}},
+        {name:'other',platform:'minimax',resetCards:{checkedAt:now,cards:[card('week',now+3600000)]}}
+    ]}));
+    assert.deepEqual(service.status().resetCards,{total:3,week:2,fiveHour:1,checkedAccounts:3,accounts:4,oldestCheckedAt:now-60000});
+    require('../src/api/platforms/glm').persistGlmResetCards(0,[]);
+    const persisted=JSON.parse(fs.readFileSync(process.env.ACCOUNTS_FILE,'utf8')).accounts[0].resetCards;
+    assert.equal(persisted.count,0);assert.ok(persisted.checkedAt>=now);
+    assert.equal(service.status().resetCards.total,2);
+});
 test.after(() => { fs.rmSync(dir, { recursive: true, force: true }); });

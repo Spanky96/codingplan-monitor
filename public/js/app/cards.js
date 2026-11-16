@@ -289,14 +289,13 @@
         var expHint = daysLeft <= 0 ? '已过期' : daysLeft + (exp.autoRenew ? '天后自动续费' : '天后到期');
         expHtml = '<div class="expire-row" onclick="refreshExpire(' + i + ')" title="点击刷新"><span class="expire-label">订阅到期</span><span class="expire-value ' + expCls + '">' + esc(String(exp.expireTime).slice(0, 10)) + '<span class="expire-hint">' + expHint + '</span></span></div>';
       }
-      var keyBadge = isAdmin() && acc.keyCount != null ? '<span class="level-badge level-badge-ok">Key: ' + acc.keyCount + '个</span>' : '';
       var rcBadge = resetCardBadgeHTML(acc);
       var rBadge = riskBadgeHTML(acc);
       var resetClass = '';
       return '<div class="card' + resetClass + '" id="card-' + i + '"><div class="card-header">' + headerLeft
         + '<div class="card-header-right">' + btn + '<span class="card-status ' + getStatusClass(mp) + '"' + quotaStatusAttrs(acc) + '>' + getStatusText(mp) + '</span></div></div>'
         + '<div class="card-body">' + limits.map(renderLimitRow).join('') + '</div>' + expHtml
-        + '<div class="card-footer"><div class="card-footer-left"><span class="level-badge">' + level + '</span>' + glmFooterBadges(acc) + keyBadge + rcBadge + rBadge + cache + '</div>'
+        + '<div class="card-footer"><div class="card-footer-left"><span class="level-badge">' + level + '</span>' + glmFooterBadges(acc) + rcBadge + rBadge + cache + '</div>'
         + '<button class="detail-btn" onclick="showDetail(' + i + ')">详情</button></div></div>';
     }
 
@@ -578,7 +577,6 @@
       var level = levelLabel(acc);
       var b = '<span class="level-badge">' + level + '</span>';
       b += glmFooterBadges(acc);
-      if (isAdmin() && acc.keyCount != null) b += '<span class="level-badge level-badge-ok">Key: ' + acc.keyCount + '个</span>';
       b += resetCardBadgeHTML(acc);
       b += riskBadgeHTML(acc);
       return b;

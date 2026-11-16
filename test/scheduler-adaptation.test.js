@@ -1,7 +1,7 @@
 'use strict';
 const test = require('node:test'), assert = require('node:assert/strict');
 const { plan } = require('../src/scheduler/planner');
-const { resetAllowed } = require('../src/scheduler/adaptation');
+const { resetAllowed, weeklyWaterline } = require('../src/scheduler/adaptation');
 const H=3600000, NOW=Date.UTC(2026,10,16,6);
 function fixture() {
     return { now:NOW, config:{accounts:[{name:'A',role:'primary',mode:'auto',autoReset:true,maxConcurrency:4,quotaScale:1}],staleAfterSeconds:600,resetWeekMinHours:24,resetMinRemainingMinutes:60},
@@ -41,11 +41,56 @@ test('no permission, missing weekly stock, stale inventory, idle demand and limi
 });
 test('short scarcity, near natural reset, upcoming replenishment and healthy weekly pace hold auto mode',()=>{
     for (const change of [p=>p.usage[0].data.limits[0].percentage=90,
-        p=>p.usage[0].data.limits[1].nextResetTime=NOW+12*H,
+        p=>Object.assign(p.usage[0].data.limits[1],{percentage:96,nextResetTime:NOW+12*H}),
         p=>p.config.accounts[0].replenishAt=new Date(NOW+8*H).toISOString(),
-        p=>p.usage[0].data.limits[1].percentage=20]) {
+        p=>p.usage[0].data.limits[1].percentage=43]) {
         const p=fixture();change(p);assert.equal(row(p).effectiveMode,'auto');
     }
+});
+test('glm5 surplus catches up without reset permission or cards, within the configured cap',()=>{
+    const p=fixture();p.config.accounts[0].autoReset=false;p.config.accounts[0].maxConcurrency=2;
+    p.accounts[0].resetCards={cards:[]};
+    Object.assign(p.usage[0].data.limits[0],{percentage:21,nextResetTime:NOW+4*H});
+    Object.assign(p.usage[0].data.limits[1],{percentage:16,nextResetTime:NOW+91*H});
+    const r=row(p);assert.equal(r.effectiveMode,'burst');assert.equal(r.accelerationReason,'surplus');
+    assert.equal(r.concurrency,2);assert.equal(r.reset,null);assert.match(r.modeReason,/补进度/);
+    assert.ok(r.accelerationFactor>=1.5&&r.accelerationFactor<=4);
+    p.usage[0].data.limits[1].percentage=100;assert.equal(row(p).reset,null);
+});
+test('surplus hysteresis releases when progress catches up and does not leak to card acceleration',()=>{
+    const p=fixture();p.config.accounts[0].autoReset=false;p.usage[0].data.limits[1].percentage=5;
+    p.previous={A:row(p)};assert.equal(p.previous.A.accelerationReason,'surplus');
+    p.usage[0].data.limits[1].percentage=14;assert.equal(row(p).effectiveMode,'burst');
+    p.usage[0].data.limits[1].percentage=17;assert.equal(row(p).effectiveMode,'auto');
+    p.config.accounts[0].autoReset=true;p.usage[0].data.limits[1].percentage=56;
+    assert.equal(row(p).effectiveMode,'auto'); // 13pp ahead must not reuse card hysteresis.
+});
+test('catch-up uses the visible work-time waterline and does not invent weekend deficits',()=>{
+    assert.equal(weeklyWaterline(NOW+96*H,NOW),20);
+    const p=fixture();p.config.accounts[0].autoReset=false;p.usage[0].data.limits[1].percentage=25;
+    assert.equal(row(p).effectiveMode,'auto'); // Above 20% work waterline, below 43% calendar progress.
+    assert.equal(weeklyWaterline(NOW+96*H,NOW-30*H),weeklyWaterline(NOW+96*H,NOW-18*H));
+});
+test('surplus acceleration obeys short-window safety, demand, manual modes and upstream cooldown',()=>{
+    for(const change of [p=>p.usage[0].data.limits[0].percentage=95,
+        p=>p.telemetry.A.current=0,p=>p.telemetry.A.limited=true,
+        p=>p.usage[0].data.limits[1].nextResetTime=null,
+        p=>p.usage[0].cachedAt=NOW-601000]) {
+        const p=fixture();p.config.accounts[0].autoReset=false;p.usage[0].data.limits[1].percentage=5;
+        change(p);assert.notEqual(row(p).effectiveMode,'burst');
+    }
+    const p=fixture();p.usage[0].data.limits[1].percentage=16;p.config.accounts[0].mode='slow';
+    assert.equal(row(p).effectiveMode,'slow');
+});
+test('near-deadline surplus drains without a card, while glm13 waits for natural recovery',()=>{
+    const p=fixture();p.config.accounts[0].autoReset=false;
+    Object.assign(p.usage[0].data.limits[1],{percentage:66,nextResetTime:NOW+18*H});
+    assert.equal(row(p).accelerationReason,'surplus');assert.equal(row(p).reset,null);
+    p.config.accounts[0].autoReset=true;p.usage[0].data.limits[1].percentage=100;
+    assert.equal(row(p).reset,null);assert.match(row(p).reasons.join('；'),/保留周卡/);
+    p.usage[0].data.limits[1].percentage=99.5;assert.notEqual(row(p).effectiveMode,'burst');
+    p.usage[0].data.limits[1].percentage=0;p.usage[0].data.limits[1].nextResetTime=NOW+168*H;
+    assert.equal(row(p).effectiveMode,'auto');
 });
 test('automatic high consumption exits when the last card is spent or weekly usage resets',()=>{
     const p=fixture();p.previous={A:row(p)};

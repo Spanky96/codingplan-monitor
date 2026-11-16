@@ -23,11 +23,12 @@
 .schedule-heading { display:flex; align-items:center; gap:12px; min-width:150px; }
 .schedule-heading b { display:block; font-size:14px; }
 .schedule-heading small { display:block; color:var(--text-mute); font-size:11px; margin-top:5px; }
+.schedule-peak { white-space:nowrap; font-size:10px; color:var(--warn); background:var(--warn-bg); border:1px solid var(--warn-bd); border-radius:6px; padding:4px 7px; }
 .schedule-orbit { width:30px; height:30px; border:1px solid var(--line); border-radius:50%; position:relative; flex:none; }
 .schedule-orbit:after { content:''; position:absolute; width:8px; height:8px; border-radius:50%; background:var(--text-faint); inset:10px; }
 .schedule-orbit.on { border-color:var(--accent-soft-bd); background:var(--accent-soft); }
 .schedule-orbit.on:after { background:var(--accent); box-shadow:0 0 0 4px var(--accent-soft); }
-.schedule-metrics { display:flex; gap:38px; flex:1; }
+.schedule-metrics { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:24px; flex:1; min-width:0; }
 .schedule-metrics strong { display:block; font-size:19px; font-weight:650; font-variant-numeric:tabular-nums; }
 .schedule-metrics small { display:block; font-size:10px; margin-top:5px; color:var(--text-mute); }
 .schedule-alert strong { color:var(--warn); }
@@ -116,8 +117,8 @@
   .schedule-footer>span { display:none; }
   .schedule-footer>div { width:100%; justify-content:flex-end; }
   .schedule-summary .schedule-heading,.schedule-live .schedule-heading { width:100%; }
-  .schedule-metrics { width:100%; flex:none; display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; }
-  .schedule-metrics strong,.schedule-metrics small { white-space:nowrap; }
+  .schedule-metrics { width:100%; flex:none; grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px 12px; }
+  .schedule-metrics strong { font-size:17px; }
   .toolbar-group { flex-wrap:wrap; }
   .toolbar-btn,.toolbar-label { white-space:nowrap; flex-shrink:0; }
   .schedule-account-fields { grid-template-columns:1fr 1fr; }

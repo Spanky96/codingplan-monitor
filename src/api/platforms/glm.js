@@ -104,11 +104,8 @@ function uuidV4() {
 function persistGlmResetCards(i, cards) {
     var accounts = readAccounts();
     if (!accounts[i]) return null;
-    if (cards.length) {
-        accounts[i].resetCards = { count: cards.length, cards: cards, checkedAt: Date.now() };
-    } else {
-        delete accounts[i].resetCards;
-    }
+    // Keep a confirmed empty inventory distinct from one we have never checked.
+    accounts[i].resetCards = { count: cards.length, cards: cards, checkedAt: Date.now() };
     writeAccounts(accounts);
     // 同步刷新内存用量缓存里的 resetCards,避免 /api/usage 仍返回旧值
     patchCachedResult(i, { resetCards: cards.length ? accounts[i].resetCards : undefined });

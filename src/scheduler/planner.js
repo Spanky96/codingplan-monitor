@@ -142,7 +142,7 @@ function plan({ config, accounts, usage, telemetry = {}, previous = {}, now }) {
         if (policy.role === 'primary' && row.effectiveMode === 'slow') {
             raw *= 0.2; state = 'slow'; reasons.unshift('管理员指定低速保护，限制流量与并发');
         } else if (policy.role === 'primary' && row.effectiveMode === 'burst') {
-            raw *= 4; state = 'burst'; reasons.unshift(row.modeReason || '人工高速消耗，优先分配流量');
+            raw *= row.accelerationFactor || 4; state = 'burst'; reasons.unshift(row.modeReason || '人工高速消耗，优先分配流量');
         }
         if (row.modeReason && row.effectiveMode !== 'burst') reasons.unshift(row.modeReason);
         const allocation = chooseConcurrency({ policy, routes, short, shortFactor, old, live, now,

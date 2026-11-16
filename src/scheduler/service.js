@@ -1,7 +1,7 @@
 'use strict';
 const config = require('../config');
 const store = require('./store');
-const { plan, windowsOf, EXHAUSTED } = require('./planner');
+const { plan, windowsOf, validCards, EXHAUSTED } = require('./planner');
 const { readAccounts } = require('../api/accounts');
 const cache = require('../api/cache');
 const { concurrencyCeiling, resetAllowed } = require('./adaptation');
@@ -11,6 +11,10 @@ const LEASE_MS = 180000;
 let running = null, timer = null, snapshot = null, snapshotAt = 0, integrationError = null;
 let lastPush = null;
 const cardChecks = {};
+function supportsCardInventory(account, policies) {
+    return (account.platform || 'glm') === 'glm' && !account.teamEdition &&
+        !policies.some(p => p.name === account.name && p.role === 'paid' && p.unmetered);
+}
 function matchKey(names, name) {
     return names.filter(n => n && name.startsWith(n)).sort((a, b) => b.length - a.length)[0];
 }
@@ -161,18 +165,19 @@ async function cycle({ preview = false } = {}) {
         try { await telemetry(); } catch (e) { integrationError = e.message; }
         const accounts = readAccounts();
         const names = new Set(state.config.accounts.map(p => p.name).concat(Object.keys(state.pendingResets || {})));
-        const jobs = accounts.map((a, i) => ({ a, i })).filter(j => names.has(j.a.name));
+        const jobs = accounts.map((a, i) => ({ a, i })).filter(j => names.has(j.a.name) || supportsCardInventory(j.a, state.config.accounts));
         // Only two official requests in flight; background operation does not depend on an open browser.
         let cursor = 0;
         await Promise.all([0, 1].map(async () => {
             while (cursor < jobs.length) {
                 const { a, i } = jobs[cursor++];
                 const u = cache.getCachedLastKnown(i);
-                if (!u || u.name !== a.name || Date.now() - u.cachedAt >= 60000 || (state.pendingResets || {})[a.name]) {
+                if (names.has(a.name) && (!u || u.name !== a.name || Date.now() - u.cachedAt >= 60000 || (state.pendingResets || {})[a.name])) {
                     try { await cache.ensureUsageFetch(a, i, true); } catch (_) { /* stale data becomes weight zero */ }
                 }
                 const p = state.config.accounts.find(p => p.name === a.name);
-                if (resetAllowed(p, a) && Date.now() - Math.max(cardChecks[a.name] || 0, ((a.resetCards || {}).checkedAt || 0)) > 600000) {
+                const cardInterval = resetAllowed(p, a) ? 600000 : 1800000;
+                if (supportsCardInventory(a, state.config.accounts) && Date.now() - Math.max(cardChecks[a.name] || 0, ((a.resetCards || {}).checkedAt || 0)) > cardInterval) {
                     cardChecks[a.name] = Date.now();
                     try { await require('./reset-cards').list(a, i); } catch (_) { /* no assumed cards */ }
                 }
@@ -201,6 +206,17 @@ async function cycle({ preview = false } = {}) {
 }
 function status() {
     const state = store.read(), accounts = readAccounts(), live = aggregate(accounts);
+    // Inventory includes unselected accounts and accounts without spending permission.
+    // Exclude expired cards; expose coverage so a missing snapshot is never called zero.
+    const resetCards = { total: 0, week: 0, fiveHour: 0, checkedAccounts: 0, accounts: 0, oldestCheckedAt: null };
+    accounts.filter(a => supportsCardInventory(a, state.config.accounts)).forEach(a => {
+        resetCards.accounts++;
+        const checkedAt = (a.resetCards || {}).checkedAt;
+        if (!checkedAt) return;
+        resetCards.checkedAccounts++;
+        resetCards.oldestCheckedAt = Math.min(resetCards.oldestCheckedAt || checkedAt, checkedAt);
+        validCards(a, Date.now()).forEach(c => { resetCards[c.type]++; resetCards.total++; });
+    });
     let appliedFallback = null;
     if (snapshot && Date.now() - snapshotAt < 90000) {
         appliedFallback = { paid: false, dilution: false };
@@ -218,7 +234,7 @@ function status() {
         });
     }
     return { config: state.config, plan: state.plan || null, events: state.events, lastPush, integrationError,
-        appliedFallback, observedAt: snapshotAt,
+        appliedFallback, observedAt: snapshotAt, resetCards,
         connected: !!snapshot && snapshot.smart_scheduler_version === 2 && Date.now() - snapshotAt < 90000,
         syncConfigured: !!config.schedulerSyncToken && config.relayEnabled,
         candidates: accounts.map((a, index) => ({ name: a.name, index, platform: a.platform || 'glm', teamEdition: !!a.teamEdition,

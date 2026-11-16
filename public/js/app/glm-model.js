@@ -2,17 +2,17 @@
     var GLM_PERIOD_5H_MS = 5 * 3600000;      // 5小时窗口长度
     var GLM_PERIOD_WEEK_MS = 7 * 86400000;   // 每周窗口长度(滚动7天)
     var GLM_BAR_SEGMENTS = 5;                // 5小时=5段;每周=5×5小时 → 也是5段
-    var GLM_PEAK_START_HOUR = 14;            // 高峰:周一至周五 14:00–18:00
+    var GLM_PEAK_START_HOUR = 14;            // 摘要提示:工作日北京时间 14:00–18:00
     var GLM_PEAK_END_HOUR = 18;
     var GLM_WORK_START_HOUR = 8;             // 水位线仅在 周一至周五 08:00–18:00 推进
     var GLM_WORK_END_HOUR = 18;
     var GLM_WORK_SCAN_DAYS = 10;             // 窗口≤7天,逐日扫描上限(含首尾余量)
 
-    // 当前是否处于 GLM 高峰时段(周一~周五 14:00–18:00,本地时间)
+    // 摘要时段按北京时间判断，不依赖浏览器时区，也不参与用量核算。
     function isGlmPeakNow(now) {
-      var d = now || new Date();
-      var dow = d.getDay(); // 0=周日 ... 6=周六
-      return dow >= 1 && dow <= 5 && d.getHours() >= GLM_PEAK_START_HOUR && d.getHours() < GLM_PEAK_END_HOUR;
+      var beijing = new Date((now || new Date()).getTime() + 8 * 3600000);
+      var hour = beijing.getUTCHours(), dow = beijing.getUTCDay();
+      return dow >= 1 && dow <= 5 && hour >= GLM_PEAK_START_HOUR && hour < GLM_PEAK_END_HOUR;
     }
 
     // GLM 套餐版本:含 CREDIT_LIMIT → 积分制新版(V3);否则 TOKENS_LIMIT 老版(v2)
@@ -51,15 +51,11 @@
       return Math.max(0, Math.min(100, (doneWork / totalWork) * 100));
     }
 
-    // GLM 页脚徽标:套餐版本(V3=积分制 / v2)与高峰合并为单个徽标,高峰时段用橙色
+    // 卡片只保留套餐版本；高峰提示统一放在调度摘要。
     function glmFooterBadges(acc) {
       var kind = glmPlanKind((acc && acc.data && acc.data.limits) || []);
       var planTip = kind === 'credit' ? 'V3 积分制套餐:高峰按 100% 消耗积分,低峰按 50% 消耗' : 'v2 套餐:高峰时段按 3 倍消耗';
       var planLabel = kind === 'credit' ? 'V3' : 'v2';
-      if (isGlmPeakNow(new Date())) {
-        var tip = '高峰时段:周一至周五 14:00–18:00;' + planTip;
-        return '<span class="plan-badge plan-badge-peak" title="" data-tooltip="' + esc(tip) + '" aria-label="' + planLabel + ' 高峰" tabindex="0">' + planLabel + '·高峰</span>';
-      }
       return '<span class="plan-badge" title="" data-tooltip="' + esc(planTip) + '" aria-label="' + planLabel + '" tabindex="0">' + planLabel + '</span>';
     }
 

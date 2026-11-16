@@ -56,18 +56,33 @@ function schedulerName(name) {
   var a = accountsData.find(function(a) { return a.name === name; });
   return a ? displayName(a, a.index) : (_privacyMode ? '托管账号' : name);
 }
-function schedulerSummaryHTML() {
+function schedulerFallbackStatus(kind) {
+  var c = schedulerState.config;
+  var allowed = kind === 'paid' ? c.allowPaid : c.allowDilution;
+  var actual = schedulerState.appliedFallback;
+  var known = actual && Date.now() - schedulerState.observedAt < 90000;
+  if (known && actual[kind]) return { label: '已启用', active: true, tip: '中转站已启用' + (allowed ? '' : '；当前配置未允许，请核对渠道') };
+  if (!known) return { label: allowed ? '已允许 · 待确认' : '未允许 · 待确认', tip: '中转站状态尚未确认' };
+  return { label: allowed ? '待命' : '未允许', tip: allowed ? '已允许，当前未触发兜底' : '未允许自动启用' };
+}
+function schedulerSummaryHTML(showPeak) {
   if (!schedulerState) return '';
   var p = schedulerState.plan, c = schedulerState.config, s = p && p.summary;
   var fresh = p && Date.now() - p.generatedAt < 180000;
-  var actual = schedulerState.appliedFallback;
+  var paid = schedulerFallbackStatus('paid'), dilution = schedulerFallbackStatus('dilution');
+  var cards = schedulerState.resetCards;
+  var inventoryKnown = cards && cards.checkedAccounts > 0;
+  var cardTip = inventoryKnown ? '周卡 ' + cards.week + ' 张 · 5h 卡 ' + cards.fiveHour + ' 张；已记录 ' + cards.checkedAccounts + '/' + cards.accounts + ' 个账号，有效期内库存，含未授权使用的卡' : '尚未读取卡库存';
+  if (inventoryKnown && cards.oldestCheckedAt) cardTip += '；最早采样 ' + new Date(cards.oldestCheckedAt).toLocaleString('zh-CN');
   var synced = schedulerState.lastPush && schedulerState.lastPush.synced && Date.now() - schedulerState.lastPush.at < 90000;
   var label = !c.enabled ? '尚未启动' : !fresh ? '等待计划更新' : !synced ? '等待中转站确认' : '正在托管';
-  return '<div class="schedule-heading"><span class="schedule-orbit ' + (c.enabled && fresh && synced ? 'on' : '') + '"></span><div><b>智能调度</b><small>' + label + '</small></div></div>'
+  return '<div class="schedule-heading"><span class="schedule-orbit ' + (c.enabled && fresh && synced ? 'on' : '') + '"></span><div><b>智能调度</b><small>' + label + '</small></div>'
+    + (showPeak && isGlmPeakNow(new Date()) ? '<span class="schedule-peak">智谱高峰</span>' : '') + '</div>'
     + '<div class="schedule-metrics"><div><strong>' + (c.enabled && s ? s.active : '—') + '</strong><small>参与调度</small></div>'
     + '<div><strong>' + (c.enabled && s ? s.capacity : '—') + '</strong><small>总并发预算</small></div>'
-    + '<div class="' + (actual && actual.paid ? 'schedule-alert' : '') + '"><strong>' + (actual ? actual.paid ? '已启用' : '关闭' : '未检测') + '</strong><small>按量付费</small></div>'
-    + '<div class="' + (actual && actual.dilution ? 'schedule-alert' : '') + '"><strong>' + (actual ? actual.dilution ? '已启用' : '关闭' : '未检测') + '</strong><small>备用分流</small></div></div>';
+    + '<div data-tooltip="' + esc(cardTip) + '"><strong>' + (inventoryKnown ? cards.total : '—') + '</strong><small>重置卡总数' + (inventoryKnown && cards.checkedAccounts < cards.accounts ? ' · 已记录' : '') + '</small></div>'
+    + '<div class="' + (paid.active ? 'schedule-alert' : '') + '" title="' + esc(paid.tip) + '"><strong>' + paid.label + '</strong><small>按量付费</small></div>'
+    + '<div class="' + (dilution.active ? 'schedule-alert' : '') + '" title="' + esc(dilution.tip) + '"><strong>' + dilution.label + '</strong><small>备用分流</small></div></div>';
 }
 function renderSchedulerSummary() {
   var btn = document.getElementById('schedulerBtn'), bar = document.getElementById('schedulerSummary');
@@ -81,7 +96,7 @@ function renderSchedulerSummary() {
   }
   if (!bar) return;
   bar.style.display = scheduleGroupsEnabled() && schedulerState ? '' : 'none';
-  bar.innerHTML = schedulerSummaryHTML();
+  bar.innerHTML = schedulerSummaryHTML(true);
   var live = document.getElementById('schedulerLiveSummary');
   if (live) live.innerHTML = schedulerSummaryHTML();
 }
@@ -262,10 +277,10 @@ function scheduleCategory(acc) {
   if (role === 'paid') return 'paid';
   if (acc.platform === 'minimax') return 'minimax';
   if (p && p.channelModes && Object.values(p.channelModes).length && Object.values(p.channelModes).every(function(m) { return m !== 'native'; })) return 'reserve';
-  if (getAccMaxPct(acc) >= 99.9) return 'exhausted';
+  if (getAccMaxPct(acc) >= 100) return 'exhausted';
   var r = schedulerRow(acc.name);
-  if ((p && p.mode === 'slow') || (r && ['protecting', 'cooldown', 'slow'].includes(r.state))) return 'slow';
-  if ((p && p.mode === 'burst') || (r && ['burn', 'burst', 'draining'].includes(r.state))) return 'burst';
+  if ((p && p.mode === 'slow') || (r && r.effectiveMode === 'slow')) return 'slow';
+  if ((p && p.mode === 'burst') || (r && r.effectiveMode === 'burst')) return 'burst';
   return (acc.platform || 'glm') === 'glm' ? 'balanced' : 'other';
 }
 function setScheduleCategory(key) {
@@ -291,8 +306,7 @@ function renderScheduleGroups(grid, list, isList) {
   grid.innerHTML = Object.keys(SCHEDULE_CATEGORIES).map(function(key) {
     var group = list.filter(function(x) { return scheduleCategory(x.acc) === key; });
     if (!group.length) return '';
-    var active = group.filter(function(x) { return weightsMap[x.acc.name] > 0; }).length;
-    var hint = key === 'paid' || key === 'reserve' ? (active ? active + ' 个目标权重已开启' : '当前关闭') : group.length + ' 个账号';
+    var hint = key === 'paid' || key === 'reserve' ? schedulerFallbackStatus(key === 'paid' ? 'paid' : 'dilution').label : group.length + ' 个账号';
     return '<div class="schedule-group-title category-' + key + '"><span></span><h3>' + SCHEDULE_CATEGORIES[key] + '</h3><small>' + hint + '</small></div>'
       + group.map(function(x) { return isList ? renderListRowHTML(x.origIdx, x.acc) : renderCardHTML(x.origIdx, x.acc); }).join('');
   }).join('');

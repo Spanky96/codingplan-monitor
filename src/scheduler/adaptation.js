@@ -2,6 +2,21 @@
 const HOUR = 3600000;
 const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
 
+// Match the dashboard's work-time waterline: weekdays 08:00–18:00, Beijing time.
+// Weekends must not manufacture a catch-up deficit before Monday's demand arrives.
+function weeklyWaterline(resetAt, now) {
+    const start = resetAt - 168 * HOUR, day = 24 * HOUR, offset = 8 * HOUR;
+    let total = 0, elapsed = 0;
+    for (let midnight = Math.floor((start + offset) / day) * day - offset; midnight < resetAt; midnight += day) {
+        const dow = new Date(midnight + offset).getUTCDay();
+        if (dow === 0 || dow === 6) continue;
+        const from = Math.max(start, midnight + 8 * HOUR), to = Math.min(resetAt, midnight + 18 * HOUR);
+        total += Math.max(0, to - from);
+        elapsed += Math.max(0, Math.min(now, to) - from);
+    }
+    return total ? clamp(100 * elapsed / total, 0, 100) : clamp(100 * (now - start) / (168 * HOUR), 0, 100);
+}
+
 function concurrencyCeiling(policy) {
     return Math.max(1, Math.min(policy.maxConcurrency || 1, policy.role === 'primary' ? 4 : 64));
 }
@@ -24,32 +39,50 @@ function chooseMode({ policy, account, cards, short, week, shortFactor, old, liv
     const result = { effectiveMode: requested, modeSource: requested === 'auto' ? 'automatic' : 'manual', modeReason: '' };
     if (requested !== 'auto' || policy.role !== 'primary') return result;
     const hold = reason => ({ ...result, modeReason: reason });
-    if (!resetAllowed(policy, account)) return hold('未授权自动用卡，按原周额度均衡');
-    const weeklyCard = cards.find(c => c.type === 'week');
-    if (!weeklyCard) return hold('无可用周卡，回到额度均衡');
-    const checked = (account.resetCards || {}).checkedAt;
-    if (!checked || now - checked > 15 * 60000 || checked > now + 60000) return hold('卡库存待刷新，暂不自动加速');
     if (!week || !Number.isFinite(week.resetAt)) return hold('缺少周重置时间，暂不自动加速');
     const hours = (week.resetAt - now) / HOUR;
+    if (!(hours > 0 && hours <= 168)) return hold('周窗口待确认，暂不自动加速');
     const elapsed = 168 - hours;
     const progress = clamp(elapsed / 168 * 100, 0, 100);
     const ahead = week.used - progress;
     const meanRate = elapsed >= 1 ? week.used / elapsed : 0;
     const finishHours = meanRate > 0 ? Math.max(0, 100 - week.used) / meanRate : Infinity;
     const gap = hours - finishHours;
-    result.weeklyPace = { expectedPct: Math.round(progress * 10) / 10, aheadPct: Math.round(ahead * 10) / 10,
+    const waterline = weeklyWaterline(week.resetAt, now);
+    result.weeklyPace = { expectedPct: Math.round(progress * 10) / 10, waterlinePct: Math.round(waterline * 10) / 10, aheadPct: Math.round(ahead * 10) / 10,
         projectedGapHours: Number.isFinite(gap) ? Math.round(gap * 10) / 10 : null };
-    if (hours < weekMinHours) return hold('临近周自然恢复，暂不为用卡加速');
-    const replenish = policy.replenishAt ? Date.parse(policy.replenishAt) : NaN;
-    if (replenish > now && replenish - now < (finishHours + weekMinHours) * HOUR) return hold('预计补充额度将覆盖缺口，暂不加速用卡');
     if (!recentDemand) return hold('近期无主力请求，保持均衡');
     if (live.limited) return hold('上游限流，暂停自动加速');
     const continuing = old.effectiveMode === 'burst' && old.modeSource === 'automatic';
     if (!short || short.used >= (continuing ? 90 : 80) || shortFactor < (continuing ? 0.45 : 0.65)) return hold('5 小时余量偏紧，暂不自动加速');
-    if (week.used < (continuing ? 45 : 50) || ahead < (continuing ? 10 : 15) || gap < (continuing ? 12 : weekMinHours)) return hold('周进度尚不需要用卡加速');
+
+    // Burning this week's surplus is independent of permission to spend a reset card.
+    // Separate hysteresis keeps a previous card-backed burst from relaxing this trigger.
+    const catchingUp = continuing && old.accelerationReason === 'surplus';
+    const remaining = Math.max(0, 100 - week.used);
+    const deficit = waterline - week.used;
+    const lagging = elapsed >= 1 && deficit >= (catchingUp ? 5 : 10);
+    const expiring = hours <= 24 && remaining >= (catchingUp ? 5 : 10);
+    if (remaining > 0 && (lagging || expiring)) {
+        const requiredRate = remaining / hours;
+        const factor = clamp(requiredRate / Math.max(meanRate, 100 / 168), 1.5, 4);
+        return { ...result, effectiveMode: 'burst', accelerationReason: 'surplus', accelerationFactor: factor,
+            modeReason: '周余量 ' + Math.round(remaining) + '%，距重置约 ' + Math.ceil(hours) + ' 小时；' +
+                (lagging ? '落后理论水位 ' + Math.round(deficit) + ' 个百分点，自动高速补进度' : '临近到期，自动高速消耗余量') };
+    }
+    if (!resetAllowed(policy, account)) return hold('周进度无需补量；未授权自动用卡');
+    const weeklyCard = cards.find(c => c.type === 'week');
+    if (!weeklyCard) return hold('无可用周卡，回到额度均衡');
+    const checked = (account.resetCards || {}).checkedAt;
+    if (!checked || now - checked > 15 * 60000 || checked > now + 60000) return hold('卡库存待刷新，暂不为用卡加速');
+    if (hours < weekMinHours) return hold('临近周自然恢复，暂不为用卡加速');
+    const replenish = policy.replenishAt ? Date.parse(policy.replenishAt) : NaN;
+    if (replenish > now && replenish - now < (finishHours + weekMinHours) * HOUR) return hold('预计补充额度将覆盖缺口，暂不加速用卡');
+    const usingCards = continuing && old.accelerationReason !== 'surplus';
+    if (week.used < (usingCards ? 45 : 50) || ahead < (usingCards ? 10 : 15) || gap < (usingCards ? 12 : weekMinHours)) return hold('周进度尚不需要用卡加速');
     // Even the current average rate must be able to reach depletion before the card expires.
     if (!cards.some(c => c.type === 'week' && c.expiresAt > now + finishHours * HOUR)) return hold('预计耗尽前周卡将到期，暂不依赖该卡加速');
-    return { ...result, effectiveMode: 'burst', modeReason: '周进度领先 ' + Math.round(ahead) + '%，预计提前耗尽约 ' + Math.round(gap) + ' 小时；有周卡且 5h 可承接，自动高速' };
+    return { ...result, effectiveMode: 'burst', accelerationReason: 'reset-card', modeReason: '周进度领先 ' + Math.round(ahead) + '%，预计提前耗尽约 ' + Math.round(gap) + ' 小时；有周卡且 5h 可承接，自动高速' };
 }
 function chooseConcurrency({ policy, routes, short, shortFactor, old, live, now, effectiveMode, recentDemand }) {
     const ceiling = concurrencyCeiling(policy);
@@ -93,4 +126,4 @@ function chooseConcurrency({ policy, routes, short, shortFactor, old, live, now,
         plannedAt: now, shortProtection: protection, concurrencyReason: reason,
         concurrencyCeiling: ceiling, limited: !!live.limited };
 }
-module.exports = { concurrencyCeiling, resetAllowed, quotaLink, chooseMode, chooseConcurrency };
+module.exports = { concurrencyCeiling, resetAllowed, quotaLink, weeklyWaterline, chooseMode, chooseConcurrency };
