@@ -587,6 +587,8 @@
       var refresh = isAdmin() ? '<button class="card-refresh list-row-refresh" id="refresh-' + i + '" onclick="event.stopPropagation(); refreshCard(' + i + ')" title="刷新">&#x21bb;</button>' : '';
       var pTag = platformTag(platform, acc.planType, acc.alias);
       var name = esc(displayName(acc, i));
+      var dispatchBadges = weightBadgeHTML(acc.name, i) + capacityBadgeHTML(acc.name)
+        + (typeof schedulingBadge === 'function' ? schedulingBadge(acc.name) : '');
 
       var leftBlock, middle, right;
       if (isUsagePending(acc)) {
@@ -594,13 +596,13 @@
           + '<div class="list-row-status"><span class="card-status status-loading">加载中</span></div></div>';
         middle = '<div class="list-rings"><div class="list-row-loading">'
           + '<div class="skel-line w80 h14"></div><div class="skel-line w60"></div></div></div>';
-        right = '<div class="list-row-meta"><span class="cache-time">正在获取用量…</span></div>';
+        right = '<div class="list-row-meta">' + dispatchBadges + '<span class="cache-time">正在获取用量…</span></div>';
       } else if (!acc.success) {
         var errStatus = '<div class="list-row-status"><span class="card-status status-error">请求失败</span></div>';
         leftBlock = '<div class="list-row-left"><div class="list-row-title">' + pTag + '<h3>' + name + '</h3></div>' + errStatus + '</div>';
         middle = '<div class="list-rings"><div><span class="list-row-error">' + esc(acc.error || '未知错误') + '</span>'
           + (isTelecomAuthError(acc) ? telecomReloginButton(i) : '') + '</div></div>';
-        right = '';
+        right = dispatchBadges ? '<div class="list-row-meta">' + dispatchBadges + '</div>' : '';
       } else {
         var mp = getAccMaxPct(acc);
         var rings = getRings(acc);
@@ -618,7 +620,7 @@
         middle = '<div class="list-rings">' + ringsHtml + '</div>';
         var cache = acc.cachedAt ? '<span class="cache-time">' + timeAgo(acc.cachedAt) + '</span>' : '';
         var expireHtml = getListExpireHtml(i, acc);
-        right = '<div class="list-row-meta">' + weightBadgeHTML(acc.name, i) + (typeof schedulingBadge === 'function' ? schedulingBadge(acc.name) : '') + getListBadges(acc) + cache + '</div>'
+        right = '<div class="list-row-meta">' + dispatchBadges + getListBadges(acc) + cache + '</div>'
           + (expireHtml ? '<div class="list-row-meta">' + expireHtml + '</div>' : '');
       }
 

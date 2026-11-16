@@ -1,4 +1,7 @@
     // ============ sub2api 容量胶囊(管理员) ============
+    var _capacityRequestId = 0;
+    var _capacityError = false;
+    var _capacityUpdatedAt = 0;
 
     // 全局容量悬浮气泡：fixed 定位挂在 body 下，卡片 overflow:hidden / hover transform
     // 都不会裁剪或位移；卡片 innerHTML 重渲染也无损（事件委托到 document）。
@@ -46,24 +49,40 @@
       var lines = cap.items.map(function(it) {
         return it.name + '：' + it.current + '/' + it.total + (it.off ? '（已停调度）' : '');
       }).join('\n');
+      if (_capacityError) {
+        cls += ' stale';
+        lines = '刷新失败，显示最近一次数据' + (_capacityUpdatedAt ? '（' + new Date(_capacityUpdatedAt).toLocaleTimeString('zh-CN') + '）' : '') + '\n' + lines;
+      }
       return '<span class="cap-pill ' + cls + '" data-cap-tip="' + escCapAttr(lines) + '">'
         + cap.current + '|' + cap.total + '</span>';
     }
 
     function loadCapacity() {
+      var requestId = ++_capacityRequestId;
       // 服务端未配置 SUB2API_BASE_URL 时整体禁用(不请求、不渲染胶囊)
       if (!FEATURES.relayEnabled) { capacityMap = {}; return; }
-      // 仅管理员展示（暴露内部账号名）；失败静默：没有快照就不渲染胶囊
+      // 仅管理员展示；暂时失败保留最近的快照，并在悬浮中标注。
       var p = localStorage.getItem('glm_pwd') || '';
       if (!p) { capacityMap = {}; return; }
-      fetch(API_PREFIX + '/api/sub2api/capacity?password=' + encodeURIComponent(p))
+      return fetch(API_PREFIX + '/api/sub2api/capacity?password=' + encodeURIComponent(p))
         .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
         .then(function(data) {
-          capacityMap = {};
-          ((data && data.accounts) || []).forEach(function(a) {
-            if (!a || !a.matched_key) return;
-            var g = capacityMap[a.matched_key];
-            if (!g) g = capacityMap[a.matched_key] = { current: 0, total: 0, items: [] };
+          if (requestId !== _capacityRequestId || p !== localStorage.getItem('glm_pwd') || !FEATURES.relayEnabled) return;
+          if (!data || !Array.isArray(data.accounts)) throw new Error('容量快照格式无效');
+          // matched_key depends on a second request from the relay to the weight
+          // source. The account snapshot is still valid if that request fails.
+          // Use the same longest-prefix rule as scheduling to recover its key.
+          var names = accountsData.filter(function(a) { return a && a.name; })
+            .map(function(a) { return a.name; }).sort(function(a, b) { return b.length - a.length; });
+          var next = {};
+          data.accounts.forEach(function(a) {
+            if (!a) return;
+            var key = names.indexOf(a.matched_key) >= 0 ? a.matched_key : names.find(function(name) {
+              return typeof a.name === 'string' && a.name.trim().indexOf(name) === 0;
+            });
+            if (!key) return;
+            var g = next[key];
+            if (!g) g = next[key] = { current: 0, total: 0, items: [] };
             var active = a.schedulable && a.status === 'active';
             var cur = a.current_concurrency || 0;
             var tot = a.concurrency || 0;
@@ -73,8 +92,13 @@
             g.total += tot;
             g.items.push({ name: a.name, current: cur, total: tot, off: !active });
           });
+          capacityMap = next; _capacityError = false; _capacityUpdatedAt = Date.now();
           if (accountsData.length) renderCards(accountsData);
         })
-        .catch(function() {});
+        .catch(function() {
+          if (requestId !== _capacityRequestId || p !== localStorage.getItem('glm_pwd')) return;
+          _capacityError = true;
+          if (accountsData.length) renderCards(accountsData);
+        });
     }
 
