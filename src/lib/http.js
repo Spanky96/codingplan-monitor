@@ -76,7 +76,7 @@ function httpsGet(url, headers, options) {
     return new Promise(function(resolve, reject) {
         var req = https.get(url, { headers: headers }, function(res) { parseJsonResponse(res, resolve, reject); });
         req.on('error', reject);
-        if (options && options.timeoutMs) {
+        if (options && options.timeoutMs && req.setTimeout) {
             req.setTimeout(options.timeoutMs, function() { req.destroy(new Error('timeout')); });
         }
     });
@@ -101,7 +101,7 @@ function httpGetJSON(url, timeoutMs) {
     });
 }
 
-function httpsRequest(method, url, headers, body) {
+function httpsRequest(method, url, headers, body, options) {
     return new Promise(function(resolve, reject) {
         var m = url.match(/^https:\/\/([^\/]+)(\/.*)$/);
         if (!m) return reject(new Error('Invalid URL'));
@@ -121,6 +121,9 @@ function httpsRequest(method, url, headers, body) {
             });
         });
         req.on('error', reject);
+        if (options && options.timeoutMs && req.setTimeout) {
+            req.setTimeout(options.timeoutMs, function() { req.destroy(new Error('timeout')); });
+        }
         if (bodyStr) req.write(bodyStr);
         req.end();
     });

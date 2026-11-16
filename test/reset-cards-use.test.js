@@ -152,6 +152,14 @@ test('card missing from freshest list still rejected with 409', async function()
     assert.equal(useCalls.length, 0);
 });
 
+test('a repeated card submission is rejected without another upstream use call', async function() {
+    useCalls = [];
+    var r = await postUse({ type: 'week', recordId: 2165677 });
+    assert.equal(r.status, 409);
+    assert.match(r.json.error, /不会重复扣卡/);
+    assert.equal(useCalls.length, 0);
+});
+
 test.after(function() {
     https.request = originalRequest;
     https.get = originalGet;

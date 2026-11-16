@@ -662,6 +662,7 @@
     }
     .theme-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 9999; pointer-events: none; }
   </style>
+  <link rel="stylesheet" href="scheduler.css">
   <script src="js/echart/echarts.min.js"></script>
   <script>
     // 子路径部署适配:页面挂在路径前缀下(如 https://host/glm/)时,
@@ -710,6 +711,7 @@
       </button>
       <span class="last-updated" id="lastUpdated"></span>
       <a class="header-btn" href="./models.html">模型调用</a>
+      <button class="header-btn" id="schedulerBtn" style="display:none" onclick="openScheduler()">智能调度</button>
       <button class="header-btn" id="mgmtBtn">管理账号</button>
       <button class="header-btn" id="refreshBtn" style="display: none;">全部刷新</button>
     </div>
@@ -717,6 +719,7 @@
   <div class="container">
     <div class="main-layout">
       <div class="main-col">
+        <div class="schedule-summary" id="schedulerSummary" style="display:none"></div>
         <div class="toolbar" id="toolbar">
           <div class="toolbar-group" id="platformFilterGroup">
             <span class="toolbar-label" title="可同时选择多个站点">站点（可多选）</span>
@@ -732,6 +735,7 @@
           </div>
           <span class="toolbar-count" id="toolbarCount"></span>
         </div>
+        <div class="schedule-categories" id="scheduleCategories" style="display:none"></div>
         <div class="card-grid" id="cardGrid"></div>
       </div>
       <!-- 管理员专属:中转站用户实时调度 + 今日Token 排行(默认隐藏,登录后显示) -->
@@ -863,10 +867,17 @@
 
   <!-- Theme transition overlay -->
   <div class="theme-overlay" id="themeOverlay"></div>
+  <div class="modal-overlay" id="schedulerOverlay">
+    <div class="modal schedule-modal" role="dialog" aria-modal="true" aria-labelledby="schedulerTitle">
+      <div class="modal-header"><h3 id="schedulerTitle">智能调度控制台</h3><button class="modal-close" aria-label="关闭智能调度" onclick="closeModal('schedulerOverlay')">&times;</button></div>
+      <div class="modal-body" id="schedulerBody"></div>
+    </div>
+  </div>
   <script src="js/app/core.js"></script>
   <script src="js/app/theme.js"></script>
   <script src="js/app/glm-model.js"></script>
   <script src="js/app/platform-helpers.js"></script>
+  <script src="js/app/status.js"></script>
   <script src="js/app/cards.js"></script>
   <script src="js/app/detail.js"></script>
   <script src="js/app/keys.js"></script>
@@ -878,6 +889,7 @@
   <script src="js/app/capacity.js"></script>
   <script src="js/app/relay.js"></script>
   <script src="js/app/relay-chart.js"></script>
+  <script src="js/app/scheduler.js"></script>
   <script src="js/app/data.js"></script>
 </body>
 </html>

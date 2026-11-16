@@ -8,6 +8,7 @@ var { readAccounts, writeAccounts } = require('../accounts');
 var { buildWeightEntries, CACHE_TTL } = require('../cache');
 var { checkAuth, clientIp, authBanState } = require('../auth');
 var privacy = require('../privacy');
+var scheduler = require('../../scheduler/service');
 
 var PASSWORD = config.adminPassword;
 
@@ -46,10 +47,13 @@ module.exports = function(app) {
                 var base = s ? s.weight : null;                      // token 失效/无缓存 → null → 走默认权重
                 var final = weights.finalWeight(base, cfg);
                 if (s && s.exhausted) final = 0;                     // 耗尽账号权重恒为 0,不受策略 A/D 复活
+                var managed = scheduler.decision(acc.name);
+                if (managed) final = managed.weight;
                 result[forceMask ? aliasMap[entry.index] : acc.name] = final;
                 if (wantDetail) {
                     detail.push({
                         index: entry.index, name: acc.name, platform: entry.platform, weight: final,
+                        scheduling: managed,
                         base: base, source: base === null ? 'default' : 'computed',
                         strategy: cfg.strategy, configValue: cfg.value, defaultWeight: cfg.defaultWeight,
                         score5h: s ? s.score5h : null, score7d: s ? s.score7d : null,
@@ -70,7 +74,15 @@ module.exports = function(app) {
                     });
                 }
             }
-            if (wantDetail) {
+            if (authenticated && req.query.schedule === '1') {
+                var state = require('../../scheduler/store').read();
+                var controls = scheduler.controls(state);
+                // A removed/renamed monitored account still needs an explicit zero
+                // for its old relay prefix until the administrator removes the policy.
+                Object.keys(controls).forEach(function(name) { result[name] = Math.round((controls[name].weight + controls[name].fallback_weight) * 10) / 10; });
+                res.json({ version: 2, controller_id: state.controllerId || '', weights: result, controls: controls,
+                    recoveries: state.verifiedResets || {}, generated_at: new Date(generatedAt).toISOString() });
+            } else if (wantDetail) {
                 res.json({ weights: result, detail: detail, generatedAt: generatedAt, cacheTtlMs: CACHE_TTL });
             } else {
                 res.json(result);
@@ -96,6 +108,8 @@ module.exports = function(app) {
                 var base = s ? s.weight : null;
                 var finalW = weights.finalWeight(base, cfg);
                 if (s && s.exhausted) finalW = 0;                    // 耗尽账号权重恒为 0
+                var managed = scheduler.decision(acc.name);
+                if (managed) finalW = managed.weight;
                 list.push({ index: entry.index, name: acc.name, platform: entry.platform, config: cfg, base: base, final: finalW, exhausted: s ? s.exhausted : false });
             }
             res.json(list);
@@ -108,6 +122,7 @@ module.exports = function(app) {
             var accounts = readAccounts();
             var idx = parseInt(req.params.index);
             if (!accounts[idx]) return res.status(404).json({ error: '未找到账号' });
+            if (scheduler.decision(accounts[idx].name)) return res.status(409).json({ error: '此账号由智能调度托管，请在智能调度中调整并发上限、用卡或暂停策略' });
             var cfg = weights.getWeightConfig(accounts[idx]);
             if (req.body && req.body.defaultWeight != null) cfg.defaultWeight = req.body.defaultWeight;
             if (req.body && req.body.strategy != null) cfg.strategy = req.body.strategy;

@@ -201,10 +201,10 @@ async function loginGlm(username, password) {
     return String(token).replace(/^Bearer\s+/i, '');
 }
 
-function saveGlmToken(index, newAuth) {
+function saveGlmToken(index, newAuth, expectedName) {
     try {
         var accounts = readAccounts();
-        if (!accounts[index]) return;
+        if (!accounts[index] || (expectedName && accounts[index].name !== expectedName)) return;
         var platform = accounts[index].platform || 'glm';
         if (platform !== 'glm') return;
         accounts[index].authorization = newAuth;
@@ -218,7 +218,7 @@ async function withGlmAuthRetry(account, index, requestFn) {
     } catch (authErr) {
         if (!isGlmAuthError(authErr) || !hasGlmLoginCredentials(account)) throw authErr;
         var newAuth = await loginGlm(account.glm_username, account.glm_password);
-        saveGlmToken(index, newAuth);
+        saveGlmToken(index, newAuth, account.name);
         // 本进程内后续请求立即用新 token（accounts.json 也可能被其他写覆盖，以内存更新为准）
         account.authorization = newAuth;
         return await requestFn(account);
@@ -230,7 +230,7 @@ async function fetchGLMUsage(account, index) {
         var json = await withGlmAuthRetry(account, index, async function(acc) {
             var url = 'https://bigmodel.cn/api/monitor/usage/quota/limit';
             if (acc.teamEdition) url += '?type=2';
-            return httpsGet(url, makeHeaders(acc));
+            return httpsGet(url, makeHeaders(acc), { timeoutMs: 15000 });
         });
         var userType = decodeJwtUserType(account.authorization);
         var personalEdition = userType ? userType === 'PERSONAL' : !account.teamEdition;

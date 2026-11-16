@@ -34,6 +34,7 @@
 - **智谱深度管理**:API Key 查看 / 复制 / 创建 / 删除、IP 白名单管理、风控异常提示、重置卡一键使用
 - **凭证免维护**:智谱 / YesCode / Sub2API 配账密后 token 失效自动重登;Sub2API 支持 Refresh Token 免账密续期(自动 rotate 回写);阶跃 refresh 段自动续期;智云扫码重登
 - **账号管理**:粘贴 fetch / cURL 自动解析凭证、拖拽排序;深色模式、隐私模式(访客脱敏)
+- **智能调度**:账号分类与人工低速 / 主动消耗模式、周/5h 额度规划、自适应并发、有限重置卡评估、付费与掺水独立兜底、即时恢复（需配套中转站版本，默认关闭）
 - **安全**:凭证 AES-256-GCM 加密落盘,所有平台请求由服务端代理转发,浏览器不持有凭证;管理密码防爆破
 
 ## 📊 平台功能支持
@@ -99,6 +100,7 @@ docker compose up -d --build
 | [deployment.md](docs/deployment.md) | Docker 部署、deploy.sh 一键脚本、本地开发 |
 | [api.md](docs/api.md) | 后端 API 一览与权重接口(/api/weights)完整逻辑 |
 | [relay-integration.md](docs/relay-integration.md) | sub2api 中转站可选集成(实时面板 / 权重输出 / 凭证同步) |
+| [smart-scheduling.md](docs/smart-scheduling.md) | 智能调度算法、手动分类、用卡规则、双项目部署与回滚 |
 | [development.md](docs/development.md) | 项目结构、新增平台指南、测试 |
 
 ## 🔒 安全说明

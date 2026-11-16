@@ -158,18 +158,6 @@
       var text = esc(acc.risk.text);
       return '<span class="risk-badge" title="" data-tooltip="' + text + '" aria-label="' + text + '" tabindex="0">&#x26a0;&#xfe0f; 异常</span>';
     }
-    function resetBadgeHTML(acc) {
-      var r = acc && acc.resetRecommendation;
-      if (!r || !r.needed) return '';
-      var unavailableDays = r.unavailableHours / 24;
-      var duration = unavailableDays >= 2
-        ? unavailableDays.toFixed(1).replace(/\.0$/, '') + ' 天'
-        : Math.round(r.unavailableHours) + ' 小时';
-      var title = '周用量 ' + Math.round(r.weeklyPct) + '%，理论 ' + Math.round(r.theoPct)
-        + '%；按当前速度预计会在重置前提前耗尽，约 ' + duration + ' 无法使用';
-      var text = esc(title);
-      return '<span class="reset-badge" title="" data-tooltip="' + text + '" aria-label="' + text + '" tabindex="0">需要重置</span>';
-    }
     // 重置卡类型标记:DIRECT=定向发放(新一批,大 recordId)/ GLOBAL=全员通用(老一批);旧缓存无该字段不显示
     function resetCardGrantTag(c) {
       if (c && c.grantType === 'DIRECT') return ' [定向]';

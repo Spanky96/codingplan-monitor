@@ -6,7 +6,7 @@
       var w = weightsMap[name];
       if (w == null) return '';
       var cls = 'weight-badge ' + (w === 0 ? 'w-0' : w <= 3 ? 'w-low' : w <= 7 ? 'w-mid' : 'w-high');
-      return '<span class="' + cls + '" onclick="event.stopPropagation();openWeightConfig(' + i + ')" title="点击配置权重" style="cursor:pointer">' + w.toFixed(1) + '</span>';
+      return '<span class="' + cls + '" onclick="event.stopPropagation();openWeightConfig(' + i + ')" title="点击查看权重与调度策略" style="cursor:pointer">' + w.toFixed(1) + '</span>';
     }
 
     function loadWeights() {
@@ -68,6 +68,10 @@
       var acc = accAt(i);
       if (!acc) return;
       var det = weightsDetail[acc.name] || {};
+      if (det.scheduling && det.scheduling.managed) {
+        openScheduler(acc.name);
+        return;
+      }
       var cfg = {
         defaultWeight: (det.defaultWeight != null) ? det.defaultWeight : 1,
         strategy: det.strategy || 'B',

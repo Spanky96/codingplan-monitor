@@ -21,6 +21,7 @@ api(app);
 
 // 每日自动签到(账号配 checkin_url 才生效;定时器 unref,不影响进程退出)
 require('./api/checkin').startCheckinScheduler();
+require('./scheduler/service').start();
 
 const server = app.listen(port, host, () => {
   console.log('用量监控已启动:');

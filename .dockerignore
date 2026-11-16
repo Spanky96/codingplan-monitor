@@ -5,7 +5,12 @@ npm-debug.log
 
 # 本地环境变量与敏感数据(绝不打入镜像,运行时通过 env_file 注入)
 .env
+.env.*
+!.env.example
 accounts.json
+scheduler-state.json
+scheduler-state.json.tmp
+usage-cache.json
 data/
 tmp/
 token.telecomjs.com/

@@ -191,37 +191,9 @@ module.exports = function(app) {
             if (!useType || !Number.isInteger(recordId) || recordId <= 0) {
                 return res.status(400).json({ error: '参数不正确,需要 type 与 recordId' });
             }
-            // 用前校验:页面上的卡可能已被使用或过期,以官方最新列表为准;
-            // 同时取该卡 grantType 一并透传(官方 use 接口已强制要求,
-            // 缺失时报「指定的重置次数不可用,请刷新后重试」——不信任前端传值)
-            var listJson = await withGlmAuthRetry(account, i, function(acc) {
-                return httpsGet(resetCardsUrl(), makeHeaders(acc));
-            });
-            var matched = parseGlmResetCards(listJson && listJson.data).find(function(c) {
-                return c.type === cardType && c.recordId === recordId;
-            });
-            if (!matched) return res.status(409).json({ error: '该重置卡已使用、已过期或不存在,请刷新后重试' });
-
-            var useBody = {
-                targetType: 'PERSONAL',
-                resetType: useType,
-                recordId: recordId,
-                requestId: uuidV4()
-            };
-            if (matched.grantType) useBody.grantType = matched.grantType;
-            var json = await withGlmAuthRetry(account, i, function(acc) {
-                return httpsRequest('POST', resetCardUseUrl(), makeHeaders(acc), useBody);
-            });
-            if (json && json.code != null && json.code !== 200) throw new Error(json.msg || '使用失败');
-
-            // 使用成功后重取列表刷新缓存(该卡 available 置 false 即消失),并回传前端免二次请求
-            var afterJson = await withGlmAuthRetry(account, i, function(acc) {
-                return httpsGet(resetCardsUrl(), makeHeaders(acc));
-            });
-            var cards = parseGlmResetCards(afterJson && afterJson.data);
-            persistGlmResetCards(i, cards);
-            res.json({ success: true, cards: cards, checkedAt: Date.now() });
-        } catch (err) { res.status(500).json({ error: err.message }); }
+            var result = await require('../../scheduler/reset-cards').use(i, cardType, recordId);
+            res.json(result);
+        } catch (err) { res.status(err.status || 500).json({ error: err.message }); }
     });
 
     // ============ 用户 ID（智谱订阅列表 customerId,仅管理员,详情页展示+复制）============

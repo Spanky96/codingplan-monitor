@@ -26,6 +26,7 @@ module.exports = function(app) {
     // 凭证导出默认关闭:CredENTIALS_EXPORT=1 才注册(测试与功能开关依赖此行为)
     if (config.credentialsExportEnabled) registerCredentials(app);
     registerWeights(app);
+    require('./routes/scheduler')(app);
     registerRelay(app);
     registerKeys(app);
     registerIpWhitelistBatch(app);

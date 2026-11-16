@@ -14,5 +14,5 @@
     // 点击遮罩关闭:仅卡片详情(modalOverlay,纯浏览随时可关)保留;
     // 其余弹层含表单/登录态,误触遮罩关闭易丢输入,只能 × 或 Esc 关闭
     document.getElementById('modalOverlay').addEventListener('click', function(e){ if(e.target===e.currentTarget) closeModal('modalOverlay'); });
-    document.addEventListener('keydown', function(e){ if(e.key==='Escape') ['pwdOverlay','modalOverlay','mgmtOverlay','telecomLoginOverlay','weightOverlay','relayChartOverlay','batchIpOverlay'].forEach(closeModal); });
+    document.addEventListener('keydown', function(e){ if(e.key==='Escape') ['pwdOverlay','modalOverlay','mgmtOverlay','telecomLoginOverlay','weightOverlay','schedulerOverlay','relayChartOverlay','batchIpOverlay'].forEach(closeModal); });
 

@@ -3,7 +3,7 @@
       var platform = acc.platform || 'glm';
       var btn = isAdmin() ? '<button class="card-refresh" id="refresh-' + i + '" onclick="refreshCard(' + i + ')" title="刷新">&#x21bb;</button>' : '';
       var pTag = platformTag(platform, acc.planType, acc.alias);
-      var wBadge = weightBadgeHTML(acc.name, i);
+      var wBadge = weightBadgeHTML(acc.name, i) + (typeof schedulingBadge === 'function' ? schedulingBadge(acc.name) : '');
       var capBadge = capacityBadgeHTML(acc.name);
       // 第一行：分类标签 + 用户名；第二行：权重徽标 + 容量胶囊（都空则不占行）
       var metaRow = (wBadge || capBadge) ? '<div class="card-title-row">' + wBadge + capBadge + '</div>' : '';
@@ -67,7 +67,7 @@
           expHtmlY = '<div class="expire-row" title="订阅到期"><span class="expire-label">订阅到期</span><span class="expire-value ' + expClsY + '">' + esc(expTxt) + '<span class="expire-hint">' + expHintY + '</span></span></div>';
         }
         return '<div class="card" id="card-' + i + '"><div class="card-header">' + headerLeft
-          + '<div class="card-header-right">' + btn + '<span class="card-status ' + getStatusClass(mpY) + '">' + getStatusText(mpY) + '</span></div></div>'
+          + '<div class="card-header-right">' + btn + '<span class="card-status ' + getStatusClass(mpY) + '"' + quotaStatusAttrs(acc) + '>' + getStatusText(mpY) + '</span></div></div>'
           + '<div class="card-body">' + bodyHtml + '</div>' + expHtmlY
           + '<div class="card-footer"><div class="card-footer-left">' + planBadge + balanceBadge + cache + '</div>'
           + '<button class="detail-btn" onclick="showDetail(' + i + ')">详情</button></div></div>';
@@ -116,7 +116,7 @@
           expHtmlH = '<div class="expire-row" title="订阅到期"><span class="expire-label">订阅到期</span><span class="expire-value ' + expClsH + '">' + esc(expTxtH) + '<span class="expire-hint">' + expHintH + '</span></span></div>';
         }
         return '<div class="card" id="card-' + i + '"><div class="card-header">' + headerLeft
-          + '<div class="card-header-right">' + btn + '<span class="card-status ' + getStatusClass(mpH) + '">' + getStatusText(mpH) + '</span></div></div>'
+          + '<div class="card-header-right">' + btn + '<span class="card-status ' + getStatusClass(mpH) + '"' + quotaStatusAttrs(acc) + '>' + getStatusText(mpH) + '</span></div></div>'
           + '<div class="card-body">' + bodyHtml + '</div>' + expHtmlH
           + '<div class="card-footer"><div class="card-footer-left">' + checkinBadgeH + balanceBadgeH + planBadgeH + cache + '</div>'
           + '<button class="detail-btn" onclick="showDetail(' + i + ')">详情</button></div></div>';
@@ -153,7 +153,7 @@
           expHtmlV = '<div class="expire-row" title="订阅到期"><span class="expire-label">订阅到期</span><span class="expire-value ' + expClsV + '">' + esc(expTxtV) + '<span class="expire-hint">' + expHintV + '</span></span></div>';
         }
         return '<div class="card" id="card-' + i + '"><div class="card-header">' + headerLeft
-          + '<div class="card-header-right">' + btn + '<span class="card-status ' + getStatusClass(mpV) + '">' + getStatusText(mpV) + '</span></div></div>'
+          + '<div class="card-header-right">' + btn + '<span class="card-status ' + getStatusClass(mpV) + '"' + quotaStatusAttrs(acc) + '>' + getStatusText(mpV) + '</span></div></div>'
           + '<div class="card-body">' + bodyHtml + '</div>' + expHtmlV
           + '<div class="card-footer"><div class="card-footer-left">' + planBadgeV + cache + '</div>'
           + '<button class="detail-btn" onclick="showDetail(' + i + ')">详情</button></div></div>';
@@ -179,7 +179,7 @@
           qExpHtml = '<div class="expire-row" title="订阅到期"><span class="expire-label">订阅到期</span><span class="expire-value ' + qExpCls + '">' + esc(qExpDate.toLocaleDateString('zh-CN')) + '<span class="expire-hint">' + qExpHint + '</span></span></div>';
         }
         return '<div class="card" id="card-' + i + '"><div class="card-header">' + headerLeft
-          + '<div class="card-header-right">' + btn + '<span class="card-status ' + getStatusClass(mpQ) + '">' + getStatusText(mpQ) + '</span></div></div>'
+          + '<div class="card-header-right">' + btn + '<span class="card-status ' + getStatusClass(mpQ) + '"' + quotaStatusAttrs(acc) + '>' + getStatusText(mpQ) + '</span></div></div>'
           + '<div class="card-body">' + qBody + '</div>' + qExpHtml
           + '<div class="card-footer"><div class="card-footer-left">' + qPlanBadge + qDaysBadge + cache + '</div>'
           + '<button class="detail-btn" onclick="showDetail(' + i + ')">详情</button></div></div>';
@@ -207,7 +207,7 @@
         }
         var zPlanBadge = '<span class="level-badge">' + esc((zSub && zSub.planName) || '无套餐') + '</span>';
         return '<div class="card" id="card-' + i + '"><div class="card-header">' + headerLeft
-          + '<div class="card-header-right">' + btn + '<span class="card-status ' + zStatusCls + '">' + zStatusTxt + '</span></div></div>'
+          + '<div class="card-header-right">' + btn + '<span class="card-status ' + zStatusCls + '"' + quotaStatusAttrs(acc) + '>' + zStatusTxt + '</span></div></div>'
           + '<div class="card-body">' + zBody + '</div>' + zExpHtml
           + '<div class="card-footer"><div class="card-footer-left">' + zPlanBadge + cache + '</div>'
           + '<button class="detail-btn" onclick="showDetail(' + i + ')">详情</button></div></div>';
@@ -234,7 +234,7 @@
         }
         var mPlanBadge = '<span class="level-badge">' + esc((mS && mS.planName) || '无套餐记录') + '</span>';
         return '<div class="card" id="card-' + i + '"><div class="card-header">' + headerLeft
-          + '<div class="card-header-right">' + btn + '<span class="card-status ' + mStatusCls + '">' + mStatusTxt + '</span></div></div>'
+          + '<div class="card-header-right">' + btn + '<span class="card-status ' + mStatusCls + '"' + quotaStatusAttrs(acc) + '>' + mStatusTxt + '</span></div></div>'
           + '<div class="card-body">' + mBody + '</div>' + mExpHtml
           + '<div class="card-footer"><div class="card-footer-left">' + mPlanBadge + cache + '</div>'
           + '<button class="detail-btn" onclick="showDetail(' + i + ')">详情</button></div></div>';
@@ -262,7 +262,7 @@
         var sfPlanBadge = '<span class="level-badge">' + esc((sfS && sfS.planName) || '无套餐') + '</span>'
           + (sfS && sfS.autoRenew ? '<span class="level-badge level-badge-ok">自动续费</span>' : '');
         return '<div class="card" id="card-' + i + '"><div class="card-header">' + headerLeft
-          + '<div class="card-header-right">' + btn + '<span class="card-status ' + sfStatusCls + '">' + sfStatusTxt + '</span></div></div>'
+          + '<div class="card-header-right">' + btn + '<span class="card-status ' + sfStatusCls + '"' + quotaStatusAttrs(acc) + '>' + sfStatusTxt + '</span></div></div>'
           + '<div class="card-body">' + sfBody + '</div>' + sfExpHtml
           + '<div class="card-footer"><div class="card-footer-left">' + sfPlanBadge + cache + '</div>'
           + '<button class="detail-btn" onclick="showDetail(' + i + ')">详情</button></div></div>';
@@ -279,7 +279,7 @@
         var ob = b.type === 'TIME_LIMIT' ? 0 : (LIMIT_ORDER[b.unit] != null ? LIMIT_ORDER[b.unit] : 9);
         return oa - ob;
       });
-      var mp = maxPct(limits), level = levelLabel(acc);
+      var mp = maxPct(limits.filter(function(l) { return l.unit === 3 || l.unit === 6; })), level = levelLabel(acc);
       var expHtml = '';
       var exp = expireData[i];
       if (exp && exp.success && exp.expireTime) {
@@ -292,12 +292,11 @@
       var keyBadge = isAdmin() && acc.keyCount != null ? '<span class="level-badge level-badge-ok">Key: ' + acc.keyCount + '个</span>' : '';
       var rcBadge = resetCardBadgeHTML(acc);
       var rBadge = riskBadgeHTML(acc);
-      var resetBadge = resetBadgeHTML(acc);
-      var resetClass = resetBadge ? ' reset-needed' : '';
+      var resetClass = '';
       return '<div class="card' + resetClass + '" id="card-' + i + '"><div class="card-header">' + headerLeft
-        + '<div class="card-header-right">' + btn + '<span class="card-status ' + getStatusClass(mp) + '">' + getStatusText(mp) + '</span></div></div>'
+        + '<div class="card-header-right">' + btn + '<span class="card-status ' + getStatusClass(mp) + '"' + quotaStatusAttrs(acc) + '>' + getStatusText(mp) + '</span></div></div>'
         + '<div class="card-body">' + limits.map(renderLimitRow).join('') + '</div>' + expHtml
-        + '<div class="card-footer"><div class="card-footer-left"><span class="level-badge">' + level + '</span>' + glmFooterBadges(acc) + keyBadge + rcBadge + resetBadge + rBadge + cache + '</div>'
+        + '<div class="card-footer"><div class="card-footer-left"><span class="level-badge">' + level + '</span>' + glmFooterBadges(acc) + keyBadge + rcBadge + rBadge + cache + '</div>'
         + '<button class="detail-btn" onclick="showDetail(' + i + ')">详情</button></div></div>';
     }
 
@@ -581,7 +580,6 @@
       b += glmFooterBadges(acc);
       if (isAdmin() && acc.keyCount != null) b += '<span class="level-badge level-badge-ok">Key: ' + acc.keyCount + '个</span>';
       b += resetCardBadgeHTML(acc);
-      b += resetBadgeHTML(acc);
       b += riskBadgeHTML(acc);
       return b;
     }
@@ -613,7 +611,7 @@
           : (rings.length ? rings.map(renderRing).join('') : '<span class="ring-value" style="text-align:left">暂无用量数据</span>');
         var okStatus = platform === 'telecomjs'
           ? '<div class="list-row-status"><span class="card-status status-ok">余额</span></div>'
-          : '<div class="list-row-status"><span class="card-status ' + getStatusClass(mp) + '">' + getStatusText(mp) + '</span></div>';
+          : '<div class="list-row-status"><span class="card-status ' + getStatusClass(mp) + '"' + quotaStatusAttrs(acc) + '>' + getStatusText(mp) + '</span></div>';
         if (platform === 'zenmux' && acc.data && acc.data.accountStatus !== 'healthy') {
           var zListDanger = ['abusive', 'suspended', 'banned'].indexOf(acc.data.accountStatus) >= 0;
           okStatus = '<div class="list-row-status"><span class="card-status ' + (zListDanger ? 'status-danger' : 'status-warn') + '">' + esc(zenmuxAccountStatusText(acc.data.accountStatus)) + '</span></div>';
@@ -622,11 +620,11 @@
         middle = '<div class="list-rings">' + ringsHtml + '</div>';
         var cache = acc.cachedAt ? '<span class="cache-time">' + timeAgo(acc.cachedAt) + '</span>' : '';
         var expireHtml = getListExpireHtml(i, acc);
-        right = '<div class="list-row-meta">' + getListBadges(acc) + cache + '</div>'
+        right = '<div class="list-row-meta">' + weightBadgeHTML(acc.name, i) + (typeof schedulingBadge === 'function' ? schedulingBadge(acc.name) : '') + getListBadges(acc) + cache + '</div>'
           + (expireHtml ? '<div class="list-row-meta">' + expireHtml + '</div>' : '');
       }
 
-      var resetClass = acc.resetRecommendation && acc.resetRecommendation.needed ? ' reset-needed' : '';
+      var resetClass = '';
       return '<div class="list-row' + resetClass + '" id="card-' + i + '" onclick="showDetail(' + i + ')" title="点击查看详情">'
         + leftBlock + middle + '<div class="list-row-right">' + right + '</div>' + refresh + '</div>';
     }
@@ -658,7 +656,7 @@
       }
       if (plat === 'telecomjs') return 0;
       var limits = acc.data.limits || [];
-      return maxPct(limits);
+      return maxPct(limits.filter(function(l) { return l.unit === 3 || l.unit === 6; }));
     }
 
     function applyFilterSort(data) {
@@ -666,6 +664,12 @@
       if (_filterPlatforms.length) {
         arr = arr.filter(function(x) {
           return _filterPlatforms.indexOf((x.acc && x.acc.platform) || 'glm') >= 0;
+        });
+      }
+      if (_sortMode === 'default' && typeof schedulerRow === 'function' && isAdmin()) {
+        arr.sort(function(a,b) {
+          var ra = schedulerRow(a.acc.name), rb = schedulerRow(b.acc.name);
+          return (ra ? ra.priority : 10000) - (rb ? rb.priority : 10000) || a.origIdx - b.origIdx;
         });
       }
       if (_sortMode === 'tension-desc' || _sortMode === 'tension-asc') {
@@ -760,11 +764,13 @@
         return;
       }
       var list = applyFilterSort(visible);
+      if (typeof filterScheduleCategories === 'function') list = filterScheduleCategories(list);
       if (countEl) countEl.textContent = '共 ' + list.length + ' / ' + data.length + ' 个账号';
       if (!list.length) {
         grid.innerHTML = '<div class="empty">当前筛选下无账号</div>';
         return;
       }
+      if (typeof renderScheduleGroups === 'function' && renderScheduleGroups(grid, list, isList)) return;
       grid.innerHTML = list.map(function(x) {
         return isList ? renderListRowHTML(x.origIdx, x.acc) : renderCardHTML(x.origIdx, x.acc);
       }).join('');

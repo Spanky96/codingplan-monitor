@@ -31,6 +31,8 @@ const config = {
   relayEnabled: !!(process.env.SUB2API_BASE_URL || '').trim(),
   // 中转站用户活动快照的 token 门禁（对应中转站 ACTIVITY_SNAPSHOT_TOKEN，未配置则不带）
   relaySnapshotToken: process.env.RELAY_SNAPSHOT_TOKEN || '',
+  // 与中转站同名环境变量一致，仅服务端使用，授权立即同步调度计划。
+  schedulerSyncToken: process.env.SCHEDULER_SYNC_TOKEN || '',
   // 模型调用页(models.html)的网关地址(OpenAI 兼容入口,含 /v1)。
   // 留空(默认)= 页面禁用并提示未配置;由 /api/features 注入前端
   modelsGatewayUrl: (process.env.MODELS_GATEWAY_URL || '').trim().replace(/\/+$/, ''),

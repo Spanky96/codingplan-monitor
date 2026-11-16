@@ -219,7 +219,8 @@
         .then(function(r){return r.json()}).then(function(data){
         accountsData = data; renderCards(data);
         document.getElementById('lastUpdated').textContent = '更新于 ' + new Date().toLocaleTimeString('zh-CN');
-        loadWeights();   // 拉取权重渲染徽标(游客仅公开账号,管理员全量)
+        loadWeights();
+        if (typeof loadScheduler === 'function') loadScheduler();   // 拉取权重渲染徽标(游客仅公开账号,管理员全量)
         loadCapacity();  // 拉取 sub2api 容量快照渲染胶囊(仅管理员)
         // 慢账号(智云等)后台补齐:列表接口已触发抓取,这里 force=false 会优先 join inflight
         (data || []).forEach(function(acc, i) {
@@ -251,6 +252,7 @@
       loadData();
       loadExpire();
       activityApplyVisibility();
+      loadScheduler();
       if (FEATURES.relayEnabled && isAdmin()) { loadActivityDispatch(); loadActivityUsage(); }
     });
     setInterval(function(){ loadData(); }, 5 * 60 * 1000);

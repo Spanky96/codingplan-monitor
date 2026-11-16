@@ -41,7 +41,7 @@
     // 相邻 CVD ΔE 8.7/8.5、normal 21.6/20.2、色度带全过;暗色表面对比全 ≥3:1,
     // 亮色 9 槽 <3:1 走 relief 规则——图例色块旁始终有模型名文字,排行条有
     // tooltip 与榜单数字兜底。claude 主题复用亮色版)。灰色仅用于「未知模型」
-    // 与槽位耗尽(20 个并发模型以上)后的新模型
+    // ；超出固定色板的模型使用稳定 HSL 扩展色
     var ACTIVITY_COLORS_LIGHT = ['#e1789b', '#6b7f0c', '#e47f5b', '#8d5baf', '#d38e2e', '#127abe', '#aba22a', '#6669c1', '#58b670', '#b34d6a', '#19b5ae', '#926e0c', '#18aeda', '#9f549a', '#61a1f0', '#b65142', '#9691ee', '#448735', '#c381d2', '#a95f0c'];
     var ACTIVITY_COLORS_DARK = ['#d56c87', '#327522', '#d77157', '#904081', '#c28412', '#0f66ac', '#98991e', '#804797', '#4ba964', '#9b4808', '#16a7a1', '#5d54ac', '#16a2c3', '#a03b51', '#6091e4', '#5b6c09', '#9980dc', '#a23c42', '#b675c5', '#3d5eaf'];
     var ACTIVITY_MODEL_GRAY = '#94a3b8';
@@ -76,8 +76,10 @@
      * 持久化 —— 之后无论快照里出现/消失哪些其他模型,颜色都不再漂移
      * (旧实现按排序位次取色,集合一变全体换色)。哈希冲突的模型必然分到
      * 不同槽,直连/转发(glm-5.3 vs glm-5.3-flash)依旧异色;历史累计超
-     * 20 种后新模型折叠为灰(不入表,槽位保留给既有模型)。 */
+     * 20 种后新模型使用名字哈希生成扩展色，灰色仅表示未知模型。 */
     function activityModelColor(name) {
+      name = String(name || '').trim().toLowerCase();
+      if (!name || name === 'unknown' || name === '未知模型') return ACTIVITY_MODEL_GRAY;
       var pal = activityPalette();
       if (Object.prototype.hasOwnProperty.call(ACTIVITY_PINNED_SLOTS, name)) {
         return pal[ACTIVITY_PINNED_SLOTS[name]];
@@ -92,7 +94,8 @@
         if (pinnedVals[map[k]]) delete map[k];
       });
       if (Object.prototype.hasOwnProperty.call(map, name)) {
-        return map[name] >= 0 && map[name] < pal.length ? pal[map[name]] : ACTIVITY_MODEL_GRAY;
+        if (Number.isInteger(map[name]) && map[name] >= 0 && map[name] < pal.length) return pal[map[name]];
+        delete map[name];
       }
       var used = {};
       Object.keys(pinnedVals).forEach(function(v) { used[v] = true; });   // 钉住槽不参与分配
@@ -105,7 +108,13 @@
           if (!used[i]) { slot = i; break; }
         }
       }
-      if (slot < 0) return ACTIVITY_MODEL_GRAY;   // 槽位耗尽:灰色,不写入分配表
+      // The palette is not a lifetime cap. Additional models get deterministic,
+      // theme-aware chromatic colors instead of silently becoming gray.
+      if (slot < 0) {
+        var hue = activityNameHash(name) % 360;
+        var dark = document.documentElement.classList.contains('dark');
+        return 'hsl(' + hue + ', ' + (dark ? 65 : 62) + '%, ' + (dark ? 67 : 42) + '%)';
+      }
       map[name] = slot;
       try { localStorage.setItem(ACTIVITY_SLOTS_KEY, JSON.stringify(map)); } catch (e) { /* 忽略写入失败 */ }
       return pal[slot];
