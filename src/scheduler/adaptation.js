@@ -1,0 +1,96 @@
+'use strict';
+const HOUR = 3600000;
+const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
+
+function concurrencyCeiling(policy) {
+    return Math.max(1, Math.min(policy.maxConcurrency || 1, policy.role === 'primary' ? 4 : 64));
+}
+function resetAllowed(policy, account) {
+    return !!(policy && account && policy.autoReset && !policy.paused && policy.role === 'primary' &&
+        policy.mode !== 'slow' && (account.platform || 'glm') === 'glm' && !account.teamEdition);
+}
+// Couple windows only when the provider supplies totals in the same CREDIT unit.
+// Percentages and request token counts alone do not establish a conversion ratio.
+function quotaLink(short, week) {
+    if (!short || !week || short.meter !== 'CREDIT_LIMIT' || week.meter !== short.meter || !(short.quota > 0 && week.quota > 0)) return null;
+    const ratio = short.quota / week.quota;
+    const needed = Math.max(0, 100 - week.used) / ratio;
+    return { source: 'official-credit', shortToWeekRatio: ratio,
+        weeklyRemainingInShortPct: Math.round(needed * 100) / 100,
+        canFinishInCurrentShortWindow: needed <= Math.max(0, 100 - short.used) };
+}
+function chooseMode({ policy, account, cards, short, week, shortFactor, old, live, now, recentDemand, weekMinHours }) {
+    const requested = policy.mode || 'auto';
+    const result = { effectiveMode: requested, modeSource: requested === 'auto' ? 'automatic' : 'manual', modeReason: '' };
+    if (requested !== 'auto' || policy.role !== 'primary') return result;
+    const hold = reason => ({ ...result, modeReason: reason });
+    if (!resetAllowed(policy, account)) return hold('未授权自动用卡，按原周额度均衡');
+    const weeklyCard = cards.find(c => c.type === 'week');
+    if (!weeklyCard) return hold('无可用周卡，回到额度均衡');
+    const checked = (account.resetCards || {}).checkedAt;
+    if (!checked || now - checked > 15 * 60000 || checked > now + 60000) return hold('卡库存待刷新，暂不自动加速');
+    if (!week || !Number.isFinite(week.resetAt)) return hold('缺少周重置时间，暂不自动加速');
+    const hours = (week.resetAt - now) / HOUR;
+    const elapsed = 168 - hours;
+    const progress = clamp(elapsed / 168 * 100, 0, 100);
+    const ahead = week.used - progress;
+    const meanRate = elapsed >= 1 ? week.used / elapsed : 0;
+    const finishHours = meanRate > 0 ? Math.max(0, 100 - week.used) / meanRate : Infinity;
+    const gap = hours - finishHours;
+    result.weeklyPace = { expectedPct: Math.round(progress * 10) / 10, aheadPct: Math.round(ahead * 10) / 10,
+        projectedGapHours: Number.isFinite(gap) ? Math.round(gap * 10) / 10 : null };
+    if (hours < weekMinHours) return hold('临近周自然恢复，暂不为用卡加速');
+    const replenish = policy.replenishAt ? Date.parse(policy.replenishAt) : NaN;
+    if (replenish > now && replenish - now < (finishHours + weekMinHours) * HOUR) return hold('预计补充额度将覆盖缺口，暂不加速用卡');
+    if (!recentDemand) return hold('近期无主力请求，保持均衡');
+    if (live.limited) return hold('上游限流，暂停自动加速');
+    const continuing = old.effectiveMode === 'burst' && old.modeSource === 'automatic';
+    if (!short || short.used >= (continuing ? 90 : 80) || shortFactor < (continuing ? 0.45 : 0.65)) return hold('5 小时余量偏紧，暂不自动加速');
+    if (week.used < (continuing ? 45 : 50) || ahead < (continuing ? 10 : 15) || gap < (continuing ? 12 : weekMinHours)) return hold('周进度尚不需要用卡加速');
+    // Even the current average rate must be able to reach depletion before the card expires.
+    if (!cards.some(c => c.type === 'week' && c.expiresAt > now + finishHours * HOUR)) return hold('预计耗尽前周卡将到期，暂不依赖该卡加速');
+    return { ...result, effectiveMode: 'burst', modeReason: '周进度领先 ' + Math.round(ahead) + '%，预计提前耗尽约 ' + Math.round(gap) + ' 小时；有周卡且 5h 可承接，自动高速' };
+}
+function chooseConcurrency({ policy, routes, short, shortFactor, old, live, now, effectiveMode, recentDemand }) {
+    const ceiling = concurrencyCeiling(policy);
+    const channels = Math.max(1, routes.native + routes.fallback);
+    const initial = Math.min(ceiling, Math.max(2, channels));
+    let adaptive = clamp(old.adaptiveConcurrency || initial, 1, ceiling);
+    let adjustedAt = old.adjustedAt || now, lastLimitedAt = old.lastLimitedAt || 0;
+    const shortHours = short && Number.isFinite(short.resetAt) ? Math.max(0, (short.resetAt - now) / HOUR) : 5;
+    let protection = 0;
+    if (short && (shortFactor < 0.25 || (short.used >= 95 && shortHours > 0.5))) protection = 2;
+    else if (short && (shortFactor < 0.6 || (short.used >= 85 && shortHours > 0.5))) protection = 1;
+    if (old.shortProtection === 2 && shortFactor < 0.4) protection = 2;
+    else if (old.shortProtection >= 1 && shortFactor < 0.75) protection = Math.max(protection, 1);
+    const quotaCap = Math.min(ceiling, protection === 2 ? 1 : protection === 1 ? 2 : ceiling);
+    const previousActual = clamp(old.concurrency || initial, 1, ceiling);
+    // Only consecutive, timely samples establish sustained saturation; idle/gaps reset it.
+    const consecutive = old.plannedAt && now - old.plannedAt >= 0 && now - old.plannedAt <= 90000;
+    const saturated = live.current >= previousActual * 0.75;
+    let busySince = !live.limited && saturated ? (consecutive && old.busySince ? old.busySince : now) : 0;
+    let reason = '等待持续负载';
+    if (live.limited) {
+        lastLimitedAt = now; busySince = 0;
+        if (!old.limited || now - adjustedAt >= 120000) {
+            adaptive = Math.max(1, Math.floor(Math.min(adaptive, previousActual) / 2)); adjustedAt = now;
+        }
+        reason = '上游限流，降低并发';
+    } else if (lastLimitedAt && now - lastLimitedAt < 120000) {
+        busySince = 0; reason = '限流恢复观察';
+    } else if (effectiveMode === 'burst' && old.effectiveMode !== 'burst' && recentDemand && protection === 0 && ceiling > adaptive) {
+        adaptive = Math.min(ceiling, adaptive + 1); adjustedAt = now; busySince = 0;
+        reason = '高速进入，试探增加一档';
+    } else if (busySince && now - busySince >= 120000 && now - adjustedAt >= 120000 && quotaCap > adaptive) {
+        adaptive = Math.min(ceiling, adaptive + 1); adjustedAt = now; busySince = 0;
+        reason = '连续繁忙两分钟，增加一档';
+    }
+    let concurrency = Math.min(adaptive, quotaCap);
+    if (effectiveMode === 'slow') { concurrency = Math.min(channels, ceiling); busySince = 0; reason = '人工低速保护'; }
+    else if (protection) reason = '5 小时额度保护';
+    else if (adaptive >= ceiling && !live.limited && !(lastLimitedAt && now - lastLimitedAt < 120000)) reason = '已达允许上限';
+    return { concurrency, adaptiveConcurrency: adaptive, adjustedAt, lastLimitedAt, busySince,
+        plannedAt: now, shortProtection: protection, concurrencyReason: reason,
+        concurrencyCeiling: ceiling, limited: !!live.limited };
+}
+module.exports = { concurrencyCeiling, resetAllowed, quotaLink, chooseMode, chooseConcurrency };

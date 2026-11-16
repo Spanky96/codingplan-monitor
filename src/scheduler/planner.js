@@ -3,6 +3,7 @@
 // Pure planning: no network, clock or persistence. All percentages are 0..100.
 const { channelCounts } = require('./channels');
 const { scoreAccount } = require('../weights');
+const { concurrencyCeiling, resetAllowed, quotaLink, chooseMode, chooseConcurrency } = require('./adaptation');
 const HOUR = 3600000;
 const EXHAUSTED = 100;
 const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
@@ -19,6 +20,7 @@ function windowsOf(usage) {
     if ((usage.platform || 'glm') === 'glm') {
         return (usage.data.limits || []).filter(w => w && !w._unlimited && [3, 6].includes(w.unit)).map(w => ({
             type: w.unit === 3 ? 'fiveHour' : 'week',
+            meter: w.type, quota: Number(w.usage) > 0 ? Number(w.usage) : null,
             used: Number(w.usage) > 0 && Number.isFinite(w.currentValue) ? 100 * w.currentValue / w.usage : Number(w.percentage),
             depleted: Number.isFinite(w.remaining) ? w.remaining <= 0 && (!Number.isFinite(w.currentValue) || !(w.usage > 0) || w.currentValue >= w.usage) : Number(w.percentage) >= 100,
             resetAt: timestamp(w.nextResetTime), hours: w.unit === 3 ? 5 : 168
@@ -33,12 +35,15 @@ function windowsOf(usage) {
 function validCards(account, now) {
     return ((account.resetCards || {}).cards || []).filter(c =>
         c.recordId && ['week', 'fiveHour'].includes(c.type) && timestamp(c.expireTime) > now
-    ).sort((a, b) => timestamp(a.expireTime) - timestamp(b.expireTime));
+    ).map(c => ({ ...c, expiresAt: timestamp(c.expireTime) })).sort((a, b) => a.expiresAt - b.expiresAt);
 }
 
 function plan({ config, accounts, usage, telemetry = {}, previous = {}, now }) {
     const primaryPolicies = config.accounts.filter(p => p.role === 'primary' && !p.paused);
     const observed = primaryPolicies.reduce((n, p) => n + ((telemetry[p.name] || {}).current || 0), 0);
+    const lastDemandAt = Math.max(0, ...primaryPolicies.map(p => (telemetry[p.name] || {}).demandAt || 0),
+        ...Object.values(previous).map(r => r.demandSeenAt || 0));
+    const demandNow = observed > 0 || (lastDemandAt > 0 && now - lastDemandAt < 15 * 60000);
     const rows = config.accounts.map(policy => {
         const index = accounts.findIndex(a => a.name === policy.name);
         const account = accounts[index];
@@ -49,24 +54,28 @@ function plan({ config, accounts, usage, telemetry = {}, previous = {}, now }) {
         const short = ws.find(w => w.type === 'fiveHour');
         const week = ws.find(w => w.type === 'week');
         const routes = channelCounts(policy, live);
-        const cards = account && policy.mode === 'burst' && policy.autoReset ? validCards(account, now) : [];
+        const cards = resetAllowed(policy, account) ? validCards(account, now) : [];
         let reasons = [], state = 'balanced', raw = 1, reset = null;
         const row = { name: policy.name, index, role: policy.role, mode: policy.mode || 'auto', weight: 0, concurrency: 1,
-            maxConcurrency: policy.maxConcurrency, priority: 999, state, reasons,
+            maxConcurrency: concurrencyCeiling(policy), configuredMaxConcurrency: policy.maxConcurrency, priority: 999, state, reasons,
+            effectiveMode: policy.mode || 'auto', modeSource: policy.mode && policy.mode !== 'auto' ? 'manual' : 'automatic',
             shortUsed: short ? short.used : null, weeklyUsed: week ? week.used : null,
             shortResetAt: short && Number.isFinite(short.resetAt) ? short.resetAt : null,
             weeklyResetAt: week && Number.isFinite(week.resetAt) ? week.resetAt : null,
             observedConcurrency: live ? live.current : null, matched: live ? live.count : 0,
             cachedAt: cached && cached.cachedAt, reset: null, channelModes: routes.modes, nativeChannels: routes.native, fallbackChannels: routes.fallback };
+        row.quotaLink = quotaLink(short, week);
         ['short', 'weekly'].forEach(label => {
             const w = label === 'short' ? short : week;
             const oldRate = old[label + 'RatePerHour'];
             row[label + 'RatePerHour'] = oldRate || 0;
+            row[label + 'RateSamples'] = old[label + 'RateSamples'] || 0;
             const elapsed = cached && old.cachedAt ? (cached.cachedAt - old.cachedAt) / HOUR : 0;
             if (w && elapsed > 0 && old[label + 'Used'] != null) {
                 const delta = w.used - old[label + 'Used'];
-                const sameWindow = !old[label + 'ResetAt'] || !Number.isFinite(w.resetAt) || old[label + 'ResetAt'] === w.resetAt;
-                row[label + 'RatePerHour'] = delta >= 0 && sameWindow
+                const sameWindow = !old[label + 'ResetAt'] || !Number.isFinite(w.resetAt) || Math.abs(old[label + 'ResetAt'] - w.resetAt) < 60000;
+                row[label + 'RateSamples'] = delta >= 0 && sameWindow && elapsed <= 1 / 6 ? (old[label + 'RateSamples'] || 0) + 1 : 0;
+                row[label + 'RatePerHour'] = delta >= 0 && sameWindow && elapsed <= 1 / 6
                     ? (oldRate == null ? delta / elapsed : 0.65 * oldRate + 0.35 * delta / elapsed) : 0;
             }
         });
@@ -89,6 +98,19 @@ function plan({ config, accounts, usage, telemetry = {}, previous = {}, now }) {
         if (ws.some(w => Number.isFinite(w.resetAt) && w.resetAt <= now && cached.cachedAt <= w.resetAt)) {
             return stop('refreshing', '已到重置时刻，等待官方额度确认');
         }
+        let shortFactor = 1;
+        if (short) {
+            const hours = Number.isFinite(short.resetAt) ? clamp((short.resetAt - now) / HOUR, 0.25, 5) : 5;
+            shortFactor = clamp(((100 - short.used) / hours) / 20, 0.05, 2);
+            if (row.shortRateSamples >= 3 && row.shortRatePerHour > 0) {
+                row.shortForecastHours = Math.max(0, 100 - short.used) / row.shortRatePerHour;
+                if (row.shortForecastHours < 0.25 && hours > 0.75) shortFactor = Math.min(shortFactor, 0.2);
+                else if (row.shortForecastHours < 0.75 && hours > 1) shortFactor = Math.min(shortFactor, 0.55);
+                if (row.shortForecastHours < 0.75 && hours > 1) reasons.push('按官方近期消耗速度，5h 预计 ' + Math.round(row.shortForecastHours * 60) + ' 分钟耗尽，提前收紧');
+            }
+        }
+        Object.assign(row, chooseMode({ policy, account, cards, short, week, shortFactor, old, live, now,
+            recentDemand: demandNow, weekMinHours: config.resetWeekMinHours || 24 }));
         const exhausted = ws.filter(w => w.used >= EXHAUSTED);
         if (exhausted.length) {
             // A weekly card cannot clear an exhausted 5h window. Restore the shorter window last.
@@ -107,13 +129,7 @@ function plan({ config, accounts, usage, telemetry = {}, previous = {}, now }) {
             if (genericScore.exhausted || !(genericScore.weight > 0)) return stop('exhausted', '额度已用尽');
             raw = genericScore.weight;
         }
-        let shortFactor = 1;
-        if (short) {
-            const remain = 100 - short.used;
-            const hours = Number.isFinite(short.resetAt) ? clamp((short.resetAt - now) / HOUR, 0.25, 5) : 5;
-            shortFactor = clamp((remain / hours) / 20, 0.05, 2);
-            if (shortFactor < 0.6) { state = 'protecting'; reasons.push('5 小时额度偏紧，降低流量并保留并发分摊'); }
-        }
+        if (shortFactor < 0.6) { state = 'protecting'; reasons.push('5 小时额度偏紧，降低流量并保留并发分摊'); }
         if (week) {
             let hours = Number.isFinite(week.resetAt) ? clamp((week.resetAt - now) / HOUR, 1, 168) : 168;
             if (hours < 24 && week.used < 90) {
@@ -123,24 +139,19 @@ function plan({ config, accounts, usage, telemetry = {}, previous = {}, now }) {
             raw = Math.sqrt(clamp(((100 - week.used) / hours) / (100 / 168), 0.05, 16));
         }
         raw *= shortFactor * policy.quotaScale;
-        if (policy.role === 'primary' && policy.mode === 'slow') {
+        if (policy.role === 'primary' && row.effectiveMode === 'slow') {
             raw *= 0.2; state = 'slow'; reasons.unshift('管理员指定低速保护，限制流量与并发');
-        } else if (policy.role === 'primary' && policy.mode === 'burst') {
-            raw *= 4; state = 'burst'; reasons.unshift('高速消耗，优先分配流量');
+        } else if (policy.role === 'primary' && row.effectiveMode === 'burst') {
+            raw *= 4; state = 'burst'; reasons.unshift(row.modeReason || '人工高速消耗，优先分配流量');
         }
-        const minimum = Math.min(routes.native + routes.fallback, policy.maxConcurrency);
-        let adaptive = clamp(old.adaptiveConcurrency || Math.max(minimum, Math.min(2, policy.maxConcurrency)), minimum, policy.maxConcurrency);
-        let adjustedAt = old.adjustedAt || now;
-        if (live.limited && (!old.limited || now - adjustedAt >= 120000)) {
-            adaptive = Math.max(minimum, Math.floor(adaptive / 2)); adjustedAt = now;
-            reasons.push('检测到上游限流，并发减半冷却');
-        } else if (!live.limited && live.current >= adaptive * 0.75 && now - adjustedAt >= 120000) {
-            adaptive = Math.min(policy.maxConcurrency, adaptive + 1); adjustedAt = now;
-        }
+        if (row.modeReason && row.effectiveMode !== 'burst') reasons.unshift(row.modeReason);
+        const allocation = chooseConcurrency({ policy, routes, short, shortFactor, old, live, now,
+            effectiveMode: row.effectiveMode, recentDemand: demandNow });
+        if (allocation.shortProtection && row.effectiveMode !== 'slow') state = 'protecting';
         if (!reasons.length) reasons.push('按周剩余额度与重置时间分流，保持多账号均衡');
         if (live.limited) { state = 'cooldown'; raw *= 0.25; }
-        return Object.assign(row, { state, reasons, raw, adaptiveConcurrency: adaptive, adjustedAt,
-            limited: !!live.limited, concurrency: policy.mode === 'slow' ? minimum : Math.max(minimum, Math.floor(adaptive * Math.sqrt(Math.min(1, shortFactor)))) });
+        reasons.push('并发 ' + allocation.concurrency + '/' + allocation.concurrencyCeiling + '：' + allocation.concurrencyReason);
+        return Object.assign(row, allocation, { state, reasons, raw });
     });
     const primaryReady = rows.filter(r => r.role === 'primary' && r.nativeChannels && r.raw > 0 && !r.limited);
     const hasPrimary = primaryReady.length > 0;
@@ -200,9 +211,9 @@ function plan({ config, accounts, usage, telemetry = {}, previous = {}, now }) {
     const pressure = recentDemand && (available.length === 0 ||
         (capacity > 0 && current / capacity >= 0.75) || imminent);
     const stock = { week: 0, fiveHour: 0 };
-    config.accounts.filter(p => p.autoReset && p.mode === 'burst' && !p.paused).forEach(p => {
+    config.accounts.forEach(p => {
         const a = accounts.find(a => a.name === p.name);
-        if (a) validCards(a, now).forEach(c => { stock[c.type]++; });
+        if (resetAllowed(p, a)) validCards(a, now).forEach(c => { stock[c.type]++; });
     });
     rows.forEach(r => {
         r.demandSeenAt = demandSeenAt;
@@ -217,11 +228,12 @@ function plan({ config, accounts, usage, telemetry = {}, previous = {}, now }) {
         else if (card.type === 'fiveHour' && hours <= config.resetMinRemainingMinutes / 60) hold = '5 小时窗口临近自然恢复，保留短周期卡';
         else if (p.replenishAt && timestamp(p.replenishAt) > now && timestamp(p.replenishAt) - now < (card.type === 'week' ? 24 : 1) * HOUR) hold = '已安排近期充值或补充额度，等待到账';
         else if (card.type === 'week' && r.shortUsed >= EXHAUSTED && (!r.shortResetAt || r.shortResetAt - now > 0.5 * HOUR)) hold = '5 小时窗口也已耗尽，周卡无法恢复当前可用性，先等短窗口恢复';
-        else if (card.type === 'fiveHour' && r.weeklyUsed != null && r.weeklyUsed > 85) hold = '周额度剩余不足，短周期卡的可用收益有限';
+        else if (card.type === 'fiveHour' && (r.quotaLink ? r.quotaLink.weeklyRemainingInShortPct < 25 : r.weeklyUsed != null && r.weeklyUsed > 85)) hold = '周额度剩余不足，短周期卡的可用收益有限';
+        else if ((p.mode || 'auto') === 'auto' && !recentDemand) hold = '近期无主力请求，等待需求后再用卡';
         r.resetDecision = { decision: hold ? 'hold' : 'use', type: card.type, stock: stock[card.type],
             naturalResetHours: Number.isFinite(hours) ? Math.round(hours * 10) / 10 : null,
             pressure, expiresSoon, benefit: Math.max(0, Math.min(hours, 168)) * (expiresSoon ? 2 : 1) };
-        r.reasons = [hold ? '暂不用卡：' + hold : '高速消耗额度已用尽，自动使用最早到期的' + (card.type === 'week' ? '周卡' : '5 小时卡')];
+        r.reasons = [hold ? '暂不用卡：' + hold : '已授权且额度已用尽，自动使用最早到期的' + (card.type === 'week' ? '周卡' : '5 小时卡')];
         if (hold) r.reset = null;
     });
     return { generatedAt: now, rows, summary: {

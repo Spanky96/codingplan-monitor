@@ -69,14 +69,14 @@ test('verified card inventory accelerates ahead-of-budget usage and selects earl
     assert.equal(row(p, 'A').reset, null);
 });
 test('AIMD backs off on rate limits and grows only after a stable busy interval', () => {
-    const p = fixture(); p.previous = { A: { adaptiveConcurrency: 8, adjustedAt: NOW - 180000 } };
+    const p = fixture(); p.previous = { A: { adaptiveConcurrency: 4, concurrency: 4, adjustedAt: NOW - 180000 } };
     p.telemetry.A.limited = true;
-    assert.equal(row(p, 'A').adaptiveConcurrency, 4);
-    p.previous.A = { adaptiveConcurrency: 4, adjustedAt: NOW - 30000, limited: true };
-    assert.equal(row(p, 'A').adaptiveConcurrency, 4);
-    p.telemetry.A.limited = false; p.telemetry.A.current = 4;
-    p.previous.A.adjustedAt = NOW - 180000;
-    assert.equal(row(p, 'A').adaptiveConcurrency, 5);
+    assert.equal(row(p, 'A').adaptiveConcurrency, 2);
+    p.previous.A = { adaptiveConcurrency: 2, concurrency: 2, adjustedAt: NOW - 30000, limited: true };
+    assert.equal(row(p, 'A').adaptiveConcurrency, 2);
+    p.telemetry.A.limited = false; p.telemetry.A.current = 2;
+    p.previous.A = { adaptiveConcurrency: 2, concurrency: 2, busySince: NOW - 180000, plannedAt: NOW - 30000, adjustedAt: NOW - 180000 };
+    assert.equal(row(p, 'A').adaptiveConcurrency, 3);
 });
 test('all alias channels receive capacity while respecting the configured pool ceiling', () => {
     const p = fixture(); p.telemetry.A.count = 3;
@@ -132,10 +132,11 @@ test('early dilution requires opt-in timing and all primary accounts to be quota
     p.config.allowDilution = false;
     assert.equal(row(p, 'Mini').weight, 0);
 });
-test('automatic resets require burst mode and explicit opt-in', () => {
+test('automatic decisions may replenish with opt-in; slow mode and missing permission do not', () => {
     const p = exhaustedWithCards(); p.config.accounts[0].mode = 'auto';
-    assert.equal(row(p, 'A').reset, null);
-    p.config.accounts[0].mode = 'burst'; p.config.accounts[0].autoReset = false;
+    assert.ok(row(p, 'A').reset);
+    p.config.accounts[0].mode = 'slow'; assert.equal(row(p, 'A').reset, null);
+    p.config.accounts[0].mode = 'auto'; p.config.accounts[0].autoReset = false;
     assert.equal(row(p, 'A').reset, null);
 });
 test('near-exhaustion and rounded CREDIT percentages never consume a card early', () => {

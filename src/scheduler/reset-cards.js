@@ -5,6 +5,7 @@ const http = require('../lib/http');
 const store = require('./store');
 const { timestamp, windowsOf, EXHAUSTED } = require('./planner');
 const cache = require('../api/cache');
+const { resetAllowed } = require('./adaptation');
 const locks = new Set();
 
 function current(index, name) {
@@ -40,7 +41,7 @@ async function use(index, type, recordId, automatic = false) {
         state = store.read();
         if (automatic) {
             const policy = state.config.accounts.find(p => p.name === account.name);
-            if (!state.config.enabled || !policy || policy.mode !== 'burst' || !policy.autoReset || policy.paused) throw new Error('自动用卡已关闭');
+            if (!state.config.enabled || !resetAllowed(policy, account)) throw new Error('自动用卡已关闭');
 
         }
         current(index, account.name);
@@ -55,7 +56,7 @@ async function use(index, type, recordId, automatic = false) {
             await controller.telemetry();
             const latest = store.read();
             const active = latest.config.accounts.find(p => p.name === account.name);
-            if (!latest.config.enabled || !active || active.mode !== 'burst' || !active.autoReset || active.paused) throw new Error('自动重置已关闭');
+            if (!latest.config.enabled || !resetAllowed(active, current(index, account.name))) throw new Error('自动重置已关闭');
             const decision = controller.compute(latest).rows.find(r => r.name === account.name);
             if (!decision || !decision.reset || decision.reset.type !== type || decision.reset.recordId !== recordId) {
                 throw new Error(decision ? decision.reasons.join('；') : '用卡条件已变化，取消自动用卡');

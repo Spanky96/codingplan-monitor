@@ -2,6 +2,7 @@
 const fs = require('fs');
 const path = require('path');
 const config = require('../config');
+const { concurrencyCeiling } = require('./adaptation');
 const file = process.env.SCHEDULER_STATE_FILE || path.join(path.dirname(config.accountsFile), 'scheduler-state.json');
 const defaults = { enabled: false, allowPaid: false, allowDilution: false, fallbackWhen: 'exhausted', accounts: [],
     staleAfterSeconds: 600, resetMinRemainingMinutes: 60, resetWeekMinHours: 24 };
@@ -45,9 +46,9 @@ function validate(input, accounts) {
             if (!/^[1-9]\d*$/.test(id) || !['native', 'fallback', 'paused'].includes(route)) throw new Error('渠道配置无效');
             channelModes[id] = route;
         }
-        return { name: p.name, role: p.role === 'dilution' ? 'standard' : p.role, mode, ...(p.channelModes == null ? {} : { channelModes }), maxConcurrency: p.maxConcurrency, quotaScale: scale,
+        return { name: p.name, role: p.role === 'dilution' ? 'standard' : p.role, mode, ...(p.channelModes == null ? {} : { channelModes }), maxConcurrency: concurrencyCeiling(p), quotaScale: scale,
             replenishAt: replenishAt ? new Date(replenishAt).toISOString() : null,
-            autoReset: mode === 'burst' && p.role === 'primary' && platform === 'glm' && !matches[0].teamEdition && p.autoReset === true,
+            autoReset: p.role === 'primary' && platform === 'glm' && !matches[0].teamEdition && p.autoReset === true,
             unmetered: p.role === 'paid' && p.unmetered === true, paused: p.paused === true };
     });
     if (input.enabled && !list.length) throw new Error('请至少选择一个账号');

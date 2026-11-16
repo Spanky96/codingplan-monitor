@@ -4,6 +4,11 @@ var schedulerDraft = null;
 var schedulerBusy = false;
 var scheduleGroupedView = localStorage.getItem('usage_schedule_grouped') === 'true';
 var SCHEDULE_MODES = { auto: '自动均衡', slow: '低速保护', burst: '高速消耗' };
+function schedulerModeLabel(policy, row) {
+  if (policy.role !== 'primary') return SCHEDULE_ROLES[policy.role] || '其他模型';
+  if (row && row.effectiveMode === 'burst' && row.modeSource === 'automatic') return '自动高速';
+  return SCHEDULE_MODES[policy.mode || 'auto'] || '自动均衡';
+}
 function scheduleGroupsEnabled() {
   return isAdmin() && FEATURES.relayEnabled && scheduleGroupedView;
 }
@@ -41,9 +46,9 @@ function schedulingBadge(name) {
   if (!isAdmin()) return '';
   var policy = schedulerState && schedulerState.config.enabled && schedulerState.config.accounts.find(function(p) { return p.name === name; });
   if (!policy) return '<span class="schedule-badge" title="沿用原权重策略；权重设为 0 可只监控">未托管</span>';
-  var label = policy.role === 'primary' ? (SCHEDULE_MODES[policy.mode || 'auto'] || '自动均衡') : (SCHEDULE_ROLES[policy.role] || '其他模型');
+  var label = schedulerModeLabel(policy, r);
   var state = r ? SCHEDULE_STATES[r.state] || r.state : '准备中';
-  if (state !== label && !(r && r.state === 'balanced')) label += ' · ' + state;
+  if (state !== label && !(r && (r.state === 'balanced' || r.state === 'burst'))) label += ' · ' + state;
   return '<span class="schedule-badge ' + (r && r.weight > 0 ? 'live' : '') + '" data-tooltip="' + esc(r ? r.reasons.join('；') : '等待首轮调度计划') + '">'
     + (scheduleGroupsEnabled() && r && r.weight > 0 ? '#' + r.priority + ' ' : '') + esc(label) + '</span>';
 }
@@ -120,7 +125,7 @@ function schedulerLocalTime(iso) {
 }
 function schedulerPolicy(a) {
   var p = schedulerDraft.accounts.find(function(p) { return p.name === a.name; }) || {
-    name: a.name, role: schedulerDefaultRole(a), maxConcurrency: Math.min(64, Math.max(2, a.capacity ? a.capacity.capacity : 4)),
+    name: a.name, role: schedulerDefaultRole(a), maxConcurrency: schedulerDefaultRole(a) === 'primary' ? 4 : Math.min(64, Math.max(2, a.capacity ? a.capacity.capacity : 4)),
     quotaScale: 1, mode: 'auto', autoReset: false, paused: false, unmetered: false
   };
   if (p.role === 'dilution') p.role = 'standard';
@@ -155,11 +160,11 @@ function renderSchedulerForm() {
       + Object.keys(SCHEDULE_ROLES).filter(function(role) { return role === 'paid' || (role === 'primary' && a.platform === 'glm') || role === 'standard'; }).map(function(role) {
         return '<option value="' + role + '"' + (p.role === role ? ' selected' : '') + '>' + SCHEDULE_ROLES[role] + '</option>';
       }).join('') + '</select></label>'
-      + '<label>调度模式<select onchange="schedulerField(' + i + ',\'mode\',this.value)">' + [['auto','自动均衡'],['slow','低速保护'],['burst','高速消耗']].map(function(m) { return '<option value="' + m[0] + '"' + ((p.mode || 'auto') === m[0] ? ' selected' : '') + '>' + m[1] + '</option>'; }).join('') + '</select></label>'
-      + '<label>并发上限<input id="sa-cap-' + i + '" type="number" min="1" max="64" value="' + p.maxConcurrency + '" onchange="schedulerField(' + i + ',\'maxConcurrency\',Number(this.value))"></label>'
+      + '<label>调度模式<select onchange="schedulerField(' + i + ',\'mode\',this.value)">' + [['auto','自动决策'],['slow','低速保护'],['burst','手动高速']].map(function(m) { return '<option value="' + m[0] + '"' + ((p.mode || 'auto') === m[0] ? ' selected' : '') + '>' + m[1] + '</option>'; }).join('') + '</select></label>'
+      + '<label title="' + (p.role === 'primary' ? '智谱总并发最多 4；算法可在此上限内升降' : '同一账号所有渠道共享上限') + '">并发上限<input id="sa-cap-' + i + '" type="number" min="1" max="' + (p.role === 'primary' ? 4 : 64) + '" value="' + Math.min(p.maxConcurrency, p.role === 'primary' ? 4 : 64) + '" onchange="schedulerField(' + i + ',\'maxConcurrency\',Number(this.value))"></label>'
       + '<label title="套餐容量相对于其他账号的比例；同套餐保持 1">容量系数<input type="number" min="0.1" max="20" step="0.1" value="' + p.quotaScale + '" onchange="schedulerField(' + i + ',\'quotaScale\',Number(this.value))"></label></div>'
       + '<div class="schedule-account-options">'
-      + (a.platform === 'glm' && !a.teamEdition && p.role === 'primary' && p.mode === 'burst' ? '<label><input type="checkbox" ' + (p.autoReset ? 'checked' : '') + ' onchange="schedulerField(' + i + ',\'autoReset\',this.checked)">耗尽后自动重置 <span>' + a.cards + ' 张</span></label>' : '')
+      + (a.platform === 'glm' && !a.teamEdition && p.role === 'primary' ? '<label title="自动决策可据此评估加速；仅额度耗尽后用卡，低速模式暂不用卡"><input type="checkbox" ' + (p.autoReset ? 'checked' : '') + ' onchange="schedulerField(' + i + ',\'autoReset\',this.checked)">允许耗尽后用卡 <span>' + (p.mode === 'slow' ? '低速暂缓 · ' : '') + a.cards + ' 张</span></label>' : '')
       + '<label><input type="checkbox" ' + (p.paused ? 'checked' : '') + ' onchange="schedulerField(' + i + ',\'paused\',this.checked)">暂停此账号</label>'
       + (p.role === 'paid' ? '<label title="无法获取余额的占位账号需显式允许才可兜底"><input type="checkbox" ' + (p.unmetered ? 'checked' : '') + ' onchange="schedulerField(' + i + ',\'unmetered\',this.checked)">允许无余额数据的按量占位</label>' : '') + '</div>'
       + schedulerChannelRows(a, p, i)
@@ -197,7 +202,6 @@ function schedulerField(i, field, value) {
     document.getElementById('schedule-account-' + i).classList.add('selected');
     document.querySelector('#schedule-account-' + i + ' .schedule-account-title>span').textContent = '已选择';
   }
-  if (field === 'mode' && value !== 'burst') p.autoReset = false;
   if (field === 'role' || field === 'mode') {
     var top = document.querySelector('.schedule-accounts').scrollTop;
     renderSchedulerForm();
@@ -235,9 +239,10 @@ function renderSchedulerDecisions() {
   document.getElementById('schedulePlanTime').textContent = plan ? timeAgo(plan.generatedAt) : '尚无计划';
   box.innerHTML = plan && plan.rows.length ? plan.rows.map(function(r) {
     return '<div class="schedule-decision ' + (r.weight ? '' : 'idle') + '"><span class="schedule-rank">' + String(r.priority).padStart(2, '0') + '</span><div class="schedule-decision-main"><div><b>'
-      + esc(schedulerName(r.name)) + '</b><span class="schedule-state">' + esc(SCHEDULE_STATES[r.state] || r.state) + '</span></div><p>' + esc(r.reasons.join('；')) + '</p>'
+      + esc(schedulerName(r.name)) + '</b><span class="schedule-state">' + esc(r.state === 'burst' && r.modeSource === 'automatic' ? '自动高速' : SCHEDULE_STATES[r.state] || r.state) + '</span></div><p>' + esc(r.reasons.join('；')) + '</p>'
       + '<div class="schedule-allocation"><i style="width:' + Math.max(0, Math.min(100, r.share)) + '%"></i></div><small>目标份额 ' + r.share + '% · 并发 ' + r.concurrency + '/' + r.maxConcurrency
       + (r.shortUsed == null ? '' : ' · 5h 已用 ' + Math.round(r.shortUsed) + '%') + (r.weeklyUsed == null ? '' : ' · 周已用 ' + Math.round(r.weeklyUsed) + '%')
+      + (r.quotaLink ? ' · 一轮 5h ≈ ' + Math.round(r.quotaLink.shortToWeekRatio * 100) + '% 周额度' : '')
       + '</small></div><div class="schedule-weight"><strong>' + r.weight.toFixed(1) + '</strong><small>权重</small></div></div>';
   }).join('') : '<div class="schedule-empty">尚无调度计划</div>';
 

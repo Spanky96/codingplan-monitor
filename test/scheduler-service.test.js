@@ -59,10 +59,18 @@ test('config validates unique stable names, manual modes, routes and recharge ti
     assert.throws(() => store.validate({ ...input, accounts: input.accounts.concat(input.accounts) }, accounts));
     assert.throws(() => store.validate({ ...input, accounts: [{ ...input.accounts[0], replenishAt: 'invalid' }] }, accounts));
 });
-test('automatic reset is normalized off outside high-consumption mode', () => {
+test('card permission is independent of mode and GLM concurrency is capped at four', () => {
     const accounts = [{ name:'A', platform:'glm' }];
     const policy = { name:'A', role:'primary', mode:'auto', autoReset:true, maxConcurrency:3 };
-    assert.equal(store.validate({accounts:[policy]}, accounts).accounts[0].autoReset, false);
+    assert.equal(store.validate({accounts:[policy]}, accounts).accounts[0].autoReset, true);
     policy.mode = 'burst'; assert.equal(store.validate({accounts:[policy]}, accounts).accounts[0].autoReset, true);
+    policy.mode = 'slow'; assert.equal(store.validate({accounts:[policy]}, accounts).accounts[0].autoReset, true);
+    policy.maxConcurrency = 8; assert.equal(store.validate({accounts:[policy]}, accounts).accounts[0].maxConcurrency, 4);
+    policy.autoReset = false; assert.equal(store.validate({accounts:[policy]}, accounts).accounts[0].autoReset, false);
+});
+test('export clamps legacy plans to the GLM safety ceiling immediately', () => {
+    const {now,state}=fixture(); state.config.accounts[0].maxConcurrency=20; state.plan.rows[0].concurrency=20;
+    assert.equal(service.controls(state,now).A.concurrency,4);
+    state.config.accounts[0].maxConcurrency=1; assert.equal(service.controls(state,now).A.concurrency,1);
 });
 test.after(() => { fs.rmSync(dir, { recursive: true, force: true }); });

@@ -4,6 +4,7 @@ const store = require('./store');
 const { plan, windowsOf, EXHAUSTED } = require('./planner');
 const { readAccounts } = require('../api/accounts');
 const cache = require('../api/cache');
+const { concurrencyCeiling, resetAllowed } = require('./adaptation');
 const { httpGetJSON } = require('../lib/http');
 
 const LEASE_MS = 180000;
@@ -90,7 +91,7 @@ function controls(state = store.read(), now = Date.now()) {
         const pending = (state.pendingResets || {})[p.name];
         const usable = fresh && r && validUsage && !exhausted && !pending;
         return [p.name, { weight: usable ? (r.nativeWeight == null ? r.weight : r.nativeWeight) : 0, fallback_weight: usable ? (r.fallbackWeight || 0) : 0,
-            channel_modes: r && r.channelModes ? r.channelModes : (p.channelModes || {}), concurrency: fresh && r ? r.concurrency : 1,
+            channel_modes: r && r.channelModes ? r.channelModes : (p.channelModes || {}), concurrency: fresh && r ? Math.min(r.concurrency, concurrencyCeiling(p)) : 1,
             priority: r ? r.priority : 999, expires_at: new Date(fresh ? state.plan.generatedAt + LEASE_MS : now + LEASE_MS).toISOString() }];
     }));
 }
@@ -171,7 +172,7 @@ async function cycle({ preview = false } = {}) {
                     try { await cache.ensureUsageFetch(a, i, true); } catch (_) { /* stale data becomes weight zero */ }
                 }
                 const p = state.config.accounts.find(p => p.name === a.name);
-                if (p && p.mode === 'burst' && p.autoReset && !a.teamEdition && Date.now() - Math.max(cardChecks[a.name] || 0, ((a.resetCards || {}).checkedAt || 0)) > 600000) {
+                if (resetAllowed(p, a) && Date.now() - Math.max(cardChecks[a.name] || 0, ((a.resetCards || {}).checkedAt || 0)) > 600000) {
                     cardChecks[a.name] = Date.now();
                     try { await require('./reset-cards').list(a, i); } catch (_) { /* no assumed cards */ }
                 }
