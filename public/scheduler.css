@@ -107,6 +107,14 @@
 .schedule-replenish { display:flex; align-items:center; gap:8px; margin-top:12px; color:var(--text-mute); font-size:10px; flex-wrap:wrap; }
 .schedule-replenish input { background:var(--glass-strong); color:var(--text); border:1px solid var(--line); border-radius:6px; padding:5px; font:inherit; }
 @media(max-width:700px) {
+  .schedule-modal .modal-header { padding:16px; }
+  .schedule-modal .modal-body { padding:16px 16px 0; }
+  .schedule-console { grid-template-columns:minmax(0,1fr); gap:20px; }
+  .schedule-live { flex-wrap:wrap; gap:16px; padding:16px; }
+  .schedule-accounts { max-height:360px; }
+  .schedule-footer { gap:10px; margin-top:16px; padding:14px 0; }
+  .schedule-footer>span { display:none; }
+  .schedule-footer>div { width:100%; justify-content:flex-end; }
   .schedule-summary .schedule-heading,.schedule-live .schedule-heading { width:100%; }
   .schedule-metrics { width:100%; flex:none; display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; }
   .schedule-metrics strong,.schedule-metrics small { white-space:nowrap; }
