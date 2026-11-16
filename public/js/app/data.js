@@ -220,9 +220,11 @@
       loadCapacity();
       loadWeights();
       if (typeof loadScheduler === 'function') loadScheduler();
+      loadAccountTokens(force);
       fetch(url, { headers: authHeaders() })
         .then(function(r){return r.json()}).then(function(data){
         accountsData = data;
+        rebuildAccountTokens();
         if (_capacitySnapshot) applyCapacitySnapshot(_capacitySnapshot, _capacityUpdatedAt);
         renderCards(data);
         document.getElementById('lastUpdated').textContent = '更新于 ' + new Date().toLocaleTimeString('zh-CN');
@@ -259,12 +261,14 @@
       if (FEATURES.relayEnabled && isAdmin()) { loadActivityDispatch(); loadActivityUsage(); }
     });
     setInterval(function(){ loadData(); }, 5 * 60 * 1000);
+    setInterval(function(){ if (isAdmin() && FEATURES.relayEnabled && !document.hidden) loadAccountTokens(); }, 60000);
     // 容量快照轻量（后端 5s 缓存）：管理员打开页面时 30s 刷新一次胶囊
     setInterval(function(){ if (isAdmin() && accountsData.length) loadCapacity(); }, 30 * 1000);
     setInterval(function(){ if (FEATURES.relayEnabled && isAdmin() && !_activityCollapsed && !document.hidden) loadActivityDispatch(); }, 15 * 1000);
     setInterval(function(){ if (FEATURES.relayEnabled && isAdmin() && !document.hidden) loadActivityUsage(); }, 5 * 60 * 1000);
     document.addEventListener('visibilitychange', function() {
       if (!document.hidden && FEATURES.relayEnabled && isAdmin()) {
+        loadAccountTokens();
         if (!_activityCollapsed) loadActivityDispatch();
         loadActivityUsage();
       }

@@ -1,3 +1,7 @@
+function cardHeaderStatus(button, name, status) {
+      return '<div class="card-header-right">' + button + '<div class="card-status-stack">'
+        + status + accountTokenBadgeHTML(name) + '</div></div>';
+    }
 // ============ 账号卡片(按平台分派渲染)============
     function renderCardHTML(i, acc) {
       var platform = acc.platform || 'glm';
@@ -12,7 +16,7 @@
       // 列表秒开占位:慢账号(尤其智云)先出骨架,不挡住其它卡
       if (isUsagePending(acc)) {
         return '<div class="card" id="card-' + i + '"><div class="card-header">' + headerLeft
-          + '<div class="card-header-right">' + btn + '<span class="card-status status-loading">加载中</span></div></div>'
+          + cardHeaderStatus(btn, acc.name, '<span class="card-status status-loading">加载中</span>') + '</div>'
           + '<div class="card-body">' + cardSkeletonBody() + '</div>'
           + '<div class="card-footer"><span class="cache-time">正在获取用量…</span><button class="detail-btn" onclick="showDetail(' + i + ')" disabled style="opacity:0.5">详情</button></div></div>';
       }
@@ -20,7 +24,7 @@
       if (!acc.success) {
         var relogin = isTelecomAuthError(acc) ? telecomReloginButton(i) : '';
         return '<div class="card" id="card-' + i + '"><div class="card-header">' + headerLeft
-          + '<div class="card-header-right">' + btn + '<span class="card-status status-error">请求失败</span></div></div>'
+          + cardHeaderStatus(btn, acc.name, '<span class="card-status status-error">请求失败</span>') + '</div>'
           + '<div class="card-body"><p class="error-text">' + esc(acc.error||'未知错误') + '</p>' + relogin + '</div>'
           + '<div class="card-footer"><span></span><button class="detail-btn" onclick="showDetail(' + i + ')">详情</button></div></div>';
       }
@@ -42,7 +46,7 @@
         var telecomStatusClass = tm.remainingDays != null && tm.remainingDays < 30 ? 'status-danger'
           : (tm.remainingDays != null && tm.remainingDays < 90 ? 'status-warn' : 'status-ok');
         return '<div class="card" id="card-' + i + '"><div class="card-header">' + headerLeft
-          + '<div class="card-header-right">' + btn + '<span class="card-status ' + telecomStatusClass + '">' + telecomDaysText(tm.remainingDays) + '</span></div></div>'
+          + cardHeaderStatus(btn, acc.name, '<span class="card-status ' + telecomStatusClass + '">' + telecomDaysText(tm.remainingDays) + '</span>') + '</div>'
           + '<div class="card-body">' + telecomBody + '</div>'
           + '<div class="card-footer"><div class="card-footer-left"><span class="level-badge">累计消费 ¥' + (+(td.totalConsumption || 0)).toFixed(2) + '</span>' + cache + '</div>'
           + '<button class="detail-btn" onclick="showDetail(' + i + ')">详情</button></div></div>';
@@ -67,7 +71,7 @@
           expHtmlY = '<div class="expire-row" title="订阅到期"><span class="expire-label">订阅到期</span><span class="expire-value ' + expClsY + '">' + esc(expTxt) + '<span class="expire-hint">' + expHintY + '</span></span></div>';
         }
         return '<div class="card" id="card-' + i + '"><div class="card-header">' + headerLeft
-          + '<div class="card-header-right">' + btn + '<span class="card-status ' + getStatusClass(mpY) + '"' + quotaStatusAttrs(acc) + '>' + getStatusText(mpY) + '</span></div></div>'
+          + cardHeaderStatus(btn, acc.name, '<span class="card-status ' + getStatusClass(mpY) + '"' + quotaStatusAttrs(acc) + '>' + getStatusText(mpY) + '</span>') + '</div>'
           + '<div class="card-body">' + bodyHtml + '</div>' + expHtmlY
           + '<div class="card-footer"><div class="card-footer-left">' + planBadge + balanceBadge + cache + '</div>'
           + '<button class="detail-btn" onclick="showDetail(' + i + ')">详情</button></div></div>';
@@ -116,7 +120,7 @@
           expHtmlH = '<div class="expire-row" title="订阅到期"><span class="expire-label">订阅到期</span><span class="expire-value ' + expClsH + '">' + esc(expTxtH) + '<span class="expire-hint">' + expHintH + '</span></span></div>';
         }
         return '<div class="card" id="card-' + i + '"><div class="card-header">' + headerLeft
-          + '<div class="card-header-right">' + btn + '<span class="card-status ' + getStatusClass(mpH) + '"' + quotaStatusAttrs(acc) + '>' + getStatusText(mpH) + '</span></div></div>'
+          + cardHeaderStatus(btn, acc.name, '<span class="card-status ' + getStatusClass(mpH) + '"' + quotaStatusAttrs(acc) + '>' + getStatusText(mpH) + '</span>') + '</div>'
           + '<div class="card-body">' + bodyHtml + '</div>' + expHtmlH
           + '<div class="card-footer"><div class="card-footer-left">' + checkinBadgeH + balanceBadgeH + planBadgeH + cache + '</div>'
           + '<button class="detail-btn" onclick="showDetail(' + i + ')">详情</button></div></div>';
@@ -153,7 +157,7 @@
           expHtmlV = '<div class="expire-row" title="订阅到期"><span class="expire-label">订阅到期</span><span class="expire-value ' + expClsV + '">' + esc(expTxtV) + '<span class="expire-hint">' + expHintV + '</span></span></div>';
         }
         return '<div class="card" id="card-' + i + '"><div class="card-header">' + headerLeft
-          + '<div class="card-header-right">' + btn + '<span class="card-status ' + getStatusClass(mpV) + '"' + quotaStatusAttrs(acc) + '>' + getStatusText(mpV) + '</span></div></div>'
+          + cardHeaderStatus(btn, acc.name, '<span class="card-status ' + getStatusClass(mpV) + '"' + quotaStatusAttrs(acc) + '>' + getStatusText(mpV) + '</span>') + '</div>'
           + '<div class="card-body">' + bodyHtml + '</div>' + expHtmlV
           + '<div class="card-footer"><div class="card-footer-left">' + planBadgeV + cache + '</div>'
           + '<button class="detail-btn" onclick="showDetail(' + i + ')">详情</button></div></div>';
@@ -179,7 +183,7 @@
           qExpHtml = '<div class="expire-row" title="订阅到期"><span class="expire-label">订阅到期</span><span class="expire-value ' + qExpCls + '">' + esc(qExpDate.toLocaleDateString('zh-CN')) + '<span class="expire-hint">' + qExpHint + '</span></span></div>';
         }
         return '<div class="card" id="card-' + i + '"><div class="card-header">' + headerLeft
-          + '<div class="card-header-right">' + btn + '<span class="card-status ' + getStatusClass(mpQ) + '"' + quotaStatusAttrs(acc) + '>' + getStatusText(mpQ) + '</span></div></div>'
+          + cardHeaderStatus(btn, acc.name, '<span class="card-status ' + getStatusClass(mpQ) + '"' + quotaStatusAttrs(acc) + '>' + getStatusText(mpQ) + '</span>') + '</div>'
           + '<div class="card-body">' + qBody + '</div>' + qExpHtml
           + '<div class="card-footer"><div class="card-footer-left">' + qPlanBadge + qDaysBadge + cache + '</div>'
           + '<button class="detail-btn" onclick="showDetail(' + i + ')">详情</button></div></div>';
@@ -207,7 +211,7 @@
         }
         var zPlanBadge = '<span class="level-badge">' + esc((zSub && zSub.planName) || '无套餐') + '</span>';
         return '<div class="card" id="card-' + i + '"><div class="card-header">' + headerLeft
-          + '<div class="card-header-right">' + btn + '<span class="card-status ' + zStatusCls + '"' + quotaStatusAttrs(acc) + '>' + zStatusTxt + '</span></div></div>'
+          + cardHeaderStatus(btn, acc.name, '<span class="card-status ' + zStatusCls + '"' + quotaStatusAttrs(acc) + '>' + zStatusTxt + '</span>') + '</div>'
           + '<div class="card-body">' + zBody + '</div>' + zExpHtml
           + '<div class="card-footer"><div class="card-footer-left">' + zPlanBadge + cache + '</div>'
           + '<button class="detail-btn" onclick="showDetail(' + i + ')">详情</button></div></div>';
@@ -234,7 +238,7 @@
         }
         var mPlanBadge = '<span class="level-badge">' + esc((mS && mS.planName) || '无套餐记录') + '</span>';
         return '<div class="card" id="card-' + i + '"><div class="card-header">' + headerLeft
-          + '<div class="card-header-right">' + btn + '<span class="card-status ' + mStatusCls + '"' + quotaStatusAttrs(acc) + '>' + mStatusTxt + '</span></div></div>'
+          + cardHeaderStatus(btn, acc.name, '<span class="card-status ' + mStatusCls + '"' + quotaStatusAttrs(acc) + '>' + mStatusTxt + '</span>') + '</div>'
           + '<div class="card-body">' + mBody + '</div>' + mExpHtml
           + '<div class="card-footer"><div class="card-footer-left">' + mPlanBadge + cache + '</div>'
           + '<button class="detail-btn" onclick="showDetail(' + i + ')">详情</button></div></div>';
@@ -262,7 +266,7 @@
         var sfPlanBadge = '<span class="level-badge">' + esc((sfS && sfS.planName) || '无套餐') + '</span>'
           + (sfS && sfS.autoRenew ? '<span class="level-badge level-badge-ok">自动续费</span>' : '');
         return '<div class="card" id="card-' + i + '"><div class="card-header">' + headerLeft
-          + '<div class="card-header-right">' + btn + '<span class="card-status ' + sfStatusCls + '"' + quotaStatusAttrs(acc) + '>' + sfStatusTxt + '</span></div></div>'
+          + cardHeaderStatus(btn, acc.name, '<span class="card-status ' + sfStatusCls + '"' + quotaStatusAttrs(acc) + '>' + sfStatusTxt + '</span>') + '</div>'
           + '<div class="card-body">' + sfBody + '</div>' + sfExpHtml
           + '<div class="card-footer"><div class="card-footer-left">' + sfPlanBadge + cache + '</div>'
           + '<button class="detail-btn" onclick="showDetail(' + i + ')">详情</button></div></div>';
@@ -293,7 +297,7 @@
       var rBadge = riskBadgeHTML(acc);
       var resetClass = '';
       return '<div class="card' + resetClass + '" id="card-' + i + '"><div class="card-header">' + headerLeft
-        + '<div class="card-header-right">' + btn + '<span class="card-status ' + getStatusClass(mp) + '"' + quotaStatusAttrs(acc) + '>' + getStatusText(mp) + '</span></div></div>'
+        + cardHeaderStatus(btn, acc.name, '<span class="card-status ' + getStatusClass(mp) + '"' + quotaStatusAttrs(acc) + '>' + getStatusText(mp) + '</span>') + '</div>'
         + '<div class="card-body">' + limits.map(renderLimitRow).join('') + '</div>' + expHtml
         + '<div class="card-footer"><div class="card-footer-left"><span class="level-badge">' + level + '</span>' + glmFooterBadges(acc) + rcBadge + rBadge + cache + '</div>'
         + '<button class="detail-btn" onclick="showDetail(' + i + ')">详情</button></div></div>';
@@ -624,6 +628,7 @@
           + (expireHtml ? '<div class="list-row-meta">' + expireHtml + '</div>' : '');
       }
 
+      leftBlock = leftBlock.replace('</span></div>', '</span>' + accountTokenBadgeHTML(acc.name) + '</div>');
       var resetClass = '';
       return '<div class="list-row' + resetClass + '" id="card-' + i + '" onclick="showDetail(' + i + ')" title="点击查看详情">'
         + leftBlock + middle + '<div class="list-row-right">' + right + '</div>' + refresh + '</div>';
