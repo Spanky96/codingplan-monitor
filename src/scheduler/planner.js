@@ -103,7 +103,7 @@ function plan({ config, accounts, usage, telemetry = {}, previous = {}, previous
         }
         let shortFactor = 1;
         if (short) {
-            const hours = Number.isFinite(short.resetAt) ? clamp((short.resetAt - now) / HOUR, 0.25, 5) : 5;
+            const hours = Number.isFinite(short.resetAt) ? clamp((short.resetAt - now) / HOUR, 1 / 60, 5) : 5;
             shortFactor = clamp(((100 - short.used) / hours) / 20, 0.05, 2);
             if (row.shortRateSamples >= 3 && row.shortRatePerHour > 0) {
                 row.shortForecastHours = Math.max(0, 100 - short.used) / row.shortRatePerHour;

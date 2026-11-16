@@ -23,6 +23,27 @@ test('manual low ceilings remain binding even during automatic acceleration',()=
     p.config.accounts[0].maxConcurrency=2;assert.equal(row(p).concurrency,2);
     p.config.accounts[0].maxConcurrency=64;assert.ok(row(p).concurrency<=4);assert.equal(row(p).maxConcurrency,4);
 });
+test('glm1 87% five-hour usage near natural reset resumes acceleration without using a weekly card',()=>{
+    const p=fixture();
+    Object.assign(p.usage[0].data.limits[0],{percentage:87,nextResetTime:NOW+4*60000});
+    p.usage[0].data.limits[1].percentage=95;
+    p.previous={A:{effectiveMode:'burst',modeSource:'automatic',accelerationActive:false,shortProtection:1,adaptiveConcurrency:3}};
+    const r=row(p);
+    assert.equal(r.effectiveMode,'burst');assert.equal(r.accelerationActive,true);
+    assert.equal(r.state,'burst');assert.equal(r.shortProtection,0);
+    assert.equal(r.concurrency,3);assert.equal(r.reset,null);
+    p.telemetry.A.limited=true;assert.equal(row(p).accelerationActive,false);
+    p.telemetry.A.limited=false;p.config.accounts[0].mode='slow';assert.equal(row(p).state,'slow');
+});
+test('nearly full window is paced using the actual last minutes, but exhaustion still stops scheduling',()=>{
+    const p=fixture();
+    Object.assign(p.usage[0].data.limits[0],{percentage:99,nextResetTime:NOW+2*60000});
+    let r=row(p);assert.equal(r.accelerationActive,true);assert.equal(r.shortProtection,0);
+    p.usage[0].data.limits[0].percentage=100;
+    r=row(p);assert.equal(r.state,'exhausted');assert.equal(r.weight,0);assert.equal(r.reset,null);
+    p.usage[0].data.limits[0].percentage=87;p.usage[0].data.limits[0].nextResetTime=NOW+2*H;
+    r=row(p);assert.equal(r.accelerationActive,false);assert.equal(r.state,'protecting');
+});
 test('5h factor slightly below one does not halve normal concurrency',()=>{
     const p=fixture();p.config.accounts[0].autoReset=false;
     assert.equal(row(p).concurrency,2);assert.equal(row(p).effectiveMode,'auto');

@@ -54,7 +54,11 @@ function chooseMode({ policy, account, cards, short, week, shortFactor, old, liv
     if (!recentDemand) return hold('近期无主力请求，保持均衡');
     const continuing = old.effectiveMode === 'burst' && old.modeSource === 'automatic';
     const accelerating = continuing && old.accelerationActive !== false;
-    const shortTight = !short || short.used >= (accelerating ? 90 : 80) || shortFactor < (accelerating ? 0.45 : 0.65);
+    // A high percentage alone is not pressure when the remaining allowance can
+    // comfortably cover the time to natural recovery. Keep measured fast-burn
+    // forecasts (which lower shortFactor) and actual upstream limits binding.
+    const shortTight = !short || shortFactor < (accelerating ? 0.45 : 0.65) ||
+        (short.used >= (accelerating ? 90 : 80) && shortFactor < 1);
     const burst = (reason, source, factor = 4) => {
         const blocked = live.limited ? '上游限流，暂缓加速' : shortTight ? '5h 保护，暂缓加速' : '';
         // Keep the weekly strategy visible while temporary protection removes its boost.
