@@ -52,9 +52,15 @@ function chooseMode({ policy, account, cards, short, week, shortFactor, old, liv
     result.weeklyPace = { expectedPct: Math.round(progress * 10) / 10, waterlinePct: Math.round(waterline * 10) / 10, aheadPct: Math.round(ahead * 10) / 10,
         projectedGapHours: Number.isFinite(gap) ? Math.round(gap * 10) / 10 : null };
     if (!recentDemand) return hold('近期无主力请求，保持均衡');
-    if (live.limited) return hold('上游限流，暂停自动加速');
     const continuing = old.effectiveMode === 'burst' && old.modeSource === 'automatic';
-    if (!short || short.used >= (continuing ? 90 : 80) || shortFactor < (continuing ? 0.45 : 0.65)) return hold('5 小时余量偏紧，暂不自动加速');
+    const accelerating = continuing && old.accelerationActive !== false;
+    const shortTight = !short || short.used >= (accelerating ? 90 : 80) || shortFactor < (accelerating ? 0.45 : 0.65);
+    const burst = (reason, source, factor = 4) => {
+        const blocked = live.limited ? '上游限流，暂缓加速' : shortTight ? '5h 保护，暂缓加速' : '';
+        // Keep the weekly strategy visible while temporary protection removes its boost.
+        return { ...result, effectiveMode: 'burst', accelerationReason: source, accelerationFactor: factor,
+            accelerationActive: !blocked, modeReason: reason + (blocked ? '；' + blocked : '') };
+    };
 
     // Burning this week's surplus is independent of permission to spend a reset card.
     // Separate hysteresis keeps a previous card-backed burst from relaxing this trigger.
@@ -66,9 +72,8 @@ function chooseMode({ policy, account, cards, short, week, shortFactor, old, liv
     if (remaining > 0 && (lagging || expiring)) {
         const requiredRate = remaining / hours;
         const factor = clamp(requiredRate / Math.max(meanRate, 100 / 168), 1.5, 4);
-        return { ...result, effectiveMode: 'burst', accelerationReason: 'surplus', accelerationFactor: factor,
-            modeReason: '周余量 ' + Math.round(remaining) + '%，距重置约 ' + Math.ceil(hours) + ' 小时；' +
-                (lagging ? '落后理论水位 ' + Math.round(deficit) + ' 个百分点，自动高速补进度' : '临近到期，自动高速消耗余量') };
+        return burst('周余量 ' + Math.round(remaining) + '%，距重置约 ' + Math.ceil(hours) + ' 小时；' +
+            (lagging ? '落后理论水位 ' + Math.round(deficit) + ' 个百分点，自动高速补进度' : '临近到期，自动高速消耗余量'), 'surplus', factor);
     }
     if (!resetAllowed(policy, account)) return hold('周进度无需补量；未授权自动用卡');
     const weeklyCard = cards.find(c => c.type === 'week');
@@ -82,7 +87,7 @@ function chooseMode({ policy, account, cards, short, week, shortFactor, old, liv
     if (week.used < (usingCards ? 45 : 50) || ahead < (usingCards ? 10 : 15) || gap < (usingCards ? 12 : weekMinHours)) return hold('周进度尚不需要用卡加速');
     // Even the current average rate must be able to reach depletion before the card expires.
     if (!cards.some(c => c.type === 'week' && c.expiresAt > now + finishHours * HOUR)) return hold('预计耗尽前周卡将到期，暂不依赖该卡加速');
-    return { ...result, effectiveMode: 'burst', accelerationReason: 'reset-card', modeReason: '周进度领先 ' + Math.round(ahead) + '%，预计提前耗尽约 ' + Math.round(gap) + ' 小时；有周卡且 5h 可承接，自动高速' };
+    return burst('周进度领先 ' + Math.round(ahead) + '%，预计提前耗尽约 ' + Math.round(gap) + ' 小时；有周卡，自动高速', 'reset-card');
 }
 function chooseConcurrency({ policy, routes, short, shortFactor, old, live, now, effectiveMode, recentDemand }) {
     const ceiling = concurrencyCeiling(policy);

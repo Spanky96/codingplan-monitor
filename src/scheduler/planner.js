@@ -142,11 +142,13 @@ function plan({ config, accounts, usage, telemetry = {}, previous = {}, now }) {
         if (policy.role === 'primary' && row.effectiveMode === 'slow') {
             raw *= 0.2; state = 'slow'; reasons.unshift('管理员指定低速保护，限制流量与并发');
         } else if (policy.role === 'primary' && row.effectiveMode === 'burst') {
-            raw *= row.accelerationFactor || 4; state = 'burst'; reasons.unshift(row.modeReason || '人工高速消耗，优先分配流量');
+            if (row.accelerationActive !== false) raw *= row.accelerationFactor || 4;
+            state = row.accelerationActive === false ? 'protecting' : 'burst';
+            reasons.unshift(row.modeReason || '人工高速消耗，优先分配流量');
         }
         if (row.modeReason && row.effectiveMode !== 'burst') reasons.unshift(row.modeReason);
         const allocation = chooseConcurrency({ policy, routes, short, shortFactor, old, live, now,
-            effectiveMode: row.effectiveMode, recentDemand: demandNow });
+            effectiveMode: row.accelerationActive === false ? 'auto' : row.effectiveMode, recentDemand: demandNow });
         if (allocation.shortProtection && row.effectiveMode !== 'slow') state = 'protecting';
         if (!reasons.length) reasons.push('按周剩余额度与重置时间分流，保持多账号均衡');
         if (live.limited) { state = 'cooldown'; raw *= 0.25; }
