@@ -75,7 +75,7 @@ test('export clamps legacy plans to the GLM safety ceiling immediately', () => {
 });
 test('reset inventory counts valid cards across all accounts, independent of spending permission', () => {
     const {now,state}=fixture();
-    state.config.accounts.push({name:'placeholder',role:'paid',unmetered:true});store.write(state);
+    state.config.accounts.push({name:'placeholder',role:'paid',unmetered:false});store.write(state);
     const card=(type,expiry)=>({type,recordId:1,expireTime:expiry});
     fs.writeFileSync(process.env.ACCOUNTS_FILE,JSON.stringify({accounts:[
         {name:'A',platform:'glm',resetCards:{checkedAt:now,cards:[card('week',now+3600000),card('fiveHour',now-1)]}},

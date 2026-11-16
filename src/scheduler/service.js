@@ -13,7 +13,7 @@ let lastPush = null;
 const cardChecks = {};
 function supportsCardInventory(account, policies) {
     return (account.platform || 'glm') === 'glm' && !account.teamEdition &&
-        !policies.some(p => p.name === account.name && p.role === 'paid' && p.unmetered);
+        !policies.some(p => p.name === account.name && p.role === 'paid');
 }
 function matchKey(names, name) {
     return names.filter(n => n && name.startsWith(n)).sort((a, b) => b.length - a.length)[0];
