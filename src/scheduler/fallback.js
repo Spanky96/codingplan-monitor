@@ -2,14 +2,16 @@
 const MINUTE = 60000, HOUR = 60 * MINUTE;
 
 // Forecast capacity, not token consumption. Only official quota deltas contribute.
-function assessFallback({ rows, previous = {}, config, now, recentDemand }) {
+function assessFallback({ rows, previous = {}, config, now, recentDemand, load }) {
     const primary = rows.filter(r => r.role === 'primary' && r.nativeChannels);
     const ready = primary.filter(r => r.raw > 0 && !r.limited);
     const capacity = ready.reduce((sum, r) => sum + r.concurrency, 0);
-    const current = primary.reduce((sum, r) => sum + (r.observedConcurrency || 0), 0);
+    const assigned = rows.filter(r => r.role === 'primary' || r.role === 'paid' || r.fallbackChannels).reduce((sum, r) =>
+        sum + (r.role === 'standard' ? r.observedFallbackConcurrency || 0 : r.observedConcurrency || 0), 0);
+    const current = load && now-load.at>=0 && now-load.at<90000 ? Math.max(assigned,load.inFlight) : assigned;
     const consecutive = previous.at && now >= previous.at && now - previous.at <= 90000;
     const old = consecutive ? previous : {};
-    const demand = Math.max(current, (old.demand || 0) * 0.8 + current * 0.2);
+    const demand = Math.round(Math.max(current, (old.demand || 0) * 0.8 + current * 0.2) * 1000) / 1000;
     const horizon = now + 45 * MINUTE, events = [];
     let atRiskCapacity = 0;
     for (const r of ready) {
@@ -56,7 +58,9 @@ function assessFallback({ rows, previous = {}, config, now, recentDemand }) {
     const fraction = active ? confirmed ? allTight ? 0.15 : overloaded ? 0.10 : 0.05 : old.fraction : 0;
     const reason = active && !confirmed ? '恢复观察，暂时保留小比例分流' : allTight ? '可用主力额度普遍偏紧'
         : overloaded ? '主力并发持续接近承接上限' : forecast ? '预计 45 分钟内可用并发下降至 ' + minimum + '，已计入临近自然恢复' : '主力承接余量足够';
-    return { at: now, active, pendingSince, calmSince, fraction, reason, demand, capacity,
+    const capacityGap = demand > capacity ? Math.max(0, Math.ceil(demand / 0.85) - capacity) : 0;
+    return { at: now, active, pendingSince, calmSince, fraction, reason, demand, capacity, capacityGap,
+        demandSource: load ? load.source : 'account-slots', unassigned: load ? load.unassigned : 0,
         projectedCapacity: minimum, atRiskCapacity, horizonMinutes: 45 };
 }
 

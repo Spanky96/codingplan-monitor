@@ -41,11 +41,11 @@ test('reaching the reset clock is insufficient without an upstream observation',
     assert.equal(row(p, 'A').state, 'refreshing');
     assert.equal(row(p, 'A').weight, 0);
 });
-test('fallback ordering is primary then paid then dilution, only with explicit permission', () => {
+test('fallback probes paid capacity first and lets dilution fill the remaining gap with explicit permission', () => {
     const p = fixture(); p.config.allowPaid = p.config.allowDilution = true;
     assert.equal(row(p, 'Paid').weight, 0);
     p.usage[0].data.limits[1].percentage = p.usage[1].data.limits[1].percentage = 100;
-    assert.ok(row(p, 'Paid').weight > 0); assert.equal(row(p, 'Mini').weight, 0);
+    assert.ok(row(p, 'Paid').weight > 0); assert.ok(row(p, 'Mini').weight > 0);
     p.usage[2].data.balance = 0;
     assert.ok(row(p, 'Mini').weight > 0);
 });
@@ -125,6 +125,7 @@ test('short-window card cannot compensate for nearly exhausted weekly quota', ()
 });
 test('early dilution requires opt-in timing and all primary accounts to be quota-constrained', () => {
     const p = fixture(); p.config.allowDilution = true; p.config.fallbackWhen = 'pressure';
+    p.telemetry.Paid.current=0;p.telemetry.Mini.current=0;
     assert.equal(row(p, 'Mini').weight, 0);
     p.usage[0].data.limits[0].percentage = p.usage[1].data.limits[0].percentage = 90;
     assert.ok(row(p, 'Mini').weight > 0);
@@ -134,6 +135,7 @@ test('early dilution requires opt-in timing and all primary accounts to be quota
 });
 test('confirmed forecast enables only the fallback channel at a small weight budget, preserving native MiniMax', () => {
     const p=withNativeMini();p.config.allowDilution=true;p.config.fallbackWhen='pressure';
+    p.telemetry.Paid.current=0;p.telemetry.Mini.current=0;
     for(const [i,name] of ['A','B'].entries()) {
         p.usage[i].data.limits[0].percentage=i===0?70:40;
         p.previous||(p.previous={});

@@ -6,9 +6,11 @@ const { readAccounts } = require('../api/accounts');
 const cache = require('../api/cache');
 const { concurrencyCeiling, resetAllowed } = require('./adaptation');
 const { httpGetJSON } = require('../lib/http');
+const { poolDemand } = require('./demand');
+const { boundChannelCapacity } = require('./channels');
 
 const LEASE_MS = 180000;
-let running = null, timer = null, snapshot = null, snapshotAt = 0, integrationError = null;
+let running = null, timer = null, snapshot = null, snapshotAt = 0, integrationError = null, activity = null;
 let lastPush = null;
 const cardChecks = {};
 function supportsCardInventory(account, policies) {
@@ -20,7 +22,16 @@ function matchKey(names, name) {
 }
 async function telemetry() {
     if (!config.relayEnabled) throw new Error('请配置 SUB2API_BASE_URL');
-    const envelope = await httpGetJSON(config.sub2apiBaseUrl + '/api/weight-snapshot', 8000);
+    const activityUrl = config.sub2apiBaseUrl + '/api/user-activity-snapshot' + (config.relaySnapshotToken ? '?token=' + encodeURIComponent(config.relaySnapshotToken) : '');
+    const [weights, users] = await Promise.allSettled([
+        httpGetJSON(config.sub2apiBaseUrl + '/api/weight-snapshot', 8000), httpGetJSON(activityUrl, 8000)
+    ]);
+    if (users.status === 'fulfilled' && users.value.code === 0 && Array.isArray((users.value.data || {}).users)) {
+        const list = users.value.data.users;
+        activity = { at: Date.now(), inUse: list.reduce((n,u)=>n+Math.max(0,u.current_in_use||0),0), waiting: list.reduce((n,u)=>n+Math.max(0,u.waiting_in_queue||0),0) };
+    } else activity = null;
+    if (weights.status !== 'fulfilled') throw weights.reason;
+    const envelope = weights.value;
     if (!envelope || envelope.code !== 0 || !envelope.data || !Array.isArray(envelope.data.accounts)) throw new Error('中转站容量响应无效');
     snapshot = envelope.data; snapshotAt = Date.now(); integrationError = null;
     return snapshot;
@@ -32,7 +43,8 @@ function aggregate(accounts) {
         const key = matchKey(names, a.name);
         if (!key) return;
         const r = result[key] || (result[key] = { count: 0, current: 0, capacity: 0, limited: false, healthy: 0, channels: [] });
-        r.channels.push({ id: a.id, name: a.name, platform: a.platform, suggestedMode: a.suggested_scheduling_mode || 'native', mode: a.scheduling_mode || null });
+        r.channels.push({ id: a.id, name: a.name, platform: a.platform, suggestedMode: a.suggested_scheduling_mode || 'native', mode: a.scheduling_mode || null,
+            current: a.current_concurrency || 0, capacity: a.concurrency || 0, weight: a.weight || 0, enabled: !!a.effective_schedulable });
         r.count++; r.current += a.current_concurrency || 0; r.capacity += a.concurrency || 0;
         r.limited = r.limited || !!a.rate_limited;
         r.demandAt = Math.max(r.demandAt || 0, a.recent_demand_at || 0);
@@ -46,7 +58,7 @@ function compute(state = store.read()) {
     const usage = accounts.map((_, i) => cache.getCachedLastKnown(i));
     const previous = Object.fromEntries(((state.plan || {}).rows || []).map(r => [r.name, r]));
     const result = plan({ config: state.config, accounts, usage, telemetry: aggregate(accounts), previous,
-        previousSummary: (state.plan || {}).summary || {}, now: Date.now() });
+        previousSummary: (state.plan || {}).summary || {}, load: snapshot ? poolDemand(snapshot, activity, state.config.accounts, Date.now()) : null, now: Date.now() });
     result.rows.forEach(r => {
         const pending = state.pendingResets && state.pendingResets[r.name];
         if (pending) {
@@ -95,8 +107,10 @@ function controls(state = store.read(), now = Date.now()) {
         const exhausted = !unmetered && windowsOf(u).some(w => w.used >= EXHAUSTED);
         const pending = (state.pendingResets || {})[p.name];
         const usable = fresh && r && validUsage && !exhausted && !pending;
+        const concurrency = fresh && r ? Math.min(r.concurrency, concurrencyCeiling(p)) : 1;
         return [p.name, { weight: usable ? (r.nativeWeight == null ? r.weight : r.nativeWeight) : 0, fallback_weight: usable ? (r.fallbackWeight || 0) : 0,
-            channel_modes: r && r.channelModes ? r.channelModes : (p.channelModes || {}), concurrency: fresh && r ? Math.min(r.concurrency, concurrencyCeiling(p)) : 1,
+            ...(r && r.channelConcurrency ? { channel_concurrency: boundChannelCapacity(r.channelModes || {}, r.channelConcurrency, usable ? concurrency : 0) } : {}),
+            channel_modes: r && r.channelModes ? r.channelModes : (p.channelModes || {}), concurrency,
             priority: r ? r.priority : 999, expires_at: new Date(fresh ? state.plan.generatedAt + LEASE_MS : now + LEASE_MS).toISOString() }];
     }));
 }
@@ -235,7 +249,7 @@ function status() {
         });
     }
     return { config: state.config, plan: state.plan || null, events: state.events, lastPush, integrationError,
-        appliedFallback, observedAt: snapshotAt, resetCards,
+        appliedFallback, observedAt: snapshotAt, resetCards, channelCapacitySupported: !!(snapshot && snapshot.smart_channel_capacity_version >= 1),
         connected: !!snapshot && snapshot.smart_scheduler_version === 2 && Date.now() - snapshotAt < 90000,
         syncConfigured: !!config.schedulerSyncToken && config.relayEnabled,
         candidates: accounts.map((a, index) => ({ name: a.name, index, platform: a.platform || 'glm', teamEdition: !!a.teamEdition,
