@@ -16,8 +16,16 @@ function allocateBackupCapacity({ rows, assessment, previous, telemetry, config,
         const ids = Object.keys(r.channelModes || {});
         const native = ids.filter(id => r.channelModes[id] === 'native');
         const recovering = r.limited || (r.lastLimitedAt && now-r.lastLimitedAt<120000);
+        // A reserve with ample quota must be usable when the primary pool is
+        // already short of capacity. Forecast pacing alone would otherwise park
+        // the reserve precisely when it is needed. Actual near-exhaustion and
+        // upstream rate limits still constrain it.
+        r.backupQuotaOverride = !!(enabled && config.allowDilution && assessment.capacityGap > 0 &&
+            r.role === 'standard' && r.fallbackChannels && r.raw > 0 && r.effectiveMode !== 'slow' &&
+            r.shortUsed != null && r.shortUsed < 85 && (r.weeklyUsed == null || r.weeklyUsed < 95));
+        const quotaLimit = r.backupQuotaOverride ? r.maxConcurrency : r.shortProtection === 2 ? 1 : r.shortProtection === 1 ? 2 : r.maxConcurrency;
         const limit = Math.min(r.maxConcurrency, recovering ? r.concurrency : r.maxConcurrency,
-            r.shortProtection === 2 ? 1 : r.shortProtection === 1 ? 2 : r.maxConcurrency);
+            quotaLimit);
         const nativeUse = (live.channels || []).filter(c => r.channelModes[String(c.id)] === 'native').reduce((n,c) => n+(c.current||0),0);
         r.nativeCapacity = r.role === 'paid' || !(r.raw > 0) ? 0 : Math.min(limit, Math.max(native.length || r.nativeChannels, Math.ceil(nativeUse / 0.8)));
         r.backupCapacity = 0;
@@ -52,7 +60,14 @@ function allocateBackupCapacity({ rows, assessment, previous, telemetry, config,
             else if (r.backupCapacity) { r.state = 'fallback'; r.reasons.push('按量兜底并发 ' + r.backupCapacity + '/' + r.maxConcurrency); }
         } else {
             if (!r.nativeCapacity && !r.backupCapacity && r.raw > 0) { r.raw = 0; r.state = 'standby'; r.reasons = ['备用分流待命']; }
-            else r.reasons.push('原生并发 ' + r.nativeCapacity + '，备用并发 ' + r.backupCapacity + '；共用上限 ' + r.maxConcurrency);
+            else {
+                if (r.backupQuotaOverride && r.backupCapacity > 0 && !r.limited) {
+                    if (r.state === 'protecting') r.state = 'balanced';
+                    r.reasons = r.reasons.filter(reason => !reason.startsWith('按官方近期消耗速度') && !reason.startsWith('5 小时额度偏紧'));
+                    r.reasons.push('主力并发不足，备用余量充足，优先承接当前缺口');
+                }
+                r.reasons.push('原生并发 ' + r.nativeCapacity + '，备用并发 ' + r.backupCapacity + '；共用上限 ' + r.maxConcurrency);
+            }
         }
     }
     return { required, allocated: required-remaining, shortfall: remaining,

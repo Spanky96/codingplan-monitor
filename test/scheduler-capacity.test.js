@@ -53,6 +53,17 @@ test('real deficits raise offload weight beyond the preventive cap while preserv
     p.rows[2].weight=70;assignBackupWeights(p.rows,p.assessment,result,true);
     assert.ok(p.rows[0].weight<=10);assert.ok(p.rows[1].weight<=10);assert.ok(p.rows[2].weight>0);
 });
+test('real capacity deficits can consume ample reserve quota despite forecast pacing, but never bypass limits or near-exhaustion',()=>{
+    const setup=()=>{const p=fixture();Object.assign(p.rows[1],{shortUsed:42,weeklyUsed:15,shortProtection:2,state:'protecting',effectiveMode:'auto'});return p;};
+    let p=setup();allocateBackupCapacity(p);assert.equal(p.rows[1].backupCapacity,3);assert.equal(p.rows[1].nativeCapacity,2);assert.equal(p.rows[1].state,'balanced');
+    p=setup();p.rows[1].shortUsed=85;allocateBackupCapacity(p);assert.equal(p.rows[1].backupCapacity,0);
+    p=setup();p.rows[1].weeklyUsed=95;allocateBackupCapacity(p);assert.equal(p.rows[1].backupCapacity,0);
+    p=setup();p.rows[1].limited=true;allocateBackupCapacity(p);assert.equal(p.rows[1].backupCapacity,0);
+    p=setup();p.rows[1].lastLimitedAt=NOW-60000;p.rows[1].concurrency=1;allocateBackupCapacity(p);assert.equal(p.rows[1].concurrency,1);
+    p=setup();p.rows[1].effectiveMode='slow';allocateBackupCapacity(p);assert.equal(p.rows[1].backupCapacity,0);
+    p=setup();p.assessment.capacityGap=0;allocateBackupCapacity(p);assert.equal(p.rows[1].backupCapacity,0);
+    p=setup();p.rows[1].raw=0;allocateBackupCapacity(p);assert.equal(p.rows[1].backupCapacity,0);
+});
 test('cleared pressure releases paid and replacement capacity while native endpoints remain available',()=>{
     const p=fixture();p.assessment.active=false;allocateBackupCapacity(p);assignBackupWeights(p.rows,p.assessment,{allocated:0},true);
     assert.equal(p.rows[0].weight,0);assert.equal(p.rows[1].fallbackWeight,0);
