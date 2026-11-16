@@ -13,6 +13,7 @@ scheduler-state.json.tmp
 usage-cache.json
 data/
 tmp/
+cclogs/
 token.telecomjs.com/
 
 # Git / 编辑器 / 系统
