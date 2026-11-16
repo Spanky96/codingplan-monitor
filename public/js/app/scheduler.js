@@ -2,6 +2,19 @@
 var schedulerState = null;
 var schedulerDraft = null;
 var schedulerBusy = false;
+var scheduleGroupedView = localStorage.getItem('usage_schedule_grouped') === 'true';
+var SCHEDULE_MODES = { auto: '自动均衡', slow: '低速保护', burst: '高速消耗' };
+function scheduleGroupsEnabled() {
+  return isAdmin() && FEATURES.relayEnabled && scheduleGroupedView;
+}
+function toggleScheduleView() {
+  if (!isAdmin() || !FEATURES.relayEnabled) return;
+  scheduleGroupedView = !scheduleGroupedView;
+  localStorage.setItem('usage_schedule_grouped', String(scheduleGroupedView));
+  scheduleCategoryFilter = 'all';
+  renderSchedulerSummary();
+  renderCards(accountsData);
+}
 var SCHEDULE_STATES = { balanced: '均衡分流', protecting: '5h 保护', draining: '到期优先', burn: '用卡加速',
   slow: '低速保护', burst: '高速消耗',
   cooldown: '限流降速', exhausted: '额度耗尽', standby: '待命', fallback: '兜底中', paused: '手动暂停',
@@ -26,9 +39,13 @@ function schedulerRow(name) {
 function schedulingBadge(name) {
   var r = schedulerRow(name);
   if (!isAdmin()) return '';
-  if (!r) return '<span class="schedule-badge" title="沿用原权重策略；权重设为 0 可只监控">未托管</span>';
-  return '<span class="schedule-badge ' + (r.weight > 0 ? 'live' : '') + '" data-tooltip="' + esc(r.reasons.join('；')) + '">'
-    + (r.weight > 0 ? '#' + r.priority + ' ' : '') + esc(SCHEDULE_STATES[r.state] || r.state) + '</span>';
+  var policy = schedulerState && schedulerState.config.enabled && schedulerState.config.accounts.find(function(p) { return p.name === name; });
+  if (!policy) return '<span class="schedule-badge" title="沿用原权重策略；权重设为 0 可只监控">未托管</span>';
+  var label = policy.role === 'primary' ? (SCHEDULE_MODES[policy.mode || 'auto'] || '自动均衡') : (SCHEDULE_ROLES[policy.role] || '其他模型');
+  var state = r ? SCHEDULE_STATES[r.state] || r.state : '准备中';
+  if (state !== label && !(r && r.state === 'balanced')) label += ' · ' + state;
+  return '<span class="schedule-badge ' + (r && r.weight > 0 ? 'live' : '') + '" data-tooltip="' + esc(r ? r.reasons.join('；') : '等待首轮调度计划') + '">'
+    + (scheduleGroupsEnabled() && r && r.weight > 0 ? '#' + r.priority + ' ' : '') + esc(label) + '</span>';
 }
 function schedulerName(name) {
   var a = accountsData.find(function(a) { return a.name === name; });
@@ -50,8 +67,15 @@ function schedulerSummaryHTML() {
 function renderSchedulerSummary() {
   var btn = document.getElementById('schedulerBtn'), bar = document.getElementById('schedulerSummary');
   if (btn) btn.style.display = isAdmin() && FEATURES.relayEnabled ? '' : 'none';
+  var view = document.getElementById('scheduleViewControls'), toggle = document.getElementById('scheduleViewToggle');
+  if (view) view.style.display = isAdmin() && FEATURES.relayEnabled ? '' : 'none';
+  if (toggle) {
+    toggle.classList.toggle('active', !!scheduleGroupsEnabled());
+    toggle.setAttribute('aria-pressed', String(!!scheduleGroupsEnabled()));
+    toggle.title = scheduleGroupsEnabled() ? '返回全部账号通铺' : '按调度模式分类查看';
+  }
   if (!bar) return;
-  bar.style.display = isAdmin() && FEATURES.relayEnabled && schedulerState ? '' : 'none';
+  bar.style.display = scheduleGroupsEnabled() && schedulerState ? '' : 'none';
   bar.innerHTML = schedulerSummaryHTML();
   var live = document.getElementById('schedulerLiveSummary');
   if (live) live.innerHTML = schedulerSummaryHTML();
@@ -246,7 +270,7 @@ function setScheduleCategory(key) {
 function filterScheduleCategories(list) {
   var box = document.getElementById('scheduleCategories');
   if (!box) return list;
-  var show = isAdmin() && FEATURES.relayEnabled;
+  var show = scheduleGroupsEnabled();
   box.style.display = show ? '' : 'none';
   if (!show) return list;
   var counts = {};
@@ -258,7 +282,7 @@ function filterScheduleCategories(list) {
   return scheduleCategoryFilter === 'all' ? list : list.filter(function(x) { return scheduleCategory(x.acc) === scheduleCategoryFilter; });
 }
 function renderScheduleGroups(grid, list, isList) {
-  if (!isAdmin() || !FEATURES.relayEnabled || _sortMode !== 'default') return false;
+  if (!scheduleGroupsEnabled()) return false;
   grid.innerHTML = Object.keys(SCHEDULE_CATEGORIES).map(function(key) {
     var group = list.filter(function(x) { return scheduleCategory(x.acc) === key; });
     if (!group.length) return '';

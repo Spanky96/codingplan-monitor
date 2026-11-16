@@ -666,7 +666,7 @@
           return _filterPlatforms.indexOf((x.acc && x.acc.platform) || 'glm') >= 0;
         });
       }
-      if (_sortMode === 'default' && typeof schedulerRow === 'function' && isAdmin()) {
+      if (_sortMode === 'default' && typeof scheduleGroupsEnabled === 'function' && scheduleGroupsEnabled()) {
         arr.sort(function(a,b) {
           var ra = schedulerRow(a.acc.name), rb = schedulerRow(b.acc.name);
           return (ra ? ra.priority : 10000) - (rb ? rb.priority : 10000) || a.origIdx - b.origIdx;

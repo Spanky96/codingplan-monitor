@@ -733,6 +733,9 @@
             <button class="toolbar-btn" data-sort="tension" onclick="setSort('tension')">紧张度<span class="sort-arrow" id="tensionArrow">▼</span></button>
             <button class="toolbar-btn" data-sort="weight" onclick="setSort('weight')">权重<span class="sort-arrow" id="weightArrow">▼</span></button>
           </div>
+          <div class="toolbar-group" id="scheduleViewControls" style="display:none">
+            <button class="toolbar-btn" id="scheduleViewToggle" aria-pressed="false" aria-controls="scheduleCategories schedulerSummary cardGrid" onclick="toggleScheduleView()">调度分类</button>
+          </div>
           <span class="toolbar-count" id="toolbarCount"></span>
         </div>
         <div class="schedule-categories" id="scheduleCategories" style="display:none"></div>
