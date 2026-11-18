@@ -133,6 +133,8 @@ function plan({ config, accounts, usage, telemetry = {}, previous = {}, previous
             if (genericScore.exhausted || !(genericScore.weight > 0)) return stop('exhausted', '额度已用尽');
             raw = genericScore.weight;
         }
+        const allocation = chooseConcurrency({ policy, routes, short, shortFactor, old, live, now,
+            effectiveMode: row.accelerationActive === false ? 'auto' : row.effectiveMode, recentDemand: demandNow });
         if (shortFactor < 0.6) { state = 'protecting'; reasons.push('5 小时额度偏紧，降低流量并保留并发分摊'); }
         if (week) {
             let hours = Number.isFinite(week.resetAt) ? clamp((week.resetAt - now) / HOUR, 1, 168) : 168;
@@ -141,6 +143,16 @@ function plan({ config, accounts, usage, telemetry = {}, previous = {}, previous
             }
             // Required remaining burn rate, normalized to a full week's average rate.
             raw = Math.sqrt(clamp(((100 - week.used) / hours) / (100 / 168), 0.05, 16));
+            // Card-backed acceleration aims to finish this allowance and replenish,
+            // not stretch its last few percent until the old natural reset. Keep
+            // at least the normal weekly baseline while that strategy is active.
+            // Inventory/permission checks stay in chooseMode; short-window and
+            // upstream protection still take precedence, and no card is spent here.
+            if (row.accelerationReason === 'reset-card' && row.accelerationActive && !allocation.shortProtection) {
+                raw = Math.max(1, raw);
+                reasons.push('周卡衔接加速：周余量少不再压低高速权重');
+            }
+            row.weeklyWeightFactor = raw;
         }
         raw *= shortFactor * policy.quotaScale;
         if (policy.role === 'primary' && row.effectiveMode === 'slow') {
@@ -151,8 +163,6 @@ function plan({ config, accounts, usage, telemetry = {}, previous = {}, previous
             reasons.unshift(row.modeReason || '人工高速消耗，优先分配流量');
         }
         if (row.modeReason && row.effectiveMode !== 'burst') reasons.unshift(row.modeReason);
-        const allocation = chooseConcurrency({ policy, routes, short, shortFactor, old, live, now,
-            effectiveMode: row.accelerationActive === false ? 'auto' : row.effectiveMode, recentDemand: demandNow });
         if (allocation.shortProtection && row.effectiveMode !== 'slow') state = 'protecting';
         if (!reasons.length) reasons.push('按周剩余额度与重置时间分流，保持多账号均衡');
         if (live.limited) { state = 'cooldown'; raw *= 0.25; }
