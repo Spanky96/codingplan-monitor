@@ -58,3 +58,40 @@ test('recovery observation prevents repeated on/off switching and releases after
     p.config.allowDilution=false;p.config.allowPaid=false;
     assert.equal(assessFallback({...p,previous:confirmed(fixture()),now:NOW+2*M}).active,false);
 });
+
+function quotaFixture() {
+    const p = fixture();
+    p.rows = Array.from({length: 12}, (_, i) => healthy(String(i), {
+        observedConcurrency: i === 0 ? 1 : 0, shortRatePerHour: 0,
+        weeklyUsed: 65, weeklyPace: {workAheadPct: i < 4 ? 20 : 0}
+    }));
+    return p;
+}
+test('one third of primaries over budget triggers preventive relief even with spare concurrency', () => {
+    const p = quotaFixture();
+    assert.equal(assessFallback(p).active, false);
+    const a = confirmed(p);
+    assert.equal(a.active, true); assert.equal(a.quotaRisk, 4); assert.equal(a.quotaMeasured, 12);
+    assert.equal(a.capacityGap, 0); assert.equal(a.fraction, 0.15); assert.match(a.reason, /4\/12/);
+    for (const mutate of [p => p.recentDemand = false, p => p.config.fallbackWhen = 'exhausted',
+        p => {p.config.allowPaid = false; p.config.allowDilution = false;}]) {
+        const muted = quotaFixture(); mutate(muted); assert.equal(confirmed(muted).active, false);
+    }
+});
+test('quota votes reflect short protection, remaining time and usable card-backed acceleration', () => {
+    const p = quotaFixture(), r = p.rows[3];
+    r.accelerationReason = 'reset-card'; r.accelerationActive = true;
+    assert.equal(confirmed(p).active, false);
+    r.accelerationActive = false; assert.equal(confirmed(p).active, true);
+    r.weeklyResetAt = NOW + 4*H; assert.equal(confirmed(p).active, false);
+    Object.assign(r, {shortProtection: 2, shortUsed: 90, shortResetAt: NOW+H});
+    assert.equal(confirmed(p).active, true);
+    r.shortResetAt = NOW+44*M; assert.equal(confirmed(p).active, false);
+    Object.assign(r, {weeklyResetAt: NOW+48*H, weeklyPace: {workAheadPct: 11}, weeklyUsed: 95});
+    assert.equal(confirmed(p).active, true);
+    Object.assign(r, {raw: 0, state: 'exhausted', weeklyUsed: 100});
+    assert.equal(confirmed(p).quotaRisk, 4);
+    r.state = 'stale'; assert.equal(confirmed(p).quotaRisk, 3);
+    assert.equal(confirmed(p).quotaMeasured, 11); assert.equal(confirmed(p).active, false);
+    p.rows = [p.rows[0], p.rows[8], p.rows[9]]; assert.equal(confirmed(p).active, false);
+});

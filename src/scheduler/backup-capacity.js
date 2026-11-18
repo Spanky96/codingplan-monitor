@@ -32,6 +32,10 @@ function allocateBackupCapacity({ rows, assessment, previous, telemetry, config,
         r.backupCeiling = Math.max(0, limit - r.nativeCapacity);
         r.backupAdjustedAt = old.backupAdjustedAt || 0;
     }
+    // During preventive quota relief both authorized routes can carry traffic.
+    // Leave one replacement slot when there is room, without enlarging the budget.
+    const reserveReplacement = hasPrimary && assessment.quotaPressure && !assessment.capacityGap &&
+        required >= 2 && backup.some(r => r.backupCeiling > 0);
     for (const r of paid.concat(backup)) {
         if (!enabled || remaining <= 0) continue;
         const old = previous[r.name] || {}, live = telemetry[r.name] || {};
@@ -44,7 +48,8 @@ function allocateBackupCapacity({ rows, assessment, previous, telemetry, config,
         // Paid capacity probes two slots first and grows on real use. Replacement
         // capacity fills the remaining deficit, without reserving idle aliases an equal share.
         const probe = !before ? 2 : before + (canGrow && (r.role !== 'paid' || occupied >= before * 0.75) ? (r.role === 'paid' ? 1 : 2) : 0);
-        r.backupCapacity = Math.min(remaining, r.backupCeiling, probe);
+        const available = reserveReplacement && r.role === 'paid' ? remaining - 1 : remaining;
+        r.backupCapacity = Math.min(available, r.backupCeiling, probe);
         if (r.backupCapacity !== before) r.backupAdjustedAt = now;
         remaining -= r.backupCapacity;
     }

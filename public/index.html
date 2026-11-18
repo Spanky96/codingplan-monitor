@@ -377,8 +377,6 @@
     .limit-bar-seg .seg-fill { height: 100%; border-radius: 3px; transition: width .6s ease; min-width: 0; }
     .limit-bar-seg .seg { position: relative; }
     .seg-today { position: absolute; inset-block: 0; background: repeating-linear-gradient(125deg, transparent 0 3px, rgba(255,255,255,.72) 3px 5px); }
-    .week-day-label { display: inline-flex; align-items:center; gap:4px; margin-top:3px; color:var(--text-soft); font-size:10px; }
-    .week-day-label::before { content:''; width:11px; height:6px; border-radius:2px; background:repeating-linear-gradient(125deg,var(--text-mute) 0 2px,var(--track) 2px 4px); }
     .ring-day { fill:none; stroke:var(--glass); stroke-width:1.6; }
     .theo-marker { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--accent); border-radius: 1px; transform: translateX(-1px); pointer-events: none; box-shadow: 0 0 6px var(--accent-glow); }
     .tension-row { display: flex; justify-content: space-between; margin-top: 5px; font-size: 11px; }
@@ -914,7 +912,7 @@
   <script src="js/app/core.js"></script>
   <script src="js/app/theme.js?v=20261116-comparison"></script>
   <script src="js/app/glm-model.js"></script>
-  <script src="js/app/platform-helpers.js"></script>
+  <script src="js/app/platform-helpers.js?v=20261118-weekly-bar"></script>
   <script src="js/app/status.js"></script>
   <script src="js/app/cards.js?v=20261118-weekly"></script>
   <script src="js/app/detail.js"></script>

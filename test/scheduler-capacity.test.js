@@ -45,6 +45,21 @@ test('capacity respects opt-outs, account ceilings, quota protection and rate-li
     p=fixture();p.rows[1].lastLimitedAt=NOW-60000;p.rows[1].concurrency=1;allocateBackupCapacity(p);assert.equal(p.rows[1].concurrency,1);
     p=fixture();p.rows[0].limited=true;allocateBackupCapacity(p);assert.equal(p.rows[0].backupCapacity,0);
 });
+test('preventive quota relief shares two slots while honoring unavailable or disabled routes', () => {
+    function preventive() {
+        const p = fixture();
+        p.assessment = {active:true, capacity:10, capacityGap:0, demand:2, fraction:0.15, quotaPressure:true};
+        return p;
+    }
+    let p = preventive(), result = allocateBackupCapacity(p);
+    assert.deepEqual([result.required, result.paid, result.fallback], [2, 1, 1]);
+    p = preventive(); p.rows[1].shortProtection = 2;
+    result = allocateBackupCapacity(p); assert.deepEqual([result.paid, result.fallback], [2, 0]);
+    p = preventive(); p.config.allowPaid = false;
+    result = allocateBackupCapacity(p); assert.deepEqual([result.paid, result.fallback], [0, 2]);
+    p = preventive(); p.config.allowDilution = false;
+    result = allocateBackupCapacity(p); assert.deepEqual([result.paid, result.fallback], [2, 0]);
+});
 test('real deficits raise offload weight beyond the preventive cap while preserving native availability',()=>{
     const p=fixture();p.rows.push({name:'GLM',role:'primary',raw:1,weight:7,nativeChannels:1,concurrency:7,maxConcurrency:7});
     const result=allocateBackupCapacity(p);assignBackupWeights(p.rows,p.assessment,result,true);

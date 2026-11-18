@@ -59,7 +59,8 @@ test('weekly bar shades only intersections of today’s interval with its five w
     assert.equal((html.match(/class="seg"/g) || []).length, 5);
     assert.equal((html.match(/class="seg-today"/g) || []).length, 2);
     assert.match(html, /left:10%;width:90%/); assert.match(html, /left:0%;width:35%/);
-    assert.match(html, /今日 1.25 格/);
+    assert.doesNotMatch(html, /week-day-label/);
+    assert.match(html, /aria-label="[^"]*共 1.25 格/);
     assert.doesNotMatch(c.renderLimitRow({ ...l, unit: 3 }, d), /seg-today/);
     assert.doesNotMatch(c.renderLimitRow(l, { ...d, day: day - 86400000 }), /seg-today/);
 });

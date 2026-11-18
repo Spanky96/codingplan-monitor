@@ -52,7 +52,7 @@
         }
 
         return '<div class="limit-row"><div class="limit-label"><span class="limit-name">' + label + '</span><span class="limit-value">' + value + '</span></div>'
-          + barHtml + (today ? '<span class="week-day-label">' + today.label + '</span>' : '') + tensionHtml
+          + barHtml + tensionHtml
           + (reset ? '<div style="font-size:11px;color:var(--text-faint);margin-top:2px">' + reset + '</div>' : '')
           + '</div>';
       }

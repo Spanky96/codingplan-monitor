@@ -138,6 +138,7 @@ test('confirmed forecast enables only the fallback channel at a small weight bud
     p.telemetry.Paid.current=0;p.telemetry.Mini.current=0;
     for(const [i,name] of ['A','B'].entries()) {
         p.usage[i].data.limits[0].percentage=i===0?70:40;
+        p.usage[i].data.limits[1].percentage=10; // Isolate the 45-minute forecast from weekly quota pressure.
         p.previous||(p.previous={});
         p.previous[name]={shortRatePerHour:i===0?120:0,shortRateSamples:4};
     }
