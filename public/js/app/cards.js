@@ -308,7 +308,7 @@ function cardHeaderStatus(button, name, status) {
       var resetClass = '';
       return '<div class="card' + resetClass + '" id="card-' + i + '"><div class="card-header">' + headerLeft
         + cardHeaderStatus(btn, acc.name, '<span class="card-status ' + getStatusClass(mp) + '"' + quotaStatusAttrs(acc) + '>' + getStatusText(mp) + '</span>') + '</div>'
-        + '<div class="card-body">' + limits.map(renderLimitRow).join('') + '</div>' + expHtml
+        + '<div class="card-body">' + limits.map(function(l) { return renderLimitRow(l, acc.weeklyDay); }).join('') + '</div>' + expHtml
         + '<div class="card-footer"><div class="card-footer-left"><span class="level-badge">' + level + '</span>' + glmFooterBadges(acc) + rcBadge + rBadge + cache + '</div>'
         + '<button class="detail-btn" onclick="showDetail(' + i + ')">详情</button></div></div>';
     }
@@ -380,6 +380,11 @@ function cardHeaderStatus(button, name, status) {
       var dashPct = Math.min(pct, 100);
       var pctShow = pct >= 100 ? '100%' : Math.round(pct) + '%';
       var extras = ringSegExtras(item.segments || 0, item.theoPct);
+      if (item.today && item.today.to > item.today.from) {
+        var length = item.today.to - item.today.from;
+        extras = '<circle class="ring-day" cx="20" cy="20" r="17" pathLength="100" stroke-dasharray="' +
+          length + ' ' + (100 - length) + '" stroke-dashoffset="' + (-item.today.from) + '"></circle>' + extras;
+      }
       var titleParts = [item.label, pctShow];
       if (item.value) titleParts.push(item.value);
       var title = item.title || titleParts.join(' ');
@@ -506,7 +511,9 @@ function cardHeaderStatus(button, name, status) {
         var theo = segs > 0 ? glmTheoPct(l.nextResetTime, periodMs) : -1;
         // MCP 额度与积分额度有原始用量(current/usage)；其余 Token 限额只有百分比，与 pct 重复故不传 value
         var value = ((l.type === 'TIME_LIMIT' || l.type === 'CREDIT_LIMIT') && l.usage != null) ? ((l.currentValue || 0) + '/' + l.usage) : null;
-        push(label, pct, value, { segments: segs, theoPct: theo, title: getLimitLabel(l) + ' ' + (value || pct + '%') });
+        var today = glmWeeklyDay(l, acc.weeklyDay);
+        push(label, today ? today.to : pct, value, { segments: segs, theoPct: theo, today: today,
+          title: getLimitLabel(l) + ' ' + (value || pct + '%') + (today ? ' · ' + today.label + ' · ' + today.tip : '') });
       });
       return rings;
     }

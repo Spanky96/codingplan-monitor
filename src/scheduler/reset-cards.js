@@ -24,6 +24,12 @@ async function list(account, index) {
 }
 function dayKey(ms) { return new Date(ms + 8 * 3600000).toISOString().slice(0, 10); }
 
+function checkManualPermission(state, name) {
+    const policy = state.config.accounts.find(p => p.name === name);
+    if (policy?.role === 'primary' && policy.autoReset === false) {
+        throw Object.assign(new Error('此账号已勾选「不使用重置卡」'), { status: 409 });
+    }
+}
 async function use(index, type, recordId, automatic = false) {
     const account = readAccounts()[index];
     if (!account) throw new Error('未找到账号');
@@ -34,6 +40,7 @@ async function use(index, type, recordId, automatic = false) {
     locks.add(account.name);
     try {
         let state = store.read();
+        if (!automatic) checkManualPermission(state, account.name);
         if (state.journal[key]) throw Object.assign(new Error('此卡已提交过使用请求，请核对官方结果；不会重复扣卡'), { status: 409 });
         const cards = await list(account, index);
         const card = cards.find(c => c.type === type && c.recordId === recordId);
@@ -66,6 +73,7 @@ async function use(index, type, recordId, automatic = false) {
         const requestId = glm.uuidV4();
         // Persist BEFORE sending. A timeout/restart leaves an uncertain entry, never an automatic retry.
         store.update(s => {
+            if (!automatic) checkManualPermission(s, account.name);
             s.journal[key] = { at: Date.now(), account: account.name, type, recordId, requestId, automatic, status: 'pending' };
             (s.pendingResets || (s.pendingResets = {}))[account.name] = { type, at: Date.now(),
                 beforeUsed: before ? before.used : null, beforeResetAt: before && Number.isFinite(before.resetAt) ? before.resetAt : null, status: 'submitted' };

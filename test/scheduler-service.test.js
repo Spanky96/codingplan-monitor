@@ -93,3 +93,15 @@ test('reset inventory counts valid cards across all accounts, independent of spe
     assert.equal(service.status().resetCards.total,2);
 });
 test.after(() => { fs.rmSync(dir, { recursive: true, force: true }); });
+
+test('new Coding Plans opt in by default while existing stored choices survive reading and saving', () => {
+    const p = { name: 'A', role: 'primary', mode: 'auto', maxConcurrency: 3 };
+    const accounts = [{ name: 'A', platform: 'glm' }];
+    assert.equal(store.validate({ accounts: [p] }, accounts).accounts[0].autoReset, true);
+    for (const old of [false, true, undefined]) {
+        store.write({ config: { accounts: [{ ...p, autoReset: old }] } });
+        const saved = store.read().config;
+        assert.equal(saved.accounts[0].autoReset, !!old);
+        assert.equal(store.validate(saved, accounts).accounts[0].autoReset, !!old);
+    }
+});

@@ -45,14 +45,18 @@ function getCachedLastKnown(index) {
     var c = usageCache[index];
     return c ? c.result : null;
 }
-function setCache(index, result) {
+function setCache(index, result, glmAccount) {
+    if (glmAccount && result.success) {
+        const records = usageCache.weeklyBaselines || (usageCache.weeklyBaselines = {});
+        result.weeklyDay = require('./weekly-usage').observeWeeklyUsage(records, glmAccount, result);
+    }
     usageCache[index] = { result: result, time: Date.now() };
     persistUsageCache();
 }
 function clearCache() {
-    usageCache = {}; expireCache = {};
+    usageCache = usageCache.weeklyBaselines ? { weeklyBaselines: usageCache.weeklyBaselines } : {}; expireCache = {};
     usageInflight = {};
-    try { fs.writeFileSync(CACHE_FILE, '{}'); } catch (e) { /* 忽略 */ }
+    try { fs.writeFileSync(CACHE_FILE, JSON.stringify(usageCache)); } catch (e) { /* 忽略 */ }
 }
 
 function clearCacheIndex(index) {

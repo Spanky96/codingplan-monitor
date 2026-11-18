@@ -60,3 +60,19 @@ test('permission revoked during async validation prevents the upstream POST',asy
     await assert.rejects(reset.use(0,'week',1,true),/自动重置已关闭/);assert.equal(calls,0);assert.equal(Object.keys(store.read().journal).length,0);
 });
 test.after(()=>fs.rmSync(dir,{recursive:true,force:true}));
+
+test('the do-not-use setting also blocks a manual submission, including a change while fetching usage', async () => {
+    fixture('auto', false);
+    await assert.rejects(reset.use(0, 'week', 1), /不使用重置卡/);
+    fixture();
+    const original = cache.ensureUsageFetch;
+    try {
+        cache.ensureUsageFetch = async (...args) => {
+            store.update(s => { s.config.accounts[0].autoReset = false; });
+            return original(...args);
+        };
+        await assert.rejects(reset.use(0, 'week', 1), /不使用重置卡/);
+        assert.equal(calls, 0);
+        assert.deepEqual(store.read().journal, {});
+    } finally { cache.ensureUsageFetch = original; }
+});

@@ -1,7 +1,7 @@
 // ============ 平台渲染辅助(卡片行/环形/百分比,按平台)============
     // ============ 卡片渲染 ============
 
-    function renderLimitRow(limit) {
+    function renderLimitRow(limit, weeklyDay) {
       if (limit._unlimited) {
         return '<div class="limit-row"><div class="limit-label"><span class="limit-name">' + getLimitLabel(limit) + '</span><span class="limit-value" style="color:#52c41a">∞</span></div></div>';
       }
@@ -11,20 +11,24 @@
       if ((limit.type === 'TIME_LIMIT' || limit.type === 'CREDIT_LIMIT') && limit.usage != null) value = (limit.currentValue||0) + '/' + limit.usage + ' (' + pct + '%)';
       var reset = limit.nextResetTime ? '重置 ' + formatTime(limit.nextResetTime) : '';
 
-      // Segmented bar for 5-hour (unit=3) and weekly (unit=6): both 5 segments (weekly limit = 5×5-hour limit)
+      // Segmented bar for 5-hour (unit=3) and weekly (unit=6): five workday budgets in the weekly bar
       var segments = 0;
       if (limit.unit === 3 || limit.unit === 6) segments = GLM_BAR_SEGMENTS;
 
       if (segments > 0) {
+        var today = glmWeeklyDay(limit, weeklyDay);
+        var barPct = today ? today.to : pct;
         var segPct = 100 / segments;
         var segHtml = '';
         for (var i = 0; i < segments; i++) {
           var segStart = i * segPct;
           var segEnd = (i + 1) * segPct;
           var fillW = 0;
-          if (pct >= segEnd) fillW = 100;
-          else if (pct > segStart) fillW = ((pct - segStart) / segPct) * 100;
-          segHtml += '<div class="seg"><div class="seg-fill ' + getColorClass(pct) + '" style="width:' + fillW + '%"></div></div>';
+          if (barPct >= segEnd) fillW = 100;
+          else if (barPct > segStart) fillW = ((barPct - segStart) / segPct) * 100;
+          var todayStart = today ? Math.max(0, Math.min(100, (today.from - segStart) * 100 / segPct)) : fillW;
+          var stripe = fillW > todayStart ? '<i class="seg-today" style="left:' + todayStart + '%;width:' + (fillW - todayStart) + '%"></i>' : '';
+          segHtml += '<div class="seg"><div class="seg-fill ' + getColorClass(pct) + '" style="width:' + fillW + '%"></div>' + stripe + '</div>';
         }
 
         // Theoretical usage: based on nextResetTime; advances only inside work hours (Mon–Fri 08:00–18:00)
@@ -34,7 +38,7 @@
           theoPct = glmTheoPct(limit.nextResetTime, periodMs);
         }
 
-        var barHtml = '<div class="limit-bar-wrap"><div class="limit-bar-seg">' + segHtml + '</div>';
+        var barHtml = '<div class="limit-bar-wrap"' + (today ? ' tabindex="0" data-tooltip="' + esc(today.tip) + '" aria-label="' + esc(today.tip) + '"' : '') + '><div class="limit-bar-seg">' + segHtml + '</div>';
         if (theoPct >= 0) {
           barHtml += '<div class="theo-marker" style="left:' + theoPct + '%"></div>';
         }
@@ -48,7 +52,7 @@
         }
 
         return '<div class="limit-row"><div class="limit-label"><span class="limit-name">' + label + '</span><span class="limit-value">' + value + '</span></div>'
-          + barHtml + tensionHtml
+          + barHtml + (today ? '<span class="week-day-label">' + today.label + '</span>' : '') + tensionHtml
           + (reset ? '<div style="font-size:11px;color:var(--text-faint);margin-top:2px">' + reset + '</div>' : '')
           + '</div>';
       }

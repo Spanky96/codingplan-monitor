@@ -65,6 +65,19 @@ function schedulerFallbackStatus(kind) {
   if (!known) return { label: allowed ? '已允许 · 待确认' : '未允许 · 待确认', tip: '中转站状态尚未确认' };
   return { label: allowed ? '待命' : '未允许', tip: allowed ? '已允许，当前未触发兜底' : '未允许自动启用' };
 }
+function schedulerTokenForecastHTML(now) {
+  var end = Math.floor((now + 8 * 3600000) / 86400000) * 86400000 + 10 * 3600000;
+  if (now >= end) return '';
+  var f = schedulerState.tokenForecast;
+  var fresh = f && f.until === end && now - f.sampledAt < 300000;
+  var known = fresh && f.covered > 0 && Number.isFinite(f.tokens);
+  var label = '18:00 前预计可用 Token';
+  var tip = '北京时间。按近期中转 Token 与各账号官方 5 小时、周额度的实际消耗估算，计入自然恢复，按近期吞吐折算到 18:00。未计入尚未使用的重置卡。';
+  if (fresh) tip += ' 覆盖 ' + f.covered + '/' + f.total + ' 个 Coding Plan，其中 ' + f.byTier + ' 个参考同版本同档套餐。';
+  var value = known ? '约 ' + fmtTokensMB(f.tokens) : '待采样';
+  if (fresh && f.covered < f.total) label += ' · ' + f.covered + '/' + f.total;
+  return '<div tabindex="0" data-tooltip="' + esc(tip) + '"><strong>' + value + '</strong><small>' + label + '</small></div>';
+}
 function schedulerSummaryHTML(showPeak) {
   if (!schedulerState) return '';
   var p = schedulerState.plan, c = schedulerState.config, s = p && p.summary;
@@ -81,6 +94,7 @@ function schedulerSummaryHTML(showPeak) {
     + '<div class="schedule-metrics"><div><strong>' + (c.enabled && s ? s.active : '—') + '</strong><small>参与调度</small></div>'
     + '<div><strong>' + (c.enabled && s ? s.capacity : '—') + '</strong><small>总并发预算</small></div>'
     + '<div data-tooltip="' + esc(cardTip) + '"><strong>' + (inventoryKnown ? cards.total : '—') + '</strong><small>重置卡总数' + (inventoryKnown && cards.checkedAccounts < cards.accounts ? ' · 已记录' : '') + '</small></div>'
+    + (showPeak ? schedulerTokenForecastHTML(Date.now()) : '')
     + '<div class="' + (paid.active ? 'schedule-alert' : '') + '" title="' + esc(paid.tip) + '"><strong>' + paid.label + '</strong><small>按量付费</small></div>'
     + '<div class="' + (dilution.active ? 'schedule-alert' : '') + '" title="' + esc(dilution.tip) + '"><strong>' + dilution.label + '</strong><small>备用分流</small></div></div>';
 }
@@ -142,7 +156,7 @@ function schedulerLocalTime(iso) {
 function schedulerPolicy(a) {
   var p = schedulerDraft.accounts.find(function(p) { return p.name === a.name; }) || {
     name: a.name, role: schedulerDefaultRole(a), maxConcurrency: schedulerDefaultRole(a) === 'primary' ? 4 : Math.min(64, Math.max(2, a.capacity ? a.capacity.capacity : 4)),
-    quotaScale: 1, mode: 'auto', autoReset: false, paused: false, unmetered: false
+    quotaScale: 1, mode: 'auto', autoReset: true, paused: false, unmetered: false
   };
   if (p.role === 'dilution') p.role = 'standard';
   if (!p.channelModes) {
@@ -180,7 +194,7 @@ function renderSchedulerForm() {
       + '<label title="' + (p.role === 'primary' ? '智谱总并发最多 4；算法可在此上限内升降' : '同一账号所有渠道共享上限') + '">并发上限<input id="sa-cap-' + i + '" type="number" min="1" max="' + (p.role === 'primary' ? 4 : 64) + '" value="' + Math.min(p.maxConcurrency, p.role === 'primary' ? 4 : 64) + '" onchange="schedulerField(' + i + ',\'maxConcurrency\',Number(this.value))"></label>'
       + '<label title="套餐容量相对于其他账号的比例；同套餐保持 1">容量系数<input type="number" min="0.1" max="20" step="0.1" value="' + p.quotaScale + '" onchange="schedulerField(' + i + ',\'quotaScale\',Number(this.value))"></label></div>'
       + '<div class="schedule-account-options">'
-      + (a.platform === 'glm' && !a.teamEdition && p.role === 'primary' ? '<label title="自动决策可据此评估加速；仅额度耗尽后用卡，低速模式暂不用卡"><input type="checkbox" ' + (p.autoReset ? 'checked' : '') + ' onchange="schedulerField(' + i + ',\'autoReset\',this.checked)">允许耗尽后用卡 <span>' + (p.mode === 'slow' ? '低速暂缓 · ' : '') + a.cards + ' 张</span></label>' : '')
+      + (a.platform === 'glm' && !a.teamEdition && p.role === 'primary' ? '<label title="勾选后禁止用卡。未勾选时，调度可优先给此账号分流，额度耗尽后再评估用卡。低速模式暂停自动用卡。"><input type="checkbox" ' + (!p.autoReset ? 'checked' : '') + ' onchange="schedulerField(' + i + ',\'autoReset\',!this.checked)">不使用重置卡 <span>' + (p.mode === 'slow' ? '低速暂缓 · ' : '') + a.cards + ' 张</span></label>' : '')
       + '<label><input type="checkbox" ' + (p.paused ? 'checked' : '') + ' onchange="schedulerField(' + i + ',\'paused\',this.checked)">暂停此账号</label>'
       + (p.role === 'paid' ? '<label title="无法获取余额的占位账号需显式允许才可兜底"><input type="checkbox" ' + (p.unmetered ? 'checked' : '') + ' onchange="schedulerField(' + i + ',\'unmetered\',this.checked)">允许无余额数据的按量占位</label>' : '') + '</div>'
       + schedulerChannelRows(a, p, i)

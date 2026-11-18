@@ -34,33 +34,38 @@ function quotaLink(short, week) {
         weeklyRemainingInShortPct: Math.round(needed * 100) / 100,
         canFinishInCurrentShortWindow: needed <= Math.max(0, 100 - short.used) };
 }
-function chooseMode({ policy, account, cards, short, week, shortFactor, old, live, now, recentDemand, weekMinHours }) {
+function weeklyPace(week, now) {
+    if (!week || !Number.isFinite(week.resetAt)) return null;
+    const hours = (week.resetAt - now) / HOUR;
+    if (!(hours > 0 && hours <= 168)) return null;
+    const elapsed = 168 - hours, expected = elapsed / 168 * 100;
+    const waterline = weeklyWaterline(week.resetAt, now);
+    const rate = elapsed >= 1 ? week.used / elapsed : 0;
+    const finish = rate > 0 ? Math.max(0, 100 - week.used) / rate : Infinity;
+    const tenth = n => Math.round(n * 10) / 10;
+    return { expectedPct: tenth(expected), waterlinePct: tenth(waterline), aheadPct: tenth(week.used - expected),
+        workAheadPct: tenth(week.used - waterline), projectedGapHours: Number.isFinite(finish) ? tenth(hours - finish) : null };
+}
+function chooseMode({ policy, account, cards, short, week, shortFactor, old, live, now, recentDemand, weekMinHours, pace, atRisk }) {
     const requested = policy.mode || 'auto';
     const result = { effectiveMode: requested, modeSource: requested === 'auto' ? 'automatic' : 'manual', modeReason: '' };
     if (requested !== 'auto' || policy.role !== 'primary') return result;
     const hold = reason => ({ ...result, modeReason: reason });
-    if (!week || !Number.isFinite(week.resetAt)) return hold('缺少周重置时间，暂不自动加速');
-    const hours = (week.resetAt - now) / HOUR;
-    if (!(hours > 0 && hours <= 168)) return hold('周窗口待确认，暂不自动加速');
-    const elapsed = 168 - hours;
-    const progress = clamp(elapsed / 168 * 100, 0, 100);
-    const ahead = week.used - progress;
+    if (!pace) return hold('缺少可信的周窗口，暂不自动加速');
+    const hours = (week.resetAt - now) / HOUR, elapsed = 168 - hours;
     const meanRate = elapsed >= 1 ? week.used / elapsed : 0;
-    const finishHours = meanRate > 0 ? Math.max(0, 100 - week.used) / meanRate : Infinity;
-    const gap = hours - finishHours;
-    const waterline = weeklyWaterline(week.resetAt, now);
-    result.weeklyPace = { expectedPct: Math.round(progress * 10) / 10, waterlinePct: Math.round(waterline * 10) / 10, aheadPct: Math.round(ahead * 10) / 10,
-        projectedGapHours: Number.isFinite(gap) ? Math.round(gap * 10) / 10 : null };
+    const remaining = Math.max(0, 100 - week.used);
+    const finishHours = meanRate > 0 ? remaining / meanRate : Infinity;
     if (!recentDemand) return hold('近期无主力请求，保持均衡');
     const continuing = old.effectiveMode === 'burst' && old.modeSource === 'automatic';
     const accelerating = continuing && old.accelerationActive !== false;
     // A high percentage alone is not pressure when the remaining allowance can
     // comfortably cover the time to natural recovery. Keep measured fast-burn
     // forecasts (which lower shortFactor) and actual upstream limits binding.
-    const shortTight = !short || shortFactor < (accelerating ? 0.45 : 0.65) ||
+    const shortTight = !short || shortProtection(short, shortFactor, old, now) > 0 || shortFactor < (accelerating ? 0.45 : 0.65) ||
         (short.used >= (accelerating ? 90 : 80) && shortFactor < 1);
     const burst = (reason, source, factor = 4) => {
-        const blocked = live.limited ? '上游限流，暂缓加速' : shortTight ? '5h 保护，暂缓加速' : '';
+        const blocked = live.limited || (old.lastLimitedAt && now - old.lastLimitedAt < 120000) ? '上游限流或恢复观察，暂缓加速' : shortTight ? '5h 保护，暂缓加速' : '';
         // Keep the weekly strategy visible while temporary protection removes its boost.
         return { ...result, effectiveMode: 'burst', accelerationReason: source, accelerationFactor: factor,
             accelerationActive: !blocked, modeReason: reason + (blocked ? '；' + blocked : '') };
@@ -69,8 +74,7 @@ function chooseMode({ policy, account, cards, short, week, shortFactor, old, liv
     // Burning this week's surplus is independent of permission to spend a reset card.
     // Separate hysteresis keeps a previous card-backed burst from relaxing this trigger.
     const catchingUp = continuing && old.accelerationReason === 'surplus';
-    const remaining = Math.max(0, 100 - week.used);
-    const deficit = waterline - week.used;
+    const deficit = -pace.workAheadPct;
     const lagging = elapsed >= 1 && deficit >= (catchingUp ? 5 : 10);
     const expiring = hours <= 24 && remaining >= (catchingUp ? 5 : 10);
     if (remaining > 0 && (lagging || expiring)) {
@@ -79,19 +83,38 @@ function chooseMode({ policy, account, cards, short, week, shortFactor, old, liv
         return burst('周余量 ' + Math.round(remaining) + '%，距重置约 ' + Math.ceil(hours) + ' 小时；' +
             (lagging ? '落后理论水位 ' + Math.round(deficit) + ' 个百分点，自动高速补进度' : '临近到期，自动高速消耗余量'), 'surplus', factor);
     }
-    if (!resetAllowed(policy, account)) return hold('周进度无需补量；未授权自动用卡');
+    if (!resetAllowed(policy, account)) return hold('此账号不参与自动用卡，按周额度调度');
     const weeklyCard = cards.find(c => c.type === 'week');
     if (!weeklyCard) return hold('无可用周卡，回到额度均衡');
     const checked = (account.resetCards || {}).checkedAt;
     if (!checked || now - checked > 15 * 60000 || checked > now + 60000) return hold('卡库存待刷新，暂不为用卡加速');
     if (hours < weekMinHours) return hold('临近周自然恢复，暂不为用卡加速');
+    const usingCards = continuing && old.accelerationReason === 'reset-card';
+    const link = quotaLink(short, week);
+    const shortWait = link && !link.canFinishInCurrentShortWindow ? Math.max(0, (short.resetAt - now) / HOUR) : 0;
+    const pacedFinish = Math.max(shortWait, finishHours);
+    const individual = week.used >= (usingCards ? 45 : 50) && pace.aheadPct >= (usingCards ? 10 : 15)
+        && hours - pacedFinish >= (usingCards ? 12 : weekMinHours);
+    // Under shared pressure a carrier can start before its own week is overdrawn.
+    // Estimate at twice its observed weekly average, subject to the current 5h window.
+    const pooled = atRisk >= 2;
+    const finish = individual ? pacedFinish : Math.max(shortWait, finishHours / 2);
+    if (!individual && !(pooled && hours - finish >= weekMinHours)) return hold('周进度尚不需要用卡加速');
     const replenish = policy.replenishAt ? Date.parse(policy.replenishAt) : NaN;
-    if (replenish > now && replenish - now < (finishHours + weekMinHours) * HOUR) return hold('预计补充额度将覆盖缺口，暂不加速用卡');
-    const usingCards = continuing && old.accelerationReason !== 'surplus';
-    if (week.used < (usingCards ? 45 : 50) || ahead < (usingCards ? 10 : 15) || gap < (usingCards ? 12 : weekMinHours)) return hold('周进度尚不需要用卡加速');
-    // Even the current average rate must be able to reach depletion before the card expires.
-    if (!cards.some(c => c.type === 'week' && c.expiresAt > now + finishHours * HOUR)) return hold('预计耗尽前周卡将到期，暂不依赖该卡加速');
-    return burst('周进度领先 ' + Math.round(ahead) + '%，预计提前耗尽约 ' + Math.round(gap) + ' 小时；有周卡，自动高速', 'reset-card');
+    if (replenish > now && replenish - now < (finish + weekMinHours) * HOUR) return hold('预计补充额度将覆盖缺口，暂不加速用卡');
+    if (!cards.some(c => c.type === 'week' && c.expiresAt > now + finish * HOUR)) return hold('预计耗尽前周卡将到期，暂不依赖该卡加速');
+    const reason = pooled ? atRisk + ' 个主力周用量领先至少一个工作日，优先承担流量'
+        : '按本周速度预计提前耗尽约 ' + Math.round(hours - finish) + ' 小时';
+    return burst(reason + '；有周卡，自动高速', 'reset-card');
+}
+function shortProtection(short, shortFactor, old, now) {
+    const shortHours = short && Number.isFinite(short.resetAt) ? Math.max(0, (short.resetAt - now) / HOUR) : 5;
+    let protection = 0;
+    if (short && (shortFactor < 0.25 || (short.used >= 95 && shortHours > 0.5))) protection = 2;
+    else if (short && (shortFactor < 0.6 || (short.used >= 85 && shortHours > 0.5))) protection = 1;
+    if (old.shortProtection === 2 && shortFactor < 0.4) protection = 2;
+    else if (old.shortProtection >= 1 && shortFactor < 0.75) protection = Math.max(protection, 1);
+    return protection;
 }
 function chooseConcurrency({ policy, routes, short, shortFactor, old, live, now, effectiveMode, recentDemand }) {
     const ceiling = concurrencyCeiling(policy);
@@ -99,12 +122,7 @@ function chooseConcurrency({ policy, routes, short, shortFactor, old, live, now,
     const initial = Math.min(ceiling, Math.max(2, channels));
     let adaptive = clamp(old.adaptiveConcurrency || initial, 1, ceiling);
     let adjustedAt = old.adjustedAt || now, lastLimitedAt = old.lastLimitedAt || 0;
-    const shortHours = short && Number.isFinite(short.resetAt) ? Math.max(0, (short.resetAt - now) / HOUR) : 5;
-    let protection = 0;
-    if (short && (shortFactor < 0.25 || (short.used >= 95 && shortHours > 0.5))) protection = 2;
-    else if (short && (shortFactor < 0.6 || (short.used >= 85 && shortHours > 0.5))) protection = 1;
-    if (old.shortProtection === 2 && shortFactor < 0.4) protection = 2;
-    else if (old.shortProtection >= 1 && shortFactor < 0.75) protection = Math.max(protection, 1);
+    const protection = shortProtection(short, shortFactor, old, now);
     const quotaCap = Math.min(ceiling, protection === 2 ? 1 : protection === 1 ? 2 : ceiling);
     const previousActual = clamp(old.concurrency || initial, 1, ceiling);
     // Only consecutive, timely samples establish sustained saturation; idle/gaps reset it.
@@ -135,4 +153,4 @@ function chooseConcurrency({ policy, routes, short, shortFactor, old, live, now,
         plannedAt: now, shortProtection: protection, concurrencyReason: reason,
         concurrencyCeiling: ceiling, limited: !!live.limited };
 }
-module.exports = { concurrencyCeiling, resetAllowed, quotaLink, weeklyWaterline, chooseMode, chooseConcurrency };
+module.exports = { concurrencyCeiling, resetAllowed, quotaLink, weeklyWaterline, weeklyPace, chooseMode, chooseConcurrency };

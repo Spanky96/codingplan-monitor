@@ -10,6 +10,10 @@ function read() {
     if (!fs.existsSync(file)) return { config: { ...defaults }, journal: {}, events: [] };
     const data = JSON.parse(fs.readFileSync(file, 'utf8'));
     ['maxResetsPerDay', 'reserveWeeklyCards', 'reserveFiveHourCards'].forEach(k => { if (data.config) delete data.config[k]; });
+    // A legacy policy without the positive flag had no permission to spend.
+    for (const p of data.config?.accounts || []) {
+        if (p.autoReset == null) p.autoReset = false;
+    }
     return { ...data, config: { ...defaults, ...data.config }, journal: data.journal || {}, events: data.events || [] };
 }
 function write(data) {
@@ -36,6 +40,7 @@ function validate(input, accounts) {
         if (!Number.isInteger(p.maxConcurrency) || p.maxConcurrency < 1 || p.maxConcurrency > 64) throw new Error('并发上限须为 1–64');
         const scale = p.quotaScale == null ? 1 : Number(p.quotaScale);
         if (!Number.isFinite(scale) || scale < 0.1 || scale > 20) throw new Error('套餐容量系数须为 0.1–20');
+        if (p.autoReset !== undefined && typeof p.autoReset !== 'boolean') throw new Error('用卡设置须为布尔值');
         const mode = p.mode || 'auto';
         if (!['auto', 'slow', 'burst'].includes(mode)) throw new Error('调度模式无效');
         const replenishAt = p.replenishAt ? Date.parse(p.replenishAt) : null;
@@ -48,7 +53,7 @@ function validate(input, accounts) {
         }
         return { name: p.name, role: p.role === 'dilution' ? 'standard' : p.role, mode, ...(p.channelModes == null ? {} : { channelModes }), maxConcurrency: concurrencyCeiling(p), quotaScale: scale,
             replenishAt: replenishAt ? new Date(replenishAt).toISOString() : null,
-            autoReset: p.role === 'primary' && platform === 'glm' && !matches[0].teamEdition && p.autoReset === true,
+            autoReset: p.role === 'primary' && platform === 'glm' && !matches[0].teamEdition && p.autoReset !== false,
             unmetered: p.role === 'paid' && p.unmetered === true, paused: p.paused === true };
     });
     if (input.enabled && !list.length) throw new Error('请至少选择一个账号');

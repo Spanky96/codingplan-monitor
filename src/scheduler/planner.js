@@ -3,7 +3,7 @@
 // Pure planning: no network, clock or persistence. All percentages are 0..100.
 const { channelCounts } = require('./channels');
 const { scoreAccount } = require('../weights');
-const { concurrencyCeiling, resetAllowed, quotaLink, chooseMode, chooseConcurrency } = require('./adaptation');
+const { concurrencyCeiling, resetAllowed, quotaLink, weeklyPace, chooseMode, chooseConcurrency } = require('./adaptation');
 const { assessFallback } = require('./fallback');
 const { allocateBackupCapacity, assignBackupWeights } = require('./backup-capacity');
 const HOUR = 3600000;
@@ -40,12 +40,14 @@ function validCards(account, now) {
     ).map(c => ({ ...c, expiresAt: timestamp(c.expireTime) })).sort((a, b) => a.expiresAt - b.expiresAt);
 }
 
-function plan({ config, accounts, usage, telemetry = {}, previous = {}, previousSummary = {}, load, now }) {
+function plan({ config, accounts, usage, telemetry = {}, previous = {}, previousSummary = {}, pendingResets = {}, load, now }) {
     const primaryPolicies = config.accounts.filter(p => p.role === 'primary' && !p.paused);
     const observed = primaryPolicies.reduce((n, p) => n + ((telemetry[p.name] || {}).current || 0), 0);
     const lastDemandAt = Math.max(0, ...primaryPolicies.map(p => (telemetry[p.name] || {}).demandAt || 0),
         ...Object.values(previous).map(r => r.demandSeenAt || 0));
     const demandNow = observed > 0 || (lastDemandAt > 0 && now - lastDemandAt < 15 * 60000);
+    const ready = [];
+    let atRisk = 0;
     const rows = config.accounts.map(policy => {
         const index = accounts.findIndex(a => a.name === policy.name);
         const account = accounts[index];
@@ -57,9 +59,10 @@ function plan({ config, accounts, usage, telemetry = {}, previous = {}, previous
         const week = ws.find(w => w.type === 'week');
         const routes = channelCounts(policy, live);
         const cards = resetAllowed(policy, account) ? validCards(account, now) : [];
-        let reasons = [], state = 'balanced', raw = 1, reset = null;
+        const reasons = [];
+        let reset = null;
         const row = { name: policy.name, index, role: policy.role, mode: policy.mode || 'auto', weight: 0, concurrency: 1,
-            maxConcurrency: concurrencyCeiling(policy), configuredMaxConcurrency: policy.maxConcurrency, priority: 999, state, reasons,
+            maxConcurrency: concurrencyCeiling(policy), configuredMaxConcurrency: policy.maxConcurrency, priority: 999, state: 'balanced', reasons,
             effectiveMode: policy.mode || 'auto', modeSource: policy.mode && policy.mode !== 'auto' ? 'manual' : 'automatic',
             shortUsed: short ? short.used : null, weeklyUsed: week ? week.used : null,
             shortResetAt: short && Number.isFinite(short.resetAt) ? short.resetAt : null,
@@ -86,6 +89,7 @@ function plan({ config, accounts, usage, telemetry = {}, previous = {}, previous
         if (!account) return stop('missing', '账号已删除或改名，请重新选择');
         if (!live || !live.count) return stop('unmapped', '未匹配到中转站账号');
         if (live.unavailable) return stop('upstream-blocked', '中转站账号存在异常或上游冷却，保留原保护状态');
+        if (pendingResets[policy.name]) return stop('reset-verifying', '重置已提交，等待官方额度恢复确认');
         if (policy.paused) return stop('paused', '管理员已在智能调度中暂停此账号');
         if (policy.role === 'paid' && !config.allowPaid) return stop('standby', '按量付费兜底关闭');
         if (!routes.native && !routes.fallback) return stop('paused', '全部渠道已暂停');
@@ -101,6 +105,10 @@ function plan({ config, accounts, usage, telemetry = {}, previous = {}, previous
         if (ws.some(w => Number.isFinite(w.resetAt) && w.resetAt <= now && cached.cachedAt <= w.resetAt)) {
             return stop('refreshing', '已到重置时刻，等待官方额度确认');
         }
+        if (policy.role === 'primary' && routes.native) {
+            row.weeklyPace = weeklyPace(week, now);
+            if (row.weeklyPace && row.weeklyPace.workAheadPct >= 20) atRisk++;
+        }
         let shortFactor = 1;
         if (short) {
             const hours = Number.isFinite(short.resetAt) ? clamp((short.resetAt - now) / HOUR, 1 / 60, 5) : 5;
@@ -112,8 +120,6 @@ function plan({ config, accounts, usage, telemetry = {}, previous = {}, previous
                 if (row.shortForecastHours < 0.75 && hours > 1) reasons.push('按官方近期消耗速度，5h 预计 ' + Math.round(row.shortForecastHours * 60) + ' 分钟耗尽，提前收紧');
             }
         }
-        Object.assign(row, chooseMode({ policy, account, cards, short, week, shortFactor, old, live, now,
-            recentDemand: demandNow, weekMinHours: config.resetWeekMinHours || 24 }));
         const exhausted = ws.filter(w => w.used >= EXHAUSTED);
         if (exhausted.length) {
             // A weekly card cannot clear an exhausted 5h window. Restore the shorter window last.
@@ -129,10 +135,35 @@ function plan({ config, accounts, usage, telemetry = {}, previous = {}, previous
             if (d.balance == null && d.platformGiftBalance == null) return stop('stale', '未提供余额数据，需允许无余额数据的按量占位才可兜底');
             if (!(Number(d.balance || 0) + Number(d.platformGiftBalance || 0) > 0)) return stop('exhausted', '按量账号无可用余额');
         }
-        if (genericScore) {
-            if (genericScore.exhausted || !(genericScore.weight > 0)) return stop('exhausted', '额度已用尽');
-            raw = genericScore.weight;
-        }
+        if (genericScore && (genericScore.exhausted || !(genericScore.weight > 0))) return stop('exhausted', '额度已用尽');
+        ready.push({ row, policy, account, cards, short, week, shortFactor, old, live, routes, genericScore });
+        return row;
+    });
+    const candidates = [];
+    for (const entry of ready) {
+        const { row } = entry;
+        const mode = chooseMode({ ...entry, pace: row.weeklyPace, atRisk, now, recentDemand: demandNow,
+            weekMinHours: config.resetWeekMinHours || 24 });
+        Object.assign(row, mode);
+        if (mode.accelerationReason === 'reset-card') candidates.push(entry);
+    }
+    // Prefer a usable short window, then a week close to depletion. A small lead
+    // for the incumbent avoids switching carriers on every quota sample.
+    const rank = ({ row, old }) => row.weeklyUsed + (old.accelerationReason === 'reset-card' ? 5 : 0);
+    candidates.sort((a, b) => Number(b.row.accelerationActive) - Number(a.row.accelerationActive)
+        || rank(b) - rank(a) || a.row.name.localeCompare(b.row.name));
+    const carrier = candidates[0];
+    for (const entry of candidates.slice(1)) {
+        const r = entry.row;
+        r.effectiveMode = 'auto';
+        delete r.accelerationReason;
+        delete r.accelerationFactor;
+        delete r.accelerationActive;
+        r.modeReason = '本轮由其他有周卡的主力承担额外流量，保留本账号周额度';
+    }
+    for (const { row, policy, short, week, shortFactor, old, live, routes, genericScore } of ready) {
+        let raw = genericScore ? genericScore.weight : 1, state = 'balanced';
+        const reasons = row.reasons;
         const allocation = chooseConcurrency({ policy, routes, short, shortFactor, old, live, now,
             effectiveMode: row.accelerationActive === false ? 'auto' : row.effectiveMode, recentDemand: demandNow });
         if (shortFactor < 0.6) { state = 'protecting'; reasons.push('5 小时额度偏紧，降低流量并保留并发分摊'); }
@@ -154,6 +185,11 @@ function plan({ config, accounts, usage, telemetry = {}, previous = {}, previous
             }
             row.weeklyWeightFactor = raw;
         }
+        if (carrier && carrier.row.accelerationActive && atRisk >= 2 && row !== carrier.row &&
+            row.mode === 'auto' && row.effectiveMode === 'auto' && row.weeklyPace?.workAheadPct >= 20) {
+            raw *= 0.5;
+            reasons.push('周用量已超前一个工作日，有周卡的主力接力，本轮目标权重减半');
+        }
         raw *= shortFactor * policy.quotaScale;
         if (policy.role === 'primary' && row.effectiveMode === 'slow') {
             raw *= 0.2; state = 'slow'; reasons.unshift('管理员指定低速保护，限制流量与并发');
@@ -167,8 +203,8 @@ function plan({ config, accounts, usage, telemetry = {}, previous = {}, previous
         if (!reasons.length) reasons.push('按周剩余额度与重置时间分流，保持多账号均衡');
         if (live.limited) { state = 'cooldown'; raw *= 0.25; }
         reasons.push('并发 ' + allocation.concurrency + '/' + allocation.concurrencyCeiling + '：' + allocation.concurrencyReason);
-        return Object.assign(row, allocation, { state, reasons, raw });
-    });
+        Object.assign(row, allocation, { state, reasons, raw });
+    }
     const primaryReady = rows.filter(r => r.role === 'primary' && r.nativeChannels && r.raw > 0 && !r.limited);
     const hasPrimary = primaryReady.length > 0;
     const fallbackAssessment = assessFallback({ rows, previous: previousSummary.fallbackAssessment,
@@ -239,7 +275,7 @@ function plan({ config, accounts, usage, telemetry = {}, previous = {}, previous
         if (hold) r.reset = null;
     });
     return { generatedAt: now, rows, summary: {
-        pressure, recentDemand, cardStock: stock, fallbackAssessment, backupCapacity,
+        weeklyRiskAccounts: atRisk, pressure, recentDemand, cardStock: stock, fallbackAssessment, backupCapacity,
         active: rows.filter(r => r.weight > 0).length,
         capacity: rows.filter(r => r.weight > 0).reduce((v, r) => v + r.concurrency, 0),
         paid: rows.some(r => r.role === 'paid' && r.weight > 0),

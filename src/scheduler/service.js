@@ -13,6 +13,14 @@ const LEASE_MS = 180000;
 let running = null, timer = null, snapshot = null, snapshotAt = 0, integrationError = null, activity = null;
 let lastPush = null;
 const cardChecks = {};
+const { createForecast, cutoff } = require('./token-forecast');
+const forecast = createForecast();
+async function sampleForecast() {
+    if (!config.relayEnabled || Date.now() >= cutoff(Date.now())) return;
+    const snapshot = await require('../api/account-tokens').snapshot();
+    const accounts = readAccounts();
+    forecast.observe(accounts, accounts.map((_, i) => cache.getCachedLastKnown(i)), store.read().config.accounts, snapshot, Date.now());
+}
 function supportsCardInventory(account, policies) {
     return (account.platform || 'glm') === 'glm' && !account.teamEdition &&
         !policies.some(p => p.name === account.name && p.role === 'paid');
@@ -58,7 +66,7 @@ function compute(state = store.read()) {
     const usage = accounts.map((_, i) => cache.getCachedLastKnown(i));
     const previous = Object.fromEntries(((state.plan || {}).rows || []).map(r => [r.name, r]));
     const result = plan({ config: state.config, accounts, usage, telemetry: aggregate(accounts), previous,
-        previousSummary: (state.plan || {}).summary || {}, load: snapshot ? poolDemand(snapshot, activity, state.config.accounts, Date.now()) : null, now: Date.now() });
+        previousSummary: (state.plan || {}).summary || {}, pendingResets: state.pendingResets, load: snapshot ? poolDemand(snapshot, activity, state.config.accounts, Date.now()) : null, now: Date.now() });
     result.rows.forEach(r => {
         const pending = state.pendingResets && state.pendingResets[r.name];
         if (pending) {
@@ -248,7 +256,7 @@ function status() {
             }
         });
     }
-    return { config: state.config, plan: state.plan || null, events: state.events, lastPush, integrationError,
+    return { tokenForecast: forecast.result(Date.now()), config: state.config, plan: state.plan || null, events: state.events, lastPush, integrationError,
         appliedFallback, observedAt: snapshotAt, resetCards, channelCapacitySupported: !!(snapshot && snapshot.smart_channel_capacity_version >= 1),
         connected: !!snapshot && snapshot.smart_scheduler_version === 2 && Date.now() - snapshotAt < 90000,
         syncConfigured: !!config.schedulerSyncToken && config.relayEnabled,
@@ -259,6 +267,10 @@ function start() {
     if (timer) return;
     timer = setInterval(() => cycle().catch(e => { integrationError = e.message; }), 30000);
     timer.unref();
+    // Forecast sampling must never hold up the scheduling or card-execution loop.
+    const sample = () => sampleForecast().catch(() => {});
+    setInterval(sample, 120000).unref();
+    sample();
     cycle().catch(e => { integrationError = e.message; });
 }
 module.exports = { start, cycle, controls, decision, status, telemetry, afterReset, push, persistPlan, aggregate, matchKey, LEASE_MS, compute };

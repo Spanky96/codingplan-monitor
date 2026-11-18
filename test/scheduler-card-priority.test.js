@@ -117,3 +117,45 @@ test('confirmed weekly recovery exits acceleration instead of keeping the replen
     assert.ok(r.weeklyWeightFactor < 1);
     assert.equal(r.reset, null);
 });
+
+function pressuredPool() {
+    const p = fixture();
+    // Two peers have already spent more than one working day's budget ahead.
+    p.usage[0].data.limits[1].percentage = 44;
+    p.usage[0].data.limits[1].nextResetTime = NOW + 110 * H;
+    p.usage[1].data.limits[1].percentage = 90;
+    p.accounts.push({ name: 'Peer' });
+    p.config.accounts.push({ ...p.config.accounts[1], name: 'Peer' });
+    p.usage.push({ ...structuredClone(p.usage[1]), name: 'Peer' });
+    p.telemetry.Peer = { ...p.telemetry.Balanced };
+    return p;
+}
+
+test('two overdrawn peers activate one healthy card carrier before it reaches 50%', () => {
+    const p = pressuredPool(), s = plan(p);
+    assert.ok(s.summary.weeklyRiskAccounts >= 2);
+    assert.equal(s.rows[0].name, 'Card');
+    assert.equal(s.rows[0].accelerationReason, 'reset-card');
+    assert.equal(s.rows[0].reset, null);
+    assert.match(s.rows.find(r => r.name === 'Peer').reasons.join(' '), /权重减半/);
+    p.usage[2].cachedAt = NOW - H;
+    assert.notEqual(card(p).accelerationReason, 'reset-card');
+    p.usage[2].cachedAt = NOW;
+    p.config.accounts[0].autoReset = false;
+    assert.equal(plan(p).rows.some(r => r.accelerationReason === 'reset-card'), false);
+});
+
+test('nearest eligible depletion wins once, short-window protection or pending verification hands off', () => {
+    const p = pressuredPool();
+    p.config.accounts[2].autoReset = true;
+    p.accounts[2].resetCards = structuredClone(p.accounts[0].resetCards);
+    const active = () => plan(p).rows.filter(r => r.accelerationReason === 'reset-card' && r.accelerationActive).map(r => r.name);
+    assert.deepEqual(active(), ['Peer']);
+    p.usage[2].data.limits[0].percentage = 99;
+    p.usage[2].data.limits[0].nextResetTime = NOW + 2 * H;
+    assert.deepEqual(active(), ['Card']);
+    p.usage[2].data.limits[0].percentage = 40;
+    p.pendingResets = { Peer: { status: 'submitted' } };
+    assert.equal(plan(p).rows.find(r => r.name === 'Peer').weight, 0);
+    assert.deepEqual(active(), []); // Only one known at-risk peer still contributes.
+});

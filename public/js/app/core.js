@@ -185,9 +185,11 @@
         return admin ? '<div class="info-section"><div class="info-section-title">重置卡' + refresh + '</div>'
           + '<div class="info-grid"><span class="info-label">有效重置卡</span><span class="info-value">无</span></div>' + note + '</div>' : '';
       }
+      var blocked = admin && typeof schedulerState !== 'undefined' && schedulerState &&
+        schedulerState.config.accounts.some(function(p) { return p.name === acc.name && p.role === 'primary' && p.autoReset === false; });
       var rows = (rc.cards || []).map(function(c, n) {
         var useBtn = (admin && index != null && c.recordId != null)
-          ? '<button class="use-card-btn" onclick="useResetCard(this,' + index + ',\'' + esc(c.type) + '\',' + c.recordId + ')">使用</button>'
+          ? blocked ? '<small>已禁用</small>' : '<button class="use-card-btn" onclick="useResetCard(this,' + index + ',\'' + esc(c.type) + '\',' + c.recordId + ')">使用</button>'
           : '';
         return '<span class="info-label">' + (c.type === 'fiveHour' ? '5小时重置卡' : '周重置卡') + ' ' + (n + 1) + '</span>'
           + '<span class="info-value">' + esc(c.expireTime || '-') + ' 到期 ' + esc(resetCardGrantTag(c).trim()) + ' ' + useBtn + '</span>';

@@ -232,7 +232,7 @@ async function fetchGLMUsage(account, index) {
         var userType = decodeJwtUserType(account.authorization);
         var personalEdition = userType ? userType === 'PERSONAL' : !account.teamEdition;
         var result = { index: index, name: account.name, platform: 'glm', responsiblePerson: account.responsiblePerson, phone: account.phone, notes: account.notes, keyCount: account.keyCount, teamEdition: account.teamEdition || undefined, personalEdition: personalEdition, isPublic: account.isPublic, risk: account.risk || undefined, resetCards: account.resetCards || undefined, data: json.data, success: true, cachedAt: Date.now() };
-        setCache(index, result);
+        setCache(index, result, account);
         return result;
     } catch (err) {
         return { index: index, name: account.name, platform: 'glm', responsiblePerson: account.responsiblePerson, phone: account.phone, notes: account.notes, keyCount: account.keyCount, teamEdition: account.teamEdition || undefined, isPublic: account.isPublic, risk: account.risk || undefined, resetCards: account.resetCards || undefined, error: err.message, success: false };

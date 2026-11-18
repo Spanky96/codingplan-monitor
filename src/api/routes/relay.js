@@ -53,22 +53,10 @@ module.exports = function(app) {
         return url;
     }
     // One bounded daily aggregate for every card; never query the relay per card.
-    var accountTokenCache = { at: 0, data: null }, accountTokenPending = null;
     app.get('/api/relay/account-tokens', checkAuth, function(req, res) {
         res.set('Cache-Control', 'no-store');
         if (!config.relayEnabled) return res.status(404).json({ error: '中转站功能未启用' });
-        var now = Date.now();
-        if (req.query.force !== '1' && accountTokenCache.data && now - accountTokenCache.at < 60000 &&
-            now < Date.parse(accountTokenCache.data.day_end)) return res.json(accountTokenCache.data);
-        if (!accountTokenPending) accountTokenPending = httpGetJSON(relaySnapshotUrl('/api/account-token-snapshot'), 10000)
-            .then(function(envelope) {
-                var data = envelope && envelope.code === 0 && envelope.data;
-                if (!data || !Array.isArray(data.rows) || !Number.isFinite(Date.parse(data.day_start)) ||
-                    !Number.isFinite(Date.parse(data.day_end))) throw new Error('invalid account token snapshot');
-                accountTokenCache = { at: Date.now(), data: data };
-                return data;
-            }).finally(function() { accountTokenPending = null; });
-        accountTokenPending.then(function(data) { res.json(data); })
+        require('../account-tokens').snapshot(req.query.force === '1').then(function(data) { res.json(data); })
             .catch(function() { res.status(502).json({ error: '中转站账号 Token 统计暂不可用' }); });
     });
     app.get('/api/relay/activity', function(req, res) {

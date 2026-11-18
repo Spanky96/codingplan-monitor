@@ -1,7 +1,7 @@
     // ============ GLM 高峰/工时模型 ============
     var GLM_PERIOD_5H_MS = 5 * 3600000;      // 5小时窗口长度
     var GLM_PERIOD_WEEK_MS = 7 * 86400000;   // 每周窗口长度(滚动7天)
-    var GLM_BAR_SEGMENTS = 5;                // 5小时=5段;每周=5×5小时 → 也是5段
+    var GLM_BAR_SEGMENTS = 5;                // 5小时=5段;每周=5个工作日，每格20% → 也是5段
     var GLM_PEAK_START_HOUR = 14;            // 摘要提示:工作日北京时间 14:00–18:00
     var GLM_PEAK_END_HOUR = 18;
     var GLM_WORK_START_HOUR = 8;             // 水位线仅在 周一至周五 08:00–18:00 推进
@@ -59,3 +59,15 @@
       return '<span class="plan-badge" title="" data-tooltip="' + esc(planTip) + '" aria-label="' + planLabel + '" tabindex="0">' + planLabel + '</span>';
     }
 
+
+    function glmWeeklyDay(limit, day) {
+      var midnight = Math.floor((Date.now() + 8 * 3600000) / 86400000) * 86400000 - 8 * 3600000;
+      if (limit.unit !== 6 || !day || day.day !== midnight || !Number.isFinite(day.from) ||
+          !Number.isFinite(day.since) || day.since < midnight || day.since >= midnight + 86400000 || !Number.isFinite(day.to) || day.from < 0 || day.to > 100 || day.from > day.to) return null;
+      var time = new Date(day.since + 8 * 3600000).toISOString().slice(11, 16);
+      var label = day.source === 'reset' ? '重置后' : day.source === 'midnight' ? '今日' : time + ' 起';
+      var cells = +((day.to - day.from) / 20).toFixed(2);
+      return { from: day.from, to: day.to, label: label + ' ' + cells + ' 格',
+        tip: '本轮周额度，北京时间 ' + time + ' 起的用量，' + (+day.from.toFixed(1)) + '% → ' +
+          (+day.to.toFixed(1)) + '%，共 ' + cells + ' 格。每格为周额度的 20%。' };
+    }

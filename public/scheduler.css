@@ -89,6 +89,7 @@
 .schedule-footer>div { display:flex; gap:10px; }
 .schedule-modal button:disabled { opacity:.5; cursor:wait; }
 .schedule-modal input:focus-visible,.schedule-modal select:focus-visible,.schedule-modal button:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+@media(min-width:701px) { .schedule-summary .schedule-metrics { grid-auto-flow:column; grid-template-columns:none; grid-auto-columns:minmax(0,1fr); } }
 @media(max-width:1050px) { .schedule-summary { gap:18px; padding:16px; flex-wrap:wrap; } .schedule-metrics { gap:24px; } .header-right { gap:7px; flex-wrap:wrap; justify-content:flex-end; } .header-btn { padding:7px 10px; } }
 @media(prefers-reduced-motion:reduce) { .modal { animation:none; } .card { transition:none; } }
 .schedule-categories { display:flex; flex-wrap:wrap; gap:8px; margin:2px 0 18px; }

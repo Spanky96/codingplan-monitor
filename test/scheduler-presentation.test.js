@@ -39,3 +39,27 @@ test('peak indicator uses Beijing weekdays 14:00 inclusive to 18:00 exclusive, o
     assert.doesNotMatch(c.schedulerSummaryHTML(),/智谱高峰/);
     assert.doesNotMatch(c.glmFooterBadges({data:{limits:[]}}),/·高峰|plan-badge-peak/);
 });
+
+test('Token summary shows the estimated subtotal with coverage and disappears at Beijing 18:00', () => {
+    const c = context(), end = Date.parse('2026-11-21T18:00:00+08:00');
+    c.fmtTokensMB = String;
+    c.schedulerState.tokenForecast = { sampledAt: end - 1000, until: end, covered: 5, total: 14, byTier: 2, tokens: 500 };
+    const html = c.schedulerTokenForecastHTML(end - 1);
+    assert.match(html, /约 500/); assert.match(html, /5\/14/); assert.match(html, /2 个参考/);
+    assert.equal(c.schedulerTokenForecastHTML(end), '');
+    assert.match(c.schedulerTokenForecastHTML(end + 12 * 3600000), /待采样/);
+});
+
+test('weekly bar shades only intersections of today’s interval with its five workday segments', () => {
+    const c = context(), now = Date.now(), day = Math.floor((now + 8 * 3600000) / 86400000) * 86400000 - 8 * 3600000;
+    c.API_PREFIX = ''; c.getLimitLabel = () => '周额度'; c.getColorClass = () => 'fill-green';
+    vm.runInContext(fs.readFileSync(path.join(__dirname, '../public/js/app/platform-helpers.js'), 'utf8'), c);
+    const l = { unit: 6, percentage: 67 }, d = { day, since: day, from: 42, to: 67, source: 'midnight' };
+    const html = c.renderLimitRow(l, d);
+    assert.equal((html.match(/class="seg"/g) || []).length, 5);
+    assert.equal((html.match(/class="seg-today"/g) || []).length, 2);
+    assert.match(html, /left:10%;width:90%/); assert.match(html, /left:0%;width:35%/);
+    assert.match(html, /今日 1.25 格/);
+    assert.doesNotMatch(c.renderLimitRow({ ...l, unit: 3 }, d), /seg-today/);
+    assert.doesNotMatch(c.renderLimitRow(l, { ...d, day: day - 86400000 }), /seg-today/);
+});
