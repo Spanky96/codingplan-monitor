@@ -224,6 +224,10 @@
         + '<div class="form-row"><div class="form-group"><label class="form-label">登录账号（可选）</label><input class="form-input" id="f_glm_username" placeholder="Token 失效时自动重新登录" value="' + esc(a.glm_username||'') + '" autocomplete="off"></div>'
         + '<div class="form-group"><label class="form-label">登录密码（可选）</label><input class="form-input" type="password" id="f_glm_password" placeholder="非必填；与账号同时填写才启用自动重登" value="' + esc(a.glm_password||'') + '" autocomplete="new-password"></div></div>'
         + '<div class="form-group"><label class="form-label" style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="f_team_edition"' + (a.teamEdition ? ' checked' : '') + ' style="width:16px;height:16px;cursor:pointer"> 团队版（接口 URL 加 type=2）</label></div>'
+        + '<div class="form-group"><label class="form-label" style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="f_zcode_enabled"' + (a.zcode && a.zcode.enabled === true ? ' checked' : '') + '> 启用 ZCode Coding Plan 接入</label>'
+        + '<div style="font-size:12px;color:var(--text-mute);margin-top:6px">开启后，中转站使用此账号的 ZCode 用量优惠；关闭后恢复原接入方式。支持个人套餐。</div></div>'
+        + '<div class="form-group"><label class="form-label">ZCode 对应中转站账号名称（可选）</label><input class="form-input" id="f_zcode_relay_name" placeholder="留空时与本账号名称一致，需精确匹配" value="' + esc(a.zcode && a.zcode.relayAccountName || '') + '"></div>'
+        + (editingIndex >= 0 ? '<div class="form-group"><button type="button" class="btn-default" onclick="checkZcodeAccount(this)">检查 ZCode 连接</button><div id="f_zcode_status" style="font-size:12px;color:var(--text-mute);margin-top:6px">检查已保存的账号，不消耗模型用量。</div></div>' : '')
         + '</div>'
         + '<div id="f_yescode_fields" style="display:' + yesDisp + '">'
         + '<div class="form-group"><label class="form-label">Cookie（可不填）</label><textarea class="form-input" id="f_cookie" placeholder="完整 Cookie，用于访问 co.yes.vg；官方有效期已缩短为 24h，配置账密后会自动登录刷新">' + esc(a.cookie||'') + '</textarea></div>'
@@ -560,6 +564,9 @@
         body.glm_username = document.getElementById('f_glm_username').value.trim();
         body.glm_password = document.getElementById('f_glm_password').value;
         body.teamEdition = document.getElementById('f_team_edition').checked || undefined;
+        body.zcode = { enabled: document.getElementById('f_zcode_enabled').checked,
+          relayAccountName: document.getElementById('f_zcode_relay_name').value.trim() };
+        if (body.zcode.enabled && body.teamEdition) { alert('ZCode 接入当前支持个人 Coding Plan 账号'); return; }
         if (!body.name || !body.authorization) { alert('账号名称和 Token 不能为空'); return; }
         // 账密需成对：只填其一也允许保存，但不会触发自动重登
         if ((body.glm_username && !body.glm_password) || (!body.glm_username && body.glm_password)) {
@@ -573,6 +580,21 @@
     }
 
     function editAccount(i){showForm(i)}
+    function checkZcodeAccount(btn) {
+      var idx = editingIndex, output = document.getElementById('f_zcode_status');
+      if (idx < 0 || !output) return;
+      btn.disabled = true;
+      output.textContent = '正在检查 ZCode 连接…';
+      fetch(API_PREFIX + '/api/zcode/check/' + idx, { method: 'POST', headers: authHeaders() })
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+          var messages = { zcode_key_missing_login_in_zcode: '尚无 zcode-api-key，请先在 ZCode 登录此账号。',
+            zcode_login_required: '账号登录已过期，请重新登录或填写登录账号和密码。',
+            zcode_team_not_supported: '当前仅支持个人 Coding Plan。' };
+          output.textContent = d.error ? (messages[d.error] || '暂时无法连接 ZCode，请稍后重试。') : 'ZCode 连接正常。';
+        }).catch(function() { output.textContent = '检查请求失败，请稍后重试。'; })
+        .finally(function() { btn.disabled = false; });
+    }
     function deleteAccount(i) {
       if(!confirm('确定删除该账号？'))return;
       fetch(API_PREFIX + '/api/accounts/'+i,{method:'DELETE',headers:authHeaders()}).then(function(r){return r.json()}).then(function(d){

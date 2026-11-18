@@ -292,6 +292,18 @@
     .card-header { padding: 9px 20px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center; }
     .card-header-left { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; min-width: 0; }
     .card-title-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
+    .platform-tag.zcode-quota-badge { position: relative; isolation: isolate; overflow: hidden; display: inline-flex; align-items: center; gap: 4px;
+      flex-shrink: 0; white-space: nowrap; padding: 2px 7px; border: 1px solid rgba(151,164,217,.38); border-radius: 5px;
+      color: #5e568c; background: linear-gradient(110deg,#e3f2ff 0%,#eeebff 48%,#f8eafa 100%);
+      height: 20px; font-family: inherit; font-size: 10px; font-weight: 700; line-height: 14px; letter-spacing: .1px; cursor: help;
+      box-shadow: 0 1px 4px rgba(105,116,170,.09), inset 0 1px 0 rgba(255,255,255,.65); }
+    .zcode-quota-badge::before { content: ''; position: absolute; z-index: -1; inset: -30% -90%; pointer-events: none;
+      background: linear-gradient(110deg,transparent 35%,rgba(255,255,255,.5) 49%,transparent 63%); transform: translateX(-32%);
+      animation: zcode-sheen 7s ease-in-out infinite; }
+    .zcode-quota-badge svg { width: 11px; height: 11px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+    :root.dark .zcode-quota-badge { color: #dbe2ff; background: linear-gradient(110deg,rgba(139,177,236,.18),rgba(180,162,238,.22) 48%,rgba(215,166,217,.18)); border-color: rgba(188,188,231,.35); box-shadow: inset 0 1px 0 rgba(255,255,255,.1); }
+    @keyframes zcode-sheen { 0%,65% { transform: translateX(-32%); } 90%,100% { transform: translateX(32%); } }
+    @media (prefers-reduced-motion: reduce) { .zcode-quota-badge::before { animation: none; } .zcode-quota-badge { transition: none; } }
     .card-header h3 { font-size: 15px; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
     .card-header-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
     .card-status-stack { display: flex; flex-direction: column; align-items: center; gap: 3px; }

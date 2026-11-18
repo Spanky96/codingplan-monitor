@@ -3,10 +3,20 @@ function cardHeaderStatus(button, name, status) {
         + status + accountTokenBadgeHTML(name) + '</div></div>';
     }
 // ============ 账号卡片(按平台分派渲染)============
+    function accountPlatformTagHTML(acc, i) {
+      var platform = acc.platform || 'glm';
+      if (platform !== 'glm' || acc.zcodeEnabled !== true) return platformTag(platform, acc.planType, acc.alias);
+      var tip = '已开启 ZCode 用量优惠，活动期间可用额度约为原来的 1.5 倍。';
+      return '<span class="platform-tag platform-glm zcode-quota-badge" aria-label="智谱 ZCode 权益渠道已启用" data-tooltip="' + tip + '">'
+        + '<img class="pt-logo" src="' + API_PREFIX + '/logo/zhipu.png" alt="" aria-hidden="true"><span>智谱</span>'
+        + '<svg viewBox="0 0 18 18" aria-hidden="true"><path d="m2 12 5-5 3 3 5-6M10 4h5v5"/></svg>'
+        + '</span>';
+    }
+
     function renderCardHTML(i, acc) {
       var platform = acc.platform || 'glm';
       var btn = isAdmin() ? '<button class="card-refresh" id="refresh-' + i + '" onclick="refreshCard(' + i + ')" title="刷新">&#x21bb;</button>' : '';
-      var pTag = platformTag(platform, acc.planType, acc.alias);
+      var pTag = accountPlatformTagHTML(acc, i);
       var wBadge = weightBadgeHTML(acc.name, i) + (typeof schedulingBadge === 'function' ? schedulingBadge(acc.name) : '');
       var capBadge = capacityBadgeHTML(acc.name);
       // 第一行：分类标签 + 用户名；第二行：权重徽标 + 容量胶囊（都空则不占行）
@@ -589,7 +599,7 @@ function cardHeaderStatus(button, name, status) {
     function renderListRowHTML(i, acc) {
       var platform = acc.platform || 'glm';
       var refresh = isAdmin() ? '<button class="card-refresh list-row-refresh" id="refresh-' + i + '" onclick="event.stopPropagation(); refreshCard(' + i + ')" title="刷新">&#x21bb;</button>' : '';
-      var pTag = platformTag(platform, acc.planType, acc.alias);
+      var pTag = accountPlatformTagHTML(acc, i);
       var name = esc(displayName(acc, i));
       var dispatchBadges = weightBadgeHTML(acc.name, i) + capacityBadgeHTML(acc.name)
         + (typeof schedulingBadge === 'function' ? schedulingBadge(acc.name) : '');

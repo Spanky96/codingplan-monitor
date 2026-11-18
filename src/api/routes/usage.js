@@ -21,6 +21,7 @@ module.exports = function(app) {
             var forceMask = privacy.forcedPrivacy(req);
             var aliasMap = forceMask ? privacy.buildAliasMap(accounts) : null;
             var mask = function(result, i) {
+                result = withZcodeState(result, accounts[i]);
                 return forceMask ? privacy.maskUsageResult(result, aliasMap[i]) : result;
             };
             var results = [];
@@ -66,6 +67,7 @@ module.exports = function(app) {
             var forceMask = privacy.forcedPrivacy(req);
             var aliasMap = forceMask ? privacy.buildAliasMap(readAccounts()) : null;
             var mask = function(result) {
+                result = withZcodeState(result, account);
                 return forceMask ? privacy.maskUsageResult(result, aliasMap[i]) : result;
             };
             if (!force) {
@@ -78,3 +80,10 @@ module.exports = function(app) {
     });
 
 };
+
+function withZcodeState(result, account) {
+    // Read current central configuration even when the usage snapshot is cached.
+    // Only a boolean reaches the public dashboard; never relay aliases or credentials.
+    return Object.assign({}, result, { zcodeEnabled: !!account && (account.platform || 'glm') === 'glm' &&
+        !account.teamEdition && account.zcode?.enabled === true });
+}

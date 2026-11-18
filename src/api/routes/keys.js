@@ -16,7 +16,8 @@ function getAccount(req) {
     return accounts[parseInt(req.params.index)];
 }
 
-module.exports = function(app) {
+module.exports = function(app, options = {}) {
+    const zcodeReset = options.zcodeReset || require('../../zcode/reset-cards').createResetService();
     app.get('/api/keys/:index', checkAuth, async function(req, res) {
         try {
             var i = parseInt(req.params.index);
@@ -156,7 +157,26 @@ module.exports = function(app) {
 
     // ============ 重置卡(Coding Plan 个人版,仅管理员打开详情时加载)============
 
+    async function readResetCards(account, i) {
+        var json = await withGlmAuthRetry(account, i, function(acc) {
+            return httpsGet(resetCardsUrl(), makeHeaders(acc), { timeoutMs: 15000 });
+        });
+        if (!json || ![0, 200].includes(json.code) || !json.data ||
+            !Array.isArray(json.data.fiveHourResets) || !Array.isArray(json.data.weekResets)) {
+            throw new Error('获取智谱重置卡失败，请稍后重试');
+        }
+        var latest = readAccounts()[i];
+        if (!latest || latest.name !== account.name || latest.authorization !== account.authorization ||
+            latest.organization !== account.organization || latest.project !== account.project || latest.teamEdition !== account.teamEdition) {
+            throw new Error('账号已变更，请重新打开详情');
+        }
+        var cards = parseGlmResetCards(json.data);
+        persistGlmResetCards(i, cards);
+        return { cards: cards, checkedAt: Date.now() };
+    }
+
     app.get('/api/reset-cards/:index', checkAuth, async function(req, res) {
+        res.set('Cache-Control', 'no-store');
         try {
             var i = parseInt(req.params.index);
             var account = getAccount(req);
@@ -166,14 +186,36 @@ module.exports = function(app) {
             if ((account.platform || 'glm') !== 'glm' || account.teamEdition) {
                 return res.json({ cards: [] });
             }
-            var json = await withGlmAuthRetry(account, i, function(acc) {
-                return httpsGet(resetCardsUrl(), makeHeaders(acc));
-            });
-            var cards = parseGlmResetCards(json && json.data);
-            // 每次打开详情刷新:有卡则记录数量与到期时间,无卡则清除(与风控同模式)
-            persistGlmResetCards(i, cards);
-            res.json({ cards: cards, checkedAt: Date.now() });
+            res.json(await readResetCards(account, i));
         } catch (err) { res.status(500).json({ error: err.message }); }
+    });
+
+    // Opening the admin detail may claim an available benefit, so use POST, not the read-only GET.
+    app.post('/api/reset-cards/:index/refresh', checkAuth, async function(req, res) {
+        res.set('Cache-Control', 'no-store');
+        try {
+            const i = Number(req.params.index);
+            const account = Number.isInteger(i) && readAccounts()[i];
+            if (!account) return res.status(404).json({ error: '未找到账号' });
+            if ((account.platform || 'glm') !== 'glm' || account.teamEdition) return res.json({ cards: [] });
+            let zcode;
+            try { zcode = await zcodeReset.check(account, i); }
+            catch (_) { zcode = { state: 'unavailable' }; }
+            // ZCode status contains expiry times, but no recordId/grantType. The BigModel list is
+            // authoritative for existing manual/automatic use, so never manufacture or merge IDs.
+            const result = await readResetCards(account, i);
+            const messages = {
+                granted: 'ZCode 已发放重置卡，列表已更新。',
+                not_eligible: '已检查 ZCode，当前没有可领取的新卡。',
+                cooldown: '重置卡已更新，稍后会再次检查 ZCode 是否有新卡。',
+                unavailable: '智谱重置卡已更新，ZCode 暂时无法检查，请稍后重试。'
+            };
+            let message = messages[zcode.state] || '';
+            if (zcode.available && zcode.available.fiveHour + zcode.available.week > result.cards.length) {
+                message = 'ZCode 显示的卡片正在同步到智谱，请稍后刷新。';
+            }
+            res.json({ ...result, zcode: { state: zcode.state, message, nextCheckAt: zcode.nextCheckAt || null } });
+        } catch (_) { res.status(502).json({ error: '重置卡更新失败，请重新打开详情或稍后重试。' }); }
     });
 
     // 使用一张重置卡:先取最新列表校验该卡仍有效,再调官方 use 接口,成功后刷新本地缓存

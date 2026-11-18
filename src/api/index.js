@@ -32,6 +32,7 @@ module.exports = function(app) {
     registerIpWhitelistBatch(app);
     registerTelecomLogin(app);
     registerAccounts(app);
+    require('./routes/zcode')(app);
     registerModelUsage(app);
     registerExpire(app);
     registerConsoleUrl(app);

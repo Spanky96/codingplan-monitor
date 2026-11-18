@@ -33,6 +33,9 @@ const config = {
   relaySnapshotToken: process.env.RELAY_SNAPSHOT_TOKEN || '',
   // 与中转站同名环境变量一致，仅服务端使用，授权立即同步调度计划。
   schedulerSyncToken: process.env.SCHEDULER_SYNC_TOKEN || '',
+  // ZCode 付费套餐：与 lwsub2api 共用的服务间密钥，不返回前端。
+  zcodeBridgeToken: (process.env.ZCODE_BRIDGE_TOKEN || '').trim(),
+  zcodeClientVersion: (process.env.ZCODE_CLIENT_VERSION || '3.18.2').trim(),
   // 模型调用页(models.html)的网关地址(OpenAI 兼容入口,含 /v1)。
   // 留空(默认)= 页面禁用并提示未配置;由 /api/features 注入前端
   modelsGatewayUrl: (process.env.MODELS_GATEWAY_URL || '').trim().replace(/\/+$/, ''),

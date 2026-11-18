@@ -29,6 +29,9 @@ module.exports = function(app) {
             if (accounts[idx].weightConfig && req.body && !('weightConfig' in req.body)) {
                 req.body.weightConfig = accounts[idx].weightConfig;
             }
+            if (accounts[idx].zcode && req.body && !('zcode' in req.body)) {
+                req.body.zcode = accounts[idx].zcode;
+            }
             accounts[idx] = req.body;
             writeAccounts(accounts);
             clearCache();

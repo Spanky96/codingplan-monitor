@@ -161,26 +161,37 @@
     // ============ 重置卡操作（智谱个人版账号,管理员）============
 
     // 用最新列表刷新内存态并重渲染详情区块与卡片徽章(列表接口与使用接口共用)
-    function applyResetCards(idx, cards, checkedAt) {
-      accAt(idx).resetCards = (cards && cards.length)
-        ? { count: cards.length, cards: cards, checkedAt: checkedAt }
-        : null;
+    function applyResetCards(idx, cards, checkedAt, zcode) {
+      accAt(idx).resetCards = { count: (cards || []).length, cards: cards || [], checkedAt: checkedAt };
+      accAt(idx)._zcodeResetMessage = zcode && zcode.message || '';
       var sec = document.getElementById('resetCards-' + idx);
       if (sec) sec.innerHTML = resetCardsSectionHTML(accAt(idx), true, idx);
       updateCard(idx, accAt(idx));
     }
 
-    function loadResetCards(idx) {
-      fetch(API_PREFIX + '/api/reset-cards/' + idx, { headers: authHeaders() })
+    var resetCardLoads = new Set();
+    function loadResetCards(idx, btn) {
+      if (resetCardLoads.has(idx)) return;
+      resetCardLoads.add(idx);
+      if (btn) { btn.disabled = true; btn.textContent = '更新中…'; }
+      fetch(API_PREFIX + '/api/reset-cards/' + idx + '/refresh', { method: 'POST', headers: authHeaders() })
         .then(function(r) {
-          if (r.status === 401) { localStorage.removeItem('glm_pwd'); requireAuth(function(){loadResetCards(idx)}); return null; }
+          if (r.status === 401) { resetCardLoads.delete(idx); localStorage.removeItem('glm_pwd'); requireAuth(function(){loadResetCards(idx)}); return null; }
           return r.json();
         })
         .then(function(r) {
-          if (!r || r.error) return;
-          applyResetCards(idx, r.cards, r.checkedAt);
+          if (!r) return;
+          if (r.error) throw new Error(r.error);
+          applyResetCards(idx, r.cards, r.checkedAt, r.zcode);
         })
-        .catch(function() {});
+        .catch(function() {
+          var acc = accAt(idx);
+          if (!acc) return;
+          acc._zcodeResetMessage = '暂时无法更新重置卡，请稍后重试。';
+          var sec = document.getElementById('resetCards-' + idx);
+          if (sec) sec.innerHTML = resetCardsSectionHTML(acc, true, idx);
+        })
+        .finally(function() { resetCardLoads.delete(idx); if (btn) { btn.disabled = false; btn.textContent = '刷新'; } });
     }
 
     function useResetCard(btn, idx, type, recordId) {

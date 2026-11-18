@@ -179,9 +179,11 @@
     // 详情页「重置卡」区块:有效卡数量 + 各卡到期时间;管理员每张卡可「使用」;无卡时仅管理员显示「无」
     function resetCardsSectionHTML(acc, admin, index) {
       var rc = acc && acc.resetCards;
+      var refresh = admin && index != null ? '<button class="use-card-btn" onclick="loadResetCards(' + index + ',this)" title="更新卡片，并检查 ZCode 是否有可领取的新卡">刷新</button>' : '';
+      var note = admin && acc && acc._zcodeResetMessage ? '<div style="font-size:12px;color:var(--text-mute);margin-top:8px">' + esc(acc._zcodeResetMessage) + '</div>' : '';
       if (!rc || !rc.count) {
-        return admin ? '<div class="info-section"><div class="info-section-title">重置卡</div>'
-          + '<div class="info-grid"><span class="info-label">有效重置卡</span><span class="info-value">无</span></div></div>' : '';
+        return admin ? '<div class="info-section"><div class="info-section-title">重置卡' + refresh + '</div>'
+          + '<div class="info-grid"><span class="info-label">有效重置卡</span><span class="info-value">无</span></div>' + note + '</div>' : '';
       }
       var rows = (rc.cards || []).map(function(c, n) {
         var useBtn = (admin && index != null && c.recordId != null)
@@ -191,8 +193,8 @@
           + '<span class="info-value">' + esc(c.expireTime || '-') + ' 到期 ' + esc(resetCardGrantTag(c).trim()) + ' ' + useBtn + '</span>';
       }).join('');
       var checked = rc.checkedAt ? '<span class="info-label">检查时间</span><span class="info-value">' + esc(formatTime(rc.checkedAt)) + '</span>' : '';
-      return '<div class="info-section"><div class="info-section-title">重置卡 · ' + rc.count + ' 张有效</div>'
-        + '<div class="info-grid">' + rows + checked + '</div></div>';
+      return '<div class="info-section"><div class="info-section-title">重置卡 · ' + rc.count + ' 张有效' + refresh + '</div>'
+        + '<div class="info-grid">' + rows + checked + '</div>' + note + '</div>';
     }
     // 风控/异常:详情页顶部横幅,展示完整提示文案;无风险返回空串
     function riskBannerHTML(acc) {

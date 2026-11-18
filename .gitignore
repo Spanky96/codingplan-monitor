@@ -18,3 +18,8 @@ scheduler-state.json.tmp
 /data/
 .env.*
 !.env.example
+
+# Local production verification snapshots and ZCode reset runtime state
+/evidence/
+/zcode-reset-state.json
+/zcode-reset-state.json.*.tmp
