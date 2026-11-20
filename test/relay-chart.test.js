@@ -17,6 +17,7 @@ function createChartContext() {
     var context = {
         escapeHtml: function (s) { return s; },
         activityDisplayName: function (r) { return 'user-' + r.user_id; },
+        document: { getElementById: function () { return null; } },
         window: { addEventListener: function () {} }
     };
     vm.createContext(context);
@@ -103,4 +104,33 @@ test('默认窗口忽略未选中系列(用户模式默认只画前 5 名)', fun
     var isSelected = function (s) { return s.label !== 'b'; };
 
     assert.deepEqual(Array.from(c.relayChartZoomWindow(list, isSelected)), [8, 16]);
+});
+
+test('用户模式默认只选总量前 5 名,模型模式全选', function () {
+    var c = createChartContext();
+    var list = [1, 2, 3, 4, 5, 6, 7].map(function (i) { return { label: 'u' + i, userId: i }; });
+
+    var sel = c.relayChartLegendSelection(list, false);
+    assert.equal(sel.u1, true); assert.equal(sel.u5, true);
+    assert.equal(sel.u6, false); assert.equal(sel.u7, false);
+    assert.deepEqual(Object.keys(c.relayChartLegendSelection(list, true)), []);
+});
+
+test('榜单点用户名带入 focusUser:只选中该用户,即使不在前 5', function () {
+    var c = createChartContext();
+    var list = [1, 2, 3, 4, 5, 6, 7].map(function (i) { return { label: 'u' + i, userId: i }; });
+    c._relayChartState.focusUser = 7;
+
+    var sel = c.relayChartLegendSelection(list, false);
+    assert.equal(sel.u7, true);
+    [1, 2, 3, 4, 5, 6].forEach(function (i) { assert.equal(sel['u' + i], false); });
+    // 焦点用户无分时数据(如纯外部渠道)→ 回退默认前 5
+    c._relayChartState.focusUser = 99;
+    var fallback = c.relayChartLegendSelection(list, false);
+    assert.equal(fallback.u1, true); assert.equal(fallback.u6, false);
+    // 手动切视角清空焦点
+    c._relayChartState.focusUser = 7;
+    c._relayChartState.mode = 'model';
+    c.relayChartSetMode('user');
+    assert.equal(c._relayChartState.focusUser, null);
 });

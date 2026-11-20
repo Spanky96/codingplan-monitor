@@ -266,6 +266,9 @@
     :root.dark .rank-move.changed.up { color: #ff9292; }
     :root.dark .rank-move.changed.down { color: #73d6a0; }
     .rank-name { font-size: 12.5px; font-weight: 550; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+    /* 榜单用户名:点击打开该用户当日分时折线(与合计同一弹层,自动只选该用户) */
+    .rank-name.rank-name-chart { cursor: pointer; }
+    .rank-name.rank-name-chart:hover { color: var(--accent); }
     .rank-val { font-size: 12px; font-weight: 650; color: var(--text); margin-left: auto; white-space: nowrap; font-variant-numeric: tabular-nums; }
     .rank-cost { display: block; text-align: right; font-size: 10px; color: var(--text-faint); margin-top: 1px; font-weight: 400; white-space: nowrap; }
     .rank-tokens, .rank-move, .rank-total-hl { cursor: help; }
@@ -937,8 +940,8 @@
   <script src="js/app/capacity.js?v=20261116-startup"></script>
   <script src="js/app/relay.js?v=20261120-sametime"></script>
   <script src="js/app/account-tokens.js?v=20261116-tokens"></script>
-  <script src="js/app/relay-chart.js?v=20261116-comparison"></script>
+  <script src="js/app/relay-chart.js?v=20261120-focus"></script>
   <script src="js/app/scheduler.js?v=20261120-tooltip"></script>
-  <script src="js/app/data.js?v=20261116-comparison"></script>
+  <script src="js/app/data.js?v=20261120-focus"></script>
 </body>
 </html>

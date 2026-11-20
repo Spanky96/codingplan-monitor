@@ -175,7 +175,7 @@
           + '<div class="rank-line">'
           + '<span class="rank-no' + (i < 3 ? ' top' : '') + '">' + (i + 1) + '</span>'
           + activityRankMovement(u, i + 1)
-          + '<span class="rank-name" data-tooltip="' + escapeHtml(activityDisplayName(u)) + '">' + escapeHtml(activityDisplayName(u)) + '</span>' + extBadge
+          + '<span class="rank-name rank-name-chart" data-tooltip="' + escapeHtml(activityDisplayName(u) + '\n点击查看分时用量') + '" onclick="openRelayChart(' + u.user_id + ')">' + escapeHtml(activityDisplayName(u)) + '</span>' + extBadge
           + '<span class="rank-val"><span class="rank-tokens' + tokenComparison.className + '" tabindex="0" data-tooltip="' + escapeHtml(tokenComparison.tooltip) + '">' + fmtTokensMB(u.today.total_tokens) + '</span>'
           + '<span class="rank-cost">$' + (u.today.actual_cost || 0).toFixed(2) + '</span></span>'
           + '</div>'

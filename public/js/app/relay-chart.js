@@ -6,7 +6,7 @@
     // 模型色沿用 activityModelColor(名字哈希稳定分配,与调度色块/榜单一致);
     // 用户色按 user_id 哈希取同一色板(键加前缀避免与模型名撞键)。
 
-    var _relayChartState = { mode: 'model', metric: 'tokens', data: null, fetchedAt: 0, loading: false, error: false, chart: null };
+    var _relayChartState = { mode: 'model', metric: 'tokens', focusUser: null, data: null, fetchedAt: 0, loading: false, error: false, chart: null };
 
     // 用户模式默认仅绘制总量前 5 名,其余点图例名加选(用户多时全画挤成一团)
     var RELAY_CHART_DEFAULT_SERIES = 5;
@@ -22,8 +22,11 @@
         = '<div class="rc-empty">加载中...</div>';
     }
 
-    function openRelayChart() {
+    // 榜单点用户名进入:切到按用户视角并只选中该用户;无参打开(合计入口)恢复默认
+    function openRelayChart(userId) {
       if (!canViewRelayActivity()) return;
+      if (userId == null) _relayChartState.focusUser = null;
+      else { _relayChartState.mode = 'user'; _relayChartState.focusUser = userId; }
       document.getElementById('relayChartOverlay').classList.add('active');
       relayChartSkeleton();
       var stale = !_relayChartState.data || (Date.now() - _relayChartState.fetchedAt) > 60 * 1000;
@@ -58,6 +61,7 @@
     function relayChartSetMode(mode) {
       if (_relayChartState.mode === mode) return;
       _relayChartState.mode = mode;
+      _relayChartState.focusUser = null;   // 手动切视角 = 放弃榜单带入的自动筛选
       relayChartRender();
     }
 
@@ -80,6 +84,7 @@
           entry = series[key] = {
             label: byMode ? r.model : escapeHtml(activityDisplayName(r)),
             colorKey: key,
+            userId: byMode ? null : r.user_id,
             values: new Array(24).fill(null),
             total: 0
           };
@@ -123,6 +128,19 @@
       });
       if (maxHour < minHour) return [0, 23];
       return [Math.max(0, minHour - 1), Math.min(23, maxHour + 1)];
+    }
+
+    // 图例默认选中:用户模式默认只画总量前 5 名;榜单点用户名带入 focusUser 时
+    // 只选中该用户(缩放窗口也随之贴合其活动范围);focus 用户无分时数据时回退默认
+    function relayChartLegendSelection(list, byMode) {
+      var legendSelected = {};
+      if (byMode) return legendSelected;
+      var focus = _relayChartState.focusUser;
+      var focusHit = focus != null && list.some(function(s) { return s.userId === focus; });
+      list.forEach(function(s, i) {
+        legendSelected[s.label] = focusHit ? s.userId === focus : i < RELAY_CHART_DEFAULT_SERIES;
+      });
+      return legendSelected;
     }
 
     function relayChartRender() {
@@ -183,13 +201,8 @@
 
       var colors = list.map(function(s) { return activityModelColor(s.colorKey); });
 
-      // 用户模式默认只画前 5 名,其余点图例名加选;模型模式默认全画
-      var legendSelected = {};
-      if (!byMode) {
-        list.forEach(function(s, i) {
-          if (i >= RELAY_CHART_DEFAULT_SERIES) legendSelected[s.label] = false;
-        });
-      }
+      // 用户模式默认只画前 5 名(或榜单带入的 focus 用户);模型模式默认全画
+      var legendSelected = relayChartLegendSelection(list, byMode);
 
       // 默认时间段贴合数据:初始缩放窗口取当前选中系列的活动范围(如凌晨 0-7 点
       // 无数据就不默认展开空轴);滑块仍可拖回全天 0-23
