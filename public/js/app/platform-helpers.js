@@ -26,8 +26,9 @@
           var fillW = 0;
           if (barPct >= segEnd) fillW = 100;
           else if (barPct > segStart) fillW = ((barPct - segStart) / segPct) * 100;
-          var todayStart = today ? Math.max(0, Math.min(100, (today.from - segStart) * 100 / segPct)) : fillW;
-          var stripe = fillW > todayStart ? '<i class="seg-today" style="left:' + todayStart + '%;width:' + (fillW - todayStart) + '%"></i>' : '';
+          var todayStart = today ? Math.max(0, Math.min(100, (today.from - segStart) * 100 / segPct)) : 0;
+          var pastW = Math.min(fillW, todayStart);
+          var stripe = pastW > 0 ? '<i class="seg-past" style="left:0;width:' + pastW + '%"></i>' : '';
           segHtml += '<div class="seg"><div class="seg-fill ' + getColorClass(pct) + '" style="width:' + fillW + '%"></div>' + stripe + '</div>';
         }
 
@@ -307,7 +308,7 @@
         return '<span class="level-badge level-badge-ok" title="' + esc(tip) + '">已签到 ✓</span>';
       }
       if (ck.checkedInToday === false) {
-        return '<span class="level-badge level-badge-warn" title="等待服务端自动签到(约半小时内生效)">未签到</span>';
+        return '<span class="level-badge level-badge-warn" title="约半小时内自动签到">未签到</span>';
       }
       if (ck.error) {
         return '<span class="level-badge level-badge-err" title="' + esc(ck.error) + '">签到 ✕</span>';
@@ -528,6 +529,6 @@
       if (!t || t.credits == null) return '';
       var calls = t.calls ? ' · ' + t.calls + '次' : '';
       // 阶跃官方按 Credits 计费,非真实 Token——用 title 说明口径
-      return '<div class="limit-row" title="阶跃官方 Credits 计费口径，非真实 Token 用量"><div class="limit-label"><span class="limit-name">今日积分</span>'
+      return '<div class="limit-row" title="阶跃 Credits 计费口径，非 Token 用量"><div class="limit-label"><span class="limit-name">今日积分</span>'
         + '<span class="limit-value">' + esc(fmtStepfunCredits(t.credits)) + calls + '</span></div></div>';
     }

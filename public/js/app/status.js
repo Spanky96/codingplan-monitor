@@ -18,21 +18,21 @@ function quotaStatusHint(acc, now) {
   var exhausted = windows.filter(function(w) { return w.used >= 99.9; });
   if (exhausted.length) {
     var resets = exhausted.map(function(w) { return new Date(w.reset).getTime(); });
-    if (resets.some(function(t) { return !isFinite(t) || t <= 0; })) return '已耗尽；官方尚未提供完整重置时间，恢复时间待确认。';
+    if (resets.some(function(t) { return !isFinite(t) || t <= 0; })) return '已耗尽，恢复时间待确认。';
     var remaining = Math.max.apply(null, resets) - now;
-    if (remaining <= 0) return '已到自然重置时间，等待官方额度更新后恢复调度。';
+    if (remaining <= 0) return '已到重置时间，等待官方更新额度。';
     var hours = remaining / 3600000;
     var duration = hours >= 24 ? (hours / 24).toFixed(1).replace(/\.0$/, '') + ' 天' : hours >= 1 ? Math.ceil(hours) + ' 小时' : Math.ceil(hours * 60) + ' 分钟';
-    return '已耗尽，约 ' + duration + '无法使用。\n' + exhausted.map(function(w) { return w.label; }).join('、')
-      + '额度耗尽；预计 ' + new Date(Math.max.apply(null, resets)).toLocaleString('zh-CN') + ' 自然恢复。\n使用有效重置卡并确认额度恢复后，可提前重新调度。';
+    return '已耗尽（' + exhausted.map(function(w) { return w.label; }).join('、') + '），预计 '
+      + new Date(Math.max.apply(null, resets)).toLocaleString('zh-CN') + ' 自然恢复，约还需 ' + duration + '。\n使用重置卡可提前恢复。';
   }
   var r = acc.resetRecommendation;
   if (r && r.needed) {
     var days = r.unavailableHours / 24;
-    return '周用量 ' + Math.round(r.weeklyPct) + '%，理论进度 ' + Math.round(r.theoPct) + '%。\n按当前速度预计提前耗尽，届时约 '
-      + (days >= 1 ? days.toFixed(1).replace(/\.0$/, '') + ' 天' : Math.ceil(r.unavailableHours) + ' 小时') + ' 无法使用。';
+    return '周用量 ' + Math.round(r.weeklyPct) + '%（理论 ' + Math.round(r.theoPct) + '%），按当前速度预计提前耗尽，届时约 '
+      + (days >= 1 ? days.toFixed(1).replace(/\.0$/, '') + ' 天' : Math.ceil(r.unavailableHours) + ' 小时') + ' 不可用。';
   }
-  return windows.length ? '当前额度可用。' + windows.map(function(w) { return w.label + '已用 ' + Math.round(w.used) + '%'; }).join('，') + '。' : '';
+  return windows.length ? windows.map(function(w) { return w.label + '已用 ' + Math.round(w.used) + '%'; }).join('，') + '。' : '';
 }
 function quotaStatusAttrs(acc) {
   var hint = quotaStatusHint(acc);

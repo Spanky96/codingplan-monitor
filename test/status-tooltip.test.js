@@ -9,7 +9,8 @@ test('exhausted tooltip waits for the latest of exhausted windows and ignores MC
         { unit: 6, percentage: 100, nextResetTime: now + 3 * 86400000 },
         { unit: 5, percentage: 100, nextResetTime: now + 30 * 86400000 }
     ] } };
-    assert.match(context.quotaStatusHint(acc, now), /已耗尽，约 3 天无法使用/);
+    assert.match(context.quotaStatusHint(acc, now), /已耗尽（5 小时、周）/);
+    assert.match(context.quotaStatusHint(acc, now), /约还需 3 天/);
     acc.data.limits[1].nextResetTime = undefined;
     assert.match(context.quotaStatusHint(acc, now), /恢复时间待确认/);
 });

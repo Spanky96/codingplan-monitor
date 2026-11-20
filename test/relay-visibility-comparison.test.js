@@ -41,21 +41,28 @@ test('viewer feature follows server authorization',async()=>{
 });
 const ui = { activityUsageData: {comparison:{date:'2026-11-13'}}, escapeHtml: s=>String(s).replace(/"/g,'&quot;') };
 vm.createContext(ui); vm.runInContext(fs.readFileSync('public/js/app/relay.js','utf8'),ui);
-test('token comparisons distinguish full-day and same-time with external coverage',()=>{
+test('token color compares against the previous workday’s same-time relay usage, not its full-day total',()=>{
   const result = ui.activityTokenComparison(90e6,20e6,{total_tokens:120e6,same_time_tokens:60e6,external_tokens:10e6});
-  assert.equal(result.className,' token-less');
-  assert.match(result.tooltip,/2026-11-13 周五/);
-  assert.match(result.tooltip,/昨日此时（站内） 60M/);
-  assert.match(result.tooltip,/较昨日全天少 30M（25.0%）/);
-  assert.match(result.tooltip,/站内较昨日此时多 10M/);
-  assert.equal(ui.activityTokenComparison(130e6,0,{total_tokens:120e6,same_time_tokens:60e6}).className,' token-more');
+  // 站内今日 70M > 对比日此时 60M → 红，即使低于对比日全天 120M
+  assert.equal(result.className,' token-more');
+  assert.match(result.tooltip,/11-13 周五此时（站内） 60M/);
+  assert.match(result.tooltip,/多 10M（16\.7%）/);
+  assert.match(result.tooltip,/11-13 周五全天 120M/);
+  assert.match(result.tooltip,/外部渠道仅整日统计/);
+  // 无外部渠道时不带站内口径说明；110M 低于全天 120M 但高于此时 100M → 红
+  assert.doesNotMatch(ui.activityTokenComparison(110e6,0,{total_tokens:120e6,same_time_tokens:100e6}).tooltip,/站内|外部/);
+  assert.equal(ui.activityTokenComparison(110e6,0,{total_tokens:120e6,same_time_tokens:100e6}).className,' token-more');
+  assert.equal(ui.activityTokenComparison(50e6,0,{total_tokens:120e6,same_time_tokens:60e6}).className,' token-less');
+  assert.equal(ui.activityTokenComparison(60e6,0,{total_tokens:120e6,same_time_tokens:60e6}).className,'');
   assert.equal(ui.activityTokenComparison(0,0,{total_tokens:0,same_time_tokens:0}).className,'');
   assert.doesNotMatch(ui.activityTokenComparison(100,0,{total_tokens:0,same_time_tokens:0}).tooltip,/Infinity|NaN/);
 });
 test('rank movement supports up, down, equal, new and unavailable history',()=>{
   const user = {today:{total_tokens:90e6},comparison:{rank:6,total_tokens:120e6,same_time_tokens:60e6}};
+  assert.match(ui.activityRankMovement(user,1),/rank-move changed up/);
   assert.match(ui.activityRankMovement(user,1),/>↑5</);
-  assert.match(ui.activityRankMovement(user,1),/排名上升 5 位/);
+  assert.match(ui.activityRankMovement(user,1),/第 6 名 → 第 1 名，上升 5 位/);
+  assert.match(ui.activityRankMovement(user,9),/rank-move changed down/);
   assert.match(ui.activityRankMovement(user,9),/>↓3</);
   assert.match(ui.activityRankMovement(user,6),/排名持平/);
   user.comparison.rank=0;

@@ -46,7 +46,7 @@
       if (!comparison) return '';
       // Read the weekday from the actual comparison date, independent of browser timezone.
       var day = new Date(comparison.date + 'T12:00:00Z').getUTCDay();
-      return comparison.date + ' 周' + '日一二三四五六'.charAt(day);
+      return comparison.date.slice(5) + ' 周' + '日一二三四五六'.charAt(day);
     }
 
     function activityTokenDifference(current, previous, label) {
@@ -56,16 +56,19 @@
       return label + (delta > 0 ? '多 ' : '少 ') + fmtTokensMB(Math.abs(delta)) + pct;
     }
 
+    // 红绿以「上一工作日同时段」为准（站内口径，外部渠道只有整日统计）；
+    // 对比日由后端给出：工作日回退上一工作日，周末回退上周同日。
     function activityTokenComparison(current, external, previous) {
-      if (!previous || !activityUsageData.comparison) return { className: '', tooltip: '今日消耗 ' + fmtTokensMB(current) + '\n历史对比暂不可用' };
+      if (!previous || !activityUsageData.comparison) return { className: '', tooltip: '今日 ' + fmtTokensMB(current) + '\n历史对比暂不可用' };
+      var day = activityComparisonDate();
       var hasExternal = external > 0 || previous.external_tokens > 0;
-      var tooltip = '今日消耗 ' + fmtTokensMB(current)
-        + '\n昨日（' + activityComparisonDate() + '）消耗 ' + fmtTokensMB(previous.total_tokens)
-        + '\n' + activityTokenDifference(current, previous.total_tokens, '较昨日全天')
-        + '\n昨日此时' + (hasExternal ? '（站内）' : '') + ' ' + fmtTokensMB(previous.same_time_tokens)
-        + '\n' + activityTokenDifference(current - external, previous.same_time_tokens, hasExternal ? '站内较昨日此时' : '较昨日此时');
-      if (hasExternal) tooltip += '\n外部渠道仅有整日统计，不参与同时段对比';
-      return { className: current < previous.total_tokens ? ' token-less' : current > previous.total_tokens ? ' token-more' : '', tooltip: tooltip };
+      var relayCurrent = current - external;
+      var tooltip = '今日 ' + fmtTokensMB(current)
+        + '\n' + day + '此时' + (hasExternal ? '（站内）' : '') + ' ' + fmtTokensMB(previous.same_time_tokens)
+        + ' · ' + activityTokenDifference(relayCurrent, previous.same_time_tokens, '')
+        + '\n' + day + '全天 ' + fmtTokensMB(previous.total_tokens);
+      if (hasExternal) tooltip += '\n外部渠道仅整日统计';
+      return { className: relayCurrent < previous.same_time_tokens ? ' token-less' : relayCurrent > previous.same_time_tokens ? ' token-more' : '', tooltip: tooltip };
     }
 
     function activityRankMovement(user, rank) {
@@ -73,10 +76,10 @@
       if (!previous || !activityUsageData.comparison) return '<span class="rank-move" tabindex="0" data-tooltip="历史排名暂不可用">—</span>';
       var delta = previous.rank ? previous.rank - rank : 0;
       var label = !previous.rank ? '新' : delta > 0 ? '↑' + delta : delta < 0 ? '↓' + Math.abs(delta) : '—';
-      var explanation = !previous.rank ? '昨日无用量，今日新上榜' : delta > 0 ? '排名上升 ' + delta + ' 位' : delta < 0 ? '排名下降 ' + Math.abs(delta) + ' 位' : '排名持平';
+      var explanation = !previous.rank ? '今日新上榜' : delta > 0 ? '上升 ' + delta + ' 位' : delta < 0 ? '下降 ' + Math.abs(delta) + ' 位' : '排名持平';
       var tooltip = activityTokenComparison(user.today.total_tokens, user.today.external_tokens || 0, previous).tooltip
-        + '\n' + (previous.rank ? '昨日第 ' + previous.rank + ' 名 → 今日第 ' + rank + ' 名\n' : '') + explanation;
-      return '<span class="rank-move' + (delta ? ' changed' : '') + '" tabindex="0" data-tooltip="' + escapeHtml(tooltip) + '">' + label + '</span>';
+        + '\n' + (previous.rank ? '第 ' + previous.rank + ' 名 → 第 ' + rank + ' 名，' : '') + explanation;
+      return '<span class="rank-move' + (delta > 0 ? ' changed up' : delta < 0 ? ' changed down' : '') + '" tabindex="0" data-tooltip="' + escapeHtml(tooltip) + '">' + label + '</span>';
     }
 
     // 模型色板:亮/暗各一套 20 槽(OKLCH 生成,dataviz 六项校验通过:

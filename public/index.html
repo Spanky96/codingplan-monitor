@@ -260,6 +260,11 @@
     .rank-no.top { color: var(--accent); }
     .rank-move { min-width: 23px; font-size: 10px; color: var(--text-faint); font-variant-numeric: tabular-nums; white-space: nowrap; }
     .rank-move.changed { color: var(--text-soft); font-weight: 600; }
+    /* 排名箭头与用量红绿同义：升=用量更猛=红，降=绿 */
+    .rank-move.changed.up { color: #c94343; }
+    .rank-move.changed.down { color: #21834f; }
+    :root.dark .rank-move.changed.up { color: #ff9292; }
+    :root.dark .rank-move.changed.down { color: #73d6a0; }
     .rank-name { font-size: 12.5px; font-weight: 550; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
     .rank-val { font-size: 12px; font-weight: 650; color: var(--text); margin-left: auto; white-space: nowrap; font-variant-numeric: tabular-nums; }
     .rank-cost { display: block; text-align: right; font-size: 10px; color: var(--text-faint); margin-top: 1px; font-weight: 400; white-space: nowrap; }
@@ -376,7 +381,9 @@
     .limit-bar-seg .seg { flex: 1; background: var(--track); border-radius: 3px; overflow: hidden; }
     .limit-bar-seg .seg-fill { height: 100%; border-radius: 3px; transition: width .6s ease; min-width: 0; }
     .limit-bar-seg .seg { position: relative; }
-    .seg-today { position: absolute; inset-block: 0; background: repeating-linear-gradient(125deg, transparent 0 3px, rgba(255,255,255,.72) 3px 5px); }
+    /* 斜纹覆盖「今日之前」的累计用量，今日新增保持实色 */
+    .seg-past { position: absolute; inset-block: 0; background: repeating-linear-gradient(125deg, transparent 0 3px, rgba(15,23,42,.22) 3px 5px); }
+    :root.dark .seg-past { background: repeating-linear-gradient(125deg, transparent 0 3px, rgba(0,0,0,.34) 3px 5px); }
     .ring-day { fill:none; stroke:var(--glass); stroke-width:1.6; }
     .theo-marker { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--accent); border-radius: 1px; transform: translateX(-1px); pointer-events: none; box-shadow: 0 0 6px var(--accent-glow); }
     .tension-row { display: flex; justify-content: space-between; margin-top: 5px; font-size: 11px; }
@@ -911,10 +918,10 @@
   </div>
   <script src="js/app/core.js"></script>
   <script src="js/app/theme.js?v=20261116-comparison"></script>
-  <script src="js/app/glm-model.js"></script>
-  <script src="js/app/platform-helpers.js?v=20261118-weekly-bar"></script>
-  <script src="js/app/status.js"></script>
-  <script src="js/app/cards.js?v=20261118-weekly"></script>
+  <script src="js/app/glm-model.js?v=20261120-texture"></script>
+  <script src="js/app/platform-helpers.js?v=20261120-texture"></script>
+  <script src="js/app/status.js?v=20261120-tooltip"></script>
+  <script src="js/app/cards.js?v=20261120-tooltip"></script>
   <script src="js/app/detail.js"></script>
   <script src="js/app/keys.js"></script>
   <script src="js/app/accounts.js"></script>
@@ -923,10 +930,10 @@
   <script src="js/app/batch-ip.js"></script>
   <script src="js/app/weights.js"></script>
   <script src="js/app/capacity.js?v=20261116-startup"></script>
-  <script src="js/app/relay.js?v=20261116-comparison"></script>
+  <script src="js/app/relay.js?v=20261120-sametime"></script>
   <script src="js/app/account-tokens.js?v=20261116-tokens"></script>
   <script src="js/app/relay-chart.js?v=20261116-comparison"></script>
-  <script src="js/app/scheduler.js?v=20261118-weekly"></script>
+  <script src="js/app/scheduler.js?v=20261120-tooltip"></script>
   <script src="js/app/data.js?v=20261116-comparison"></script>
 </body>
 </html>

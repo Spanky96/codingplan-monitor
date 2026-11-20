@@ -68,6 +68,6 @@
       var label = day.source === 'reset' ? '重置后' : day.source === 'midnight' ? '今日' : time + ' 起';
       var cells = +((day.to - day.from) / 20).toFixed(2);
       return { from: day.from, to: day.to, label: label + ' ' + cells + ' 格',
-        tip: '本轮周额度，北京时间 ' + time + ' 起的用量，' + (+day.from.toFixed(1)) + '% → ' +
-          (+day.to.toFixed(1)) + '%，共 ' + cells + ' 格。每格为周额度的 20%。' };
+        tip: '今日 ' + time + ' 起 +' + cells + ' 格：' + (+day.from.toFixed(1)) + '% → ' +
+          (+day.to.toFixed(1)) + '%。斜纹为今日之前累计。' };
     }
