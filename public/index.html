@@ -381,9 +381,14 @@
     .limit-bar-seg .seg { flex: 1; background: var(--track); border-radius: 3px; overflow: hidden; }
     .limit-bar-seg .seg-fill { height: 100%; border-radius: 3px; transition: width .6s ease; min-width: 0; }
     .limit-bar-seg .seg { position: relative; }
-    /* 斜纹覆盖「今日之前」的累计用量，今日新增保持实色 */
-    .seg-past { position: absolute; inset-block: 0; background: repeating-linear-gradient(125deg, transparent 0 3px, rgba(15,23,42,.22) 3px 5px); }
-    :root.dark .seg-past { background: repeating-linear-gradient(125deg, transparent 0 3px, rgba(0,0,0,.34) 3px 5px); }
+    /* 斜纹(白)=今日之前累计；今日增量保持实色,并叠加循环扫光的「充电中」效果 */
+    .seg-past { position: absolute; inset-block: 0; background: repeating-linear-gradient(125deg, transparent 0 3px, rgba(255,255,255,.72) 3px 5px); }
+    .seg-charge { position: absolute; inset-block: 0; overflow: hidden; pointer-events: none; }
+    .seg-charge::before { content: ''; position: absolute; top: 0; bottom: 0; width: 70%; left: -70%;
+      background: linear-gradient(100deg, transparent 25%, rgba(255,255,255,.55) 50%, transparent 75%);
+      animation: seg-charge 2.2s ease-in-out infinite; }
+    @keyframes seg-charge { 0% { left: -70%; } 70%, 100% { left: 100%; } }
+    @media (prefers-reduced-motion: reduce) { .seg-charge::before { animation: none; } }
     .ring-day { fill:none; stroke:var(--glass); stroke-width:1.6; }
     .theo-marker { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--accent); border-radius: 1px; transform: translateX(-1px); pointer-events: none; box-shadow: 0 0 6px var(--accent-glow); }
     .tension-row { display: flex; justify-content: space-between; margin-top: 5px; font-size: 11px; }
@@ -919,7 +924,7 @@
   <script src="js/app/core.js"></script>
   <script src="js/app/theme.js?v=20261116-comparison"></script>
   <script src="js/app/glm-model.js?v=20261120-texture"></script>
-  <script src="js/app/platform-helpers.js?v=20261120-texture"></script>
+  <script src="js/app/platform-helpers.js?v=20261120-charge"></script>
   <script src="js/app/status.js?v=20261120-tooltip"></script>
   <script src="js/app/cards.js?v=20261120-tooltip"></script>
   <script src="js/app/detail.js"></script>

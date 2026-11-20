@@ -29,7 +29,8 @@
           var todayStart = today ? Math.max(0, Math.min(100, (today.from - segStart) * 100 / segPct)) : 0;
           var pastW = Math.min(fillW, todayStart);
           var stripe = pastW > 0 ? '<i class="seg-past" style="left:0;width:' + pastW + '%"></i>' : '';
-          segHtml += '<div class="seg"><div class="seg-fill ' + getColorClass(pct) + '" style="width:' + fillW + '%"></div>' + stripe + '</div>';
+          var charge = today && fillW > todayStart ? '<i class="seg-charge" style="left:' + todayStart + '%;width:' + (fillW - todayStart) + '%"></i>' : '';
+          segHtml += '<div class="seg"><div class="seg-fill ' + getColorClass(pct) + '" style="width:' + fillW + '%"></div>' + stripe + charge + '</div>';
         }
 
         // Theoretical usage: based on nextResetTime; advances only inside work hours (Mon–Fri 08:00–18:00)
