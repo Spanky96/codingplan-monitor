@@ -29,7 +29,12 @@
           var todayStart = today ? Math.max(0, Math.min(100, (today.from - segStart) * 100 / segPct)) : 0;
           var pastW = Math.min(fillW, todayStart);
           var stripe = pastW > 0 ? '<i class="seg-past" style="left:0;width:' + pastW + '%"></i>' : '';
-          var charge = today && fillW > todayStart ? '<i class="seg-charge" style="left:' + todayStart + '%;width:' + (fillW - todayStart) + '%"></i>' : '';
+          // 充电扫光:周条照「今日增量」,5 小时条照整段填充;窗口耗尽(紫色)时不加
+          var charge = '';
+          if (getColorClass(pct) !== 'fill-exhausted') {
+            var chargeL = today ? todayStart : 0;
+            if (fillW > chargeL) charge = '<i class="seg-charge" style="left:' + chargeL + '%;width:' + (fillW - chargeL) + '%"></i>';
+          }
           segHtml += '<div class="seg"><div class="seg-fill ' + getColorClass(pct) + '" style="width:' + fillW + '%"></div>' + stripe + charge + '</div>';
         }
 

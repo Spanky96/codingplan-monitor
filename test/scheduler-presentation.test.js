@@ -52,7 +52,7 @@ test('Token summary shows the estimated subtotal with coverage and disappears at
 
 test('weekly bar textures only the pre-today accumulation; today’s share stays solid', () => {
     const c = context(), now = Date.now(), day = Math.floor((now + 8 * 3600000) / 86400000) * 86400000 - 8 * 3600000;
-    c.API_PREFIX = ''; c.getLimitLabel = () => '周额度'; c.getColorClass = () => 'fill-green';
+    c.API_PREFIX = ''; c.getLimitLabel = () => '周额度'; c.getColorClass = p => p >= 99.9 ? 'fill-exhausted' : 'fill-green';
     vm.runInContext(fs.readFileSync(path.join(__dirname, '../public/js/app/platform-helpers.js'), 'utf8'), c);
     const l = { unit: 6, percentage: 67 }, d = { day, since: day, from: 42, to: 67, source: 'midnight' };
     const html = c.renderLimitRow(l, d);
@@ -65,9 +65,17 @@ test('weekly bar textures only the pre-today accumulation; today’s share stays
     assert.match(html, /left:10%;width:90%/); assert.match(html, /left:0%;width:35%/);
     assert.doesNotMatch(html, /week-day-label/);
     assert.match(html, /aria-label="[^"]*\+1\.25 格/);
-    assert.doesNotMatch(c.renderLimitRow({ ...l, unit: 3 }, d), /seg-past|seg-charge/);
-    assert.doesNotMatch(c.renderLimitRow(l, { ...d, day: day - 86400000 }), /seg-past|seg-charge/);
+    assert.doesNotMatch(c.renderLimitRow({ ...l, unit: 3 }, d), /seg-past/);
+    // 5 小时条无今日切分,整段填充带扫光
+    assert.equal((c.renderLimitRow({ ...l, unit: 3 }, d).match(/class="seg-charge"/g) || []).length, 4);
+    // 日数据过期时周条退化为整段扫光(无斜纹切分)
+    assert.doesNotMatch(c.renderLimitRow(l, { ...d, day: day - 86400000 }), /seg-past/);
+    assert.match(c.renderLimitRow(l, { ...d, day: day - 86400000 }), /seg-charge/);
     // 今日从0格起(段首)时无历史部分不画斜纹，今日整段带扫光
     const fresh = c.renderLimitRow(l, { ...d, from: 0, to: 30 });
     assert.doesNotMatch(fresh, /seg-past/); assert.match(fresh, /seg-charge/);
+    // 耗尽窗口(紫色填充)不加充电扫光;斜纹保留
+    const dead = c.renderLimitRow({ ...l, percentage: 100 }, { ...d, to: 100 });
+    assert.doesNotMatch(dead, /seg-charge/); assert.match(dead, /fill-exhausted/); assert.match(dead, /seg-past/);
+    assert.doesNotMatch(c.renderLimitRow({ ...l, unit: 3, percentage: 100 }, d), /seg-charge/);
 });
