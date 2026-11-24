@@ -225,7 +225,7 @@
         + '<div class="form-group"><label class="form-label">登录密码（可选）</label><input class="form-input" type="password" id="f_glm_password" placeholder="非必填；与账号同时填写才启用自动重登" value="' + esc(a.glm_password||'') + '" autocomplete="new-password"></div></div>'
         + '<div class="form-group"><label class="form-label" style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="f_team_edition"' + (a.teamEdition ? ' checked' : '') + ' style="width:16px;height:16px;cursor:pointer"> 团队版（接口 URL 加 type=2）</label></div>'
         + '<div class="form-group"><label class="form-label" style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="f_zcode_enabled"' + (a.zcode && a.zcode.enabled === true ? ' checked' : '') + '> 启用 ZCode Coding Plan 接入</label>'
-        + '<div style="font-size:12px;color:var(--text-mute);margin-top:6px">开启后，中转站使用此账号的 ZCode 用量优惠；关闭后恢复原接入方式。支持个人套餐。</div></div>'
+        + '<div style="font-size:12px;color:var(--text-mute);margin-top:6px">仅支持个人套餐。已设置跟随的中转站账号会使用 ZCode 渠道，关闭后使用原 API Key。</div></div>'
         + '<div class="form-group"><label class="form-label">ZCode 对应中转站账号名称（可选）</label><input class="form-input" id="f_zcode_relay_name" placeholder="留空时与本账号名称一致，需精确匹配" value="' + esc(a.zcode && a.zcode.relayAccountName || '') + '"></div>'
         + (editingIndex >= 0 ? '<div class="form-group"><button type="button" class="btn-default" onclick="checkZcodeAccount(this)">检查 ZCode 连接</button><div id="f_zcode_status" style="font-size:12px;color:var(--text-mute);margin-top:6px">检查已保存的账号，不消耗模型用量。</div></div>' : '')
         + '</div>'
