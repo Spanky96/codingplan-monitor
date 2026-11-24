@@ -4,6 +4,7 @@
 const { channelCounts } = require('./channels');
 const { scoreAccount } = require('../weights');
 const { concurrencyCeiling, resetAllowed, quotaLink, weeklyPace, chooseMode, chooseConcurrency } = require('./adaptation');
+const { fastBurn, targetWeights } = require('./priority');
 const { assessFallback } = require('./fallback');
 const { allocateBackupCapacity, assignBackupWeights } = require('./backup-capacity');
 const HOUR = 3600000;
@@ -107,9 +108,10 @@ function plan({ config, accounts, usage, telemetry = {}, previous = {}, previous
         }
         if (policy.role === 'primary' && routes.native) {
             row.weeklyPace = weeklyPace(week, now);
-            if (row.weeklyPace && row.weeklyPace.workAheadPct >= 20) atRisk++;
+            // A manual burn runs ahead by request; it is no sign that the pool is overdrawn.
+            if (row.weeklyPace && row.weeklyPace.workAheadPct >= 20 && policy.mode !== 'burst') atRisk++;
         }
-        let shortFactor = 1;
+        let shortFactor = 1, forecastNotice = '';
         if (short) {
             const hours = Number.isFinite(short.resetAt) ? clamp((short.resetAt - now) / HOUR, 1 / 60, 5) : 5;
             shortFactor = clamp(((100 - short.used) / hours) / 20, 0.05, 2);
@@ -117,12 +119,14 @@ function plan({ config, accounts, usage, telemetry = {}, previous = {}, previous
                 row.shortForecastHours = Math.max(0, 100 - short.used) / row.shortRatePerHour;
                 if (row.shortForecastHours < 0.25 && hours > 0.75) shortFactor = Math.min(shortFactor, 0.2);
                 else if (row.shortForecastHours < 0.75 && hours > 1) shortFactor = Math.min(shortFactor, 0.55);
-                if (row.shortForecastHours < 0.75 && hours > 1) reasons.push('按官方近期消耗速度，5h 预计 ' + Math.round(row.shortForecastHours * 60) + ' 分钟耗尽，提前收紧');
+                if (row.shortForecastHours < 0.75 && hours > 1) forecastNotice = '按官方近期消耗速度，5h 预计 ' + Math.round(row.shortForecastHours * 60) + ' 分钟耗尽，提前收紧';
             }
         }
         const exhausted = ws.filter(w => w.used >= EXHAUSTED);
         if (exhausted.length) {
-            // A weekly card cannot clear an exhausted 5h window. Restore the shorter window last.
+            // A weekly card reopens both windows at once (seen live on 2026-11-24:
+            // glm9's 5h window restarted with its weekly card, four hours early),
+            // so restore the week first and only fall back to a short card.
             const target = exhausted.find(w => w.type === 'week') || exhausted[0];
             const card = target.depleted ? cards.find(c => c.type === target.type) : null;
             if (card) {
@@ -136,7 +140,7 @@ function plan({ config, accounts, usage, telemetry = {}, previous = {}, previous
             if (!(Number(d.balance || 0) + Number(d.platformGiftBalance || 0) > 0)) return stop('exhausted', '按量账号无可用余额');
         }
         if (genericScore && (genericScore.exhausted || !(genericScore.weight > 0))) return stop('exhausted', '额度已用尽');
-        ready.push({ row, policy, account, cards, short, week, shortFactor, old, live, routes, genericScore });
+        ready.push({ row, policy, account, cards, short, week, shortFactor, forecastNotice, old, live, routes, genericScore });
         return row;
     });
     const candidates = [];
@@ -161,11 +165,18 @@ function plan({ config, accounts, usage, telemetry = {}, previous = {}, previous
         delete r.accelerationActive;
         r.modeReason = '本轮由其他有周卡的主力承担额外流量，保留本账号周额度';
     }
-    for (const { row, policy, short, week, shortFactor, old, live, routes, genericScore } of ready) {
+    for (const { row, policy, short, week, shortFactor: paceFactor, forecastNotice, old, live, routes, genericScore } of ready) {
+        // A high-speed row spends its short window on purpose. Its pace factor,
+        // forecast tightening and concurrency cap are all skipped; nothing here
+        // spends a card, and an upstream limit still comes first.
+        const fast = fastBurn(row, live.limited);
+        const shortFactor = fast ? 1 : paceFactor;
         let raw = genericScore ? genericScore.weight : 1, state = 'balanced';
         const reasons = row.reasons;
-        const allocation = chooseConcurrency({ policy, routes, short, shortFactor, old, live, now,
+        const allocation = chooseConcurrency({ policy, routes, short, shortFactor, old, live, now, fast,
             effectiveMode: row.accelerationActive === false ? 'auto' : row.effectiveMode, recentDemand: demandNow });
+        if (forecastNotice && !fast) reasons.push(forecastNotice);
+        if (fast && paceFactor < 0.6) reasons.push('高速账号不做 5h 保护：窗口用尽后由周卡或自然重置恢复');
         if (shortFactor < 0.6) { state = 'protecting'; reasons.push('5 小时额度偏紧，降低流量并保留并发分摊'); }
         if (week) {
             let hours = Number.isFinite(week.resetAt) ? clamp((week.resetAt - now) / HOUR, 1, 168) : 168;
@@ -174,14 +185,13 @@ function plan({ config, accounts, usage, telemetry = {}, previous = {}, previous
             }
             // Required remaining burn rate, normalized to a full week's average rate.
             raw = Math.sqrt(clamp(((100 - week.used) / hours) / (100 / 168), 0.05, 16));
-            // Card-backed acceleration aims to finish this allowance and replenish,
-            // not stretch its last few percent until the old natural reset. Keep
-            // at least the normal weekly baseline while that strategy is active.
-            // Inventory/permission checks stay in chooseMode; short-window and
-            // upstream protection still take precedence, and no card is spent here.
-            if (row.accelerationReason === 'reset-card' && row.accelerationActive && !allocation.shortProtection) {
+            // High-speed burning aims to finish this allowance and replenish, with
+            // a card or naturally, not to stretch its last few percent until the
+            // old natural reset. Keep at least the normal weekly baseline while it
+            // burns. Inventory and permission checks stay in chooseMode.
+            if (fast) {
                 raw = Math.max(1, raw);
-                reasons.push('周卡衔接加速：周余量少不再压低高速权重');
+                if (row.accelerationReason === 'reset-card') reasons.push('周卡衔接加速：周余量少不再压低高速权重');
             }
             row.weeklyWeightFactor = raw;
         }
@@ -203,23 +213,19 @@ function plan({ config, accounts, usage, telemetry = {}, previous = {}, previous
         if (!reasons.length) reasons.push('按周剩余额度与重置时间分流，保持多账号均衡');
         if (live.limited) { state = 'cooldown'; raw *= 0.25; }
         reasons.push('并发 ' + allocation.concurrency + '/' + allocation.concurrencyCeiling + '：' + allocation.concurrencyReason);
-        Object.assign(row, allocation, { state, reasons, raw });
+        Object.assign(row, allocation, { state, reasons, raw, fast });
     }
     const primaryReady = rows.filter(r => r.role === 'primary' && r.nativeChannels && r.raw > 0 && !r.limited);
     const hasPrimary = primaryReady.length > 0;
     const fallbackAssessment = assessFallback({ rows, previous: previousSummary.fallbackAssessment,
         config, now, recentDemand: demandNow, load });
     const backupCapacity = allocateBackupCapacity({ rows, assessment: fallbackAssessment, previous, telemetry, config, now, hasPrimary });
-    const peak = Math.max(1, ...rows.map(r => r.raw || 0));
+    // Zero and exhaustion never arrive with a score, so they always take effect at once.
+    const targets = targetWeights(rows, previous);
     rows.forEach(r => {
-        if (!r.raw) return;
-        let target = clamp(10 * r.raw / peak, 0.1, 10);
-        const old = previous[r.name];
-        // Smooth non-emergency transitions only. Zero/exhaustion always takes effect immediately.
-        if (old && old.weight > 0 && r.role === 'primary' && !['protecting', 'cooldown', 'slow'].includes(r.state)) {
-            target = 0.65 * old.weight + 0.35 * target;
-        }
-        r.weight = Math.round(target * 10) / 10;
+        const target = targets[r.name];
+        r.weight = target ? target.weight : 0;
+        if (target && target.yielded) r.reasons.push('高速账号优先承接流量，本轮压低目标权重；其并发占满后流量照常顺延');
     });
     assignBackupWeights(rows, fallbackAssessment, backupCapacity, hasPrimary);
     rows.forEach(r => {
@@ -260,12 +266,12 @@ function plan({ config, accounts, usage, telemetry = {}, previous = {}, previous
         const resetAt = card.type === 'week' ? r.weeklyResetAt : r.shortResetAt;
         const hours = (resetAt - now) / HOUR;
         const expiresSoon = timestamp(card.expireTime) - now < 6 * HOUR;
+        // An exhausted 5h window is no reason to hold a weekly card: it reopens both.
         let hold = '';
         if (!Number.isFinite(hours) || hours <= 0) hold = '缺少可信的自然重置时间，先核对额度';
         else if (card.type === 'week' && hours < (config.resetWeekMinHours || 24)) hold = '周额度不足 24 小时即自然恢复，保留周卡';
         else if (card.type === 'fiveHour' && hours <= config.resetMinRemainingMinutes / 60) hold = '5 小时窗口临近自然恢复，保留短周期卡';
         else if (p.replenishAt && timestamp(p.replenishAt) > now && timestamp(p.replenishAt) - now < (card.type === 'week' ? 24 : 1) * HOUR) hold = '已安排近期充值或补充额度，等待到账';
-        else if (card.type === 'week' && r.shortUsed >= EXHAUSTED && (!r.shortResetAt || r.shortResetAt - now > 0.5 * HOUR)) hold = '5 小时窗口也已耗尽，周卡无法恢复当前可用性，先等短窗口恢复';
         else if (card.type === 'fiveHour' && (r.quotaLink ? r.quotaLink.weeklyRemainingInShortPct < 25 : r.weeklyUsed != null && r.weeklyUsed > 85)) hold = '周额度剩余不足，短周期卡的可用收益有限';
         else if ((p.mode || 'auto') === 'auto' && !recentDemand) hold = '近期无主力请求，等待需求后再用卡';
         r.resetDecision = { decision: hold ? 'hold' : 'use', type: card.type, stock: stock[card.type],

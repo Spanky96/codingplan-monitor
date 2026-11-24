@@ -65,7 +65,12 @@ function chooseMode({ policy, account, cards, short, week, shortFactor, old, liv
     const shortTight = !short || shortProtection(short, shortFactor, old, now) > 0 || shortFactor < (accelerating ? 0.45 : 0.65) ||
         (short.used >= (accelerating ? 90 : 80) && shortFactor < 1);
     const burst = (reason, source, factor = 4) => {
-        const blocked = live.limited || (old.lastLimitedAt && now - old.lastLimitedAt < 120000) ? '上游限流或恢复观察，暂缓加速' : shortTight ? '5h 保护，暂缓加速' : '';
+        // A carrier holding a weekly card may spend its whole short window: the
+        // card, or the natural short reset, reopens it. Surplus catch-up has no
+        // such card and keeps the measured fast-burn and short-window guards.
+        const limited = live.limited || (old.lastLimitedAt && now - old.lastLimitedAt < 120000);
+        const blocked = limited ? '上游限流或恢复观察，暂缓加速'
+            : source !== 'reset-card' && shortTight ? '5h 保护，暂缓加速' : '';
         // Keep the weekly strategy visible while temporary protection removes its boost.
         return { ...result, effectiveMode: 'burst', accelerationReason: source, accelerationFactor: factor,
             accelerationActive: !blocked, modeReason: reason + (blocked ? '；' + blocked : '') };
@@ -116,13 +121,14 @@ function shortProtection(short, shortFactor, old, now) {
     else if (old.shortProtection >= 1 && shortFactor < 0.75) protection = Math.max(protection, 1);
     return protection;
 }
-function chooseConcurrency({ policy, routes, short, shortFactor, old, live, now, effectiveMode, recentDemand }) {
+function chooseConcurrency({ policy, routes, short, shortFactor, old, live, now, effectiveMode, recentDemand, fast = false }) {
     const ceiling = concurrencyCeiling(policy);
     const channels = Math.max(1, routes.native + routes.fallback);
     const initial = Math.min(ceiling, Math.max(2, channels));
     let adaptive = clamp(old.adaptiveConcurrency || initial, 1, ceiling);
     let adjustedAt = old.adjustedAt || now, lastLimitedAt = old.lastLimitedAt || 0;
-    const protection = shortProtection(short, shortFactor, old, now);
+    // A high-speed row spends its short window on purpose, so it has no quota cap.
+    const protection = fast ? 0 : shortProtection(short, shortFactor, old, now);
     const quotaCap = Math.min(ceiling, protection === 2 ? 1 : protection === 1 ? 2 : ceiling);
     const previousActual = clamp(old.concurrency || initial, 1, ceiling);
     // Only consecutive, timely samples establish sustained saturation; idle/gaps reset it.
@@ -138,6 +144,11 @@ function chooseConcurrency({ policy, routes, short, shortFactor, old, live, now,
         reason = '上游限流，降低并发';
     } else if (lastLimitedAt && now - lastLimitedAt < 120000) {
         busySince = 0; reason = '限流恢复观察';
+    } else if (fast && recentDemand && !old.fast && ceiling > adaptive) {
+        // The request to burn is explicit, so entering needs no one-step probe.
+        // Recovery after a limit still climbs one step per sustained busy interval.
+        adaptive = ceiling; adjustedAt = now; busySince = 0;
+        reason = '高速模式有需求，并发升至上限';
     } else if (effectiveMode === 'burst' && old.effectiveMode !== 'burst' && recentDemand && protection === 0 && ceiling > adaptive) {
         adaptive = Math.min(ceiling, adaptive + 1); adjustedAt = now; busySince = 0;
         reason = '高速进入，试探增加一档';

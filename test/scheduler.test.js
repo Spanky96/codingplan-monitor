@@ -105,11 +105,16 @@ test('half-day natural weekly reset never consumes a card even when the pool is 
     p.usage[1].data.limits[1].percentage = 100;
     const r = row(p, 'A'); assert.equal(r.reset, null); assert.match(r.reasons[0], /不足 24 小时/);
 });
-test('upcoming recharge and another blocked window still avoid wasted resets', () => {
-    let p = exhaustedWithCards(); p.config.accounts[0].replenishAt = new Date(NOW + 8 * H).toISOString();
+test('upcoming recharge still avoids a wasted reset', () => {
+    const p = exhaustedWithCards(); p.config.accounts[0].replenishAt = new Date(NOW + 8 * H).toISOString();
     assert.match(row(p, 'A').reasons[0], /等待到账/);
-    p = exhaustedWithCards(); p.usage[0].data.limits[0].percentage = 100;
-    assert.match(row(p, 'A').reasons[0], /周卡无法恢复/);
+});
+test('an exhausted 5h window does not hold the weekly card back, because it reopens both windows', () => {
+    const p = exhaustedWithCards(); p.usage[0].data.limits[0].percentage = 100;
+    const r = row(p, 'A');
+    assert.equal(r.weight, 0);
+    assert.equal(r.reset.type, 'week');
+    assert.match(r.reasons[0], /自动使用最早到期的周卡/);
 });
 test('explicit burst replenishment has no daily or reserve limit and no unrelated account cooldown', () => {
     const p = exhaustedWithCards(); p.accounts[0].resetCards.cards.pop();

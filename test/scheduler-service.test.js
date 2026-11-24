@@ -75,7 +75,12 @@ test('export clamps legacy plans to the GLM safety ceiling immediately', () => {
 });
 test('reset inventory counts valid cards across all accounts, independent of spending permission', () => {
     const {now,state}=fixture();
-    state.config.accounts.push({name:'placeholder',role:'paid',unmetered:false});store.write(state);
+    state.config.accounts.push({name:'placeholder',role:'paid',unmetered:false});
+    // Only cards confirmed used since Beijing midnight count as today's usage, manual ones included.
+    const midnight=Math.floor((now+8*3600000)/86400000)*86400000-8*3600000;
+    state.journal={automatic:{at:now,type:'week',status:'used'},manual:{at:midnight+60000,type:'fiveHour',status:'used'},
+        yesterday:{at:midnight-60000,type:'week',status:'used'},uncertain:{at:now,type:'week',status:'uncertain'}};
+    store.write(state);
     const card=(type,expiry)=>({type,recordId:1,expireTime:expiry});
     fs.writeFileSync(process.env.ACCOUNTS_FILE,JSON.stringify({accounts:[
         {name:'A',platform:'glm',resetCards:{checkedAt:now,cards:[card('week',now+3600000),card('fiveHour',now-1)]}},
@@ -86,7 +91,8 @@ test('reset inventory counts valid cards across all accounts, independent of spe
         {name:'team',platform:'glm',teamEdition:true,resetCards:{checkedAt:now,cards:[card('week',now+3600000)]}},
         {name:'other',platform:'minimax',resetCards:{checkedAt:now,cards:[card('week',now+3600000)]}}
     ]}));
-    assert.deepEqual(service.status().resetCards,{total:3,week:2,fiveHour:1,checkedAccounts:3,accounts:4,oldestCheckedAt:now-60000});
+    assert.deepEqual(service.status().resetCards,{total:3,week:2,fiveHour:1,checkedAccounts:3,accounts:4,oldestCheckedAt:now-60000,
+        usedToday:{total:2,week:1,fiveHour:1}});
     require('../src/api/platforms/glm').persistGlmResetCards(0,[]);
     const persisted=JSON.parse(fs.readFileSync(process.env.ACCOUNTS_FILE,'utf8')).accounts[0].resetCards;
     assert.equal(persisted.count,0);assert.ok(persisted.checkedAt>=now);

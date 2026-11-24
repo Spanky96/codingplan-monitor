@@ -28,7 +28,9 @@ fs.writeFileSync(accountsFile, JSON.stringify({ accounts: [{
 }] }));
 fs.writeFileSync(cacheFile, '{}');
 
-// 官方最新列表:一张 GLOBAL 老卡(小 recordId)+ 一张 DIRECT 新卡(大 recordId)
+// 官方最新列表:一张 GLOBAL 老卡(小 recordId)+ 一张 DIRECT 新卡(大 recordId)。
+// 有效期相对当前时间生成(北京墙钟时间):写死的日期一到,用例就会随日历失效。
+var EXPIRES_LATER = new Date(Date.now() + 30 * 86400000 + 8 * 3600000).toISOString().replace('T', ' ').slice(0, 19);
 var OFFICIAL_LIST = {
     code: 200,
     success: true,
@@ -36,8 +38,8 @@ var OFFICIAL_LIST = {
         targetType: 'PERSONAL',
         fiveHourResets: [],
         weekResets: [
-            { recordId: 9, grantType: 'GLOBAL', expireTime: '2026-12-22 23:59:59', available: true },
-            { recordId: 2165677, grantType: 'DIRECT', expireTime: '2026-11-22 10:24:28', available: true }
+            { recordId: 9, grantType: 'GLOBAL', expireTime: EXPIRES_LATER, available: true },
+            { recordId: 2165677, grantType: 'DIRECT', expireTime: EXPIRES_LATER, available: true }
         ]
     }
 };

@@ -12,10 +12,10 @@ function fixture() {
         telemetry:{A:{count:1,current:1,capacity:2,limited:false}} };
 }
 const row=p=>plan(p).rows[0];
-test('glm1 case enters automatic high consumption, probes concurrency and never resets 66% quota',()=>{
+test('glm1 case enters automatic high consumption at full concurrency and never resets 66% quota',()=>{
     const p=fixture(), r=row(p);
     assert.equal(r.mode,'auto'); assert.equal(r.effectiveMode,'burst'); assert.equal(r.modeSource,'automatic');
-    assert.equal(r.concurrency,3); assert.equal(r.reset,null); assert.ok(r.weeklyPace.projectedGapHours>48);
+    assert.equal(r.concurrency,4); assert.equal(r.reset,null); assert.ok(r.weeklyPace.projectedGapHours>48);
     assert.match(r.reasons[0],/自动高速/);
 });
 test('manual low ceilings remain binding even during automatic acceleration',()=>{
@@ -31,18 +31,18 @@ test('glm1 87% five-hour usage near natural reset resumes acceleration without u
     const r=row(p);
     assert.equal(r.effectiveMode,'burst');assert.equal(r.accelerationActive,true);
     assert.equal(r.state,'burst');assert.equal(r.shortProtection,0);
-    assert.equal(r.concurrency,3);assert.equal(r.reset,null);
+    assert.equal(r.concurrency,4);assert.equal(r.reset,null);
     p.telemetry.A.limited=true;assert.equal(row(p).accelerationActive,false);
     p.telemetry.A.limited=false;p.config.accounts[0].mode='slow';assert.equal(row(p).state,'slow');
 });
-test('nearly full window is paced using the actual last minutes, but exhaustion still stops scheduling',()=>{
+test('a card-backed carrier keeps accelerating in the last minutes of its window, but exhaustion still stops scheduling',()=>{
     const p=fixture();
     Object.assign(p.usage[0].data.limits[0],{percentage:99,nextResetTime:NOW+2*60000});
     let r=row(p);assert.equal(r.accelerationActive,true);assert.equal(r.shortProtection,0);
     p.usage[0].data.limits[0].percentage=100;
     r=row(p);assert.equal(r.state,'exhausted');assert.equal(r.weight,0);assert.equal(r.reset,null);
     p.usage[0].data.limits[0].percentage=87;p.usage[0].data.limits[0].nextResetTime=NOW+2*H;
-    r=row(p);assert.equal(r.accelerationActive,false);assert.equal(r.state,'protecting');
+    r=row(p);assert.equal(r.accelerationActive,true);assert.equal(r.state,'burst');assert.equal(r.concurrency,4);
 });
 test('5h factor slightly below one does not halve normal concurrency',()=>{
     const p=fixture();p.config.accounts[0].autoReset=false;
@@ -101,22 +101,22 @@ test('surplus acceleration obeys demand, manual modes and data freshness',()=>{
     const p=fixture();p.usage[0].data.limits[1].percentage=16;p.config.accounts[0].mode='slow';
     assert.equal(row(p).effectiveMode,'slow');
 });
-test('5h protection and cooldown preserve the major mode but remove its weight and concurrency boost',()=>{
-    for(const surplus of [false,true]) {
-        const p=fixture();if(surplus)p.usage[0].data.limits[1].percentage=5;
-        p.usage[0].data.limits[0].percentage=95;
-        const protectedRow=row(p);
-        assert.equal(protectedRow.effectiveMode,'burst');assert.equal(protectedRow.accelerationActive,false);
-        assert.equal(protectedRow.state,'protecting');assert.equal(protectedRow.concurrency,1);
-        p.config.accounts[0].mode='burst';assert.ok(row(p).weight>protectedRow.weight);
-        p.config.accounts[0].mode='auto';
-        p.previous={A:protectedRow};p.usage[0].data.limits[0].percentage=85;
-        assert.equal(row(p).accelerationActive,false); // Paused acceleration cannot use the relaxed continuation threshold.
-        p.usage[0].data.limits[0].percentage=43;
-        assert.equal(row(p).accelerationActive,true);
-        p.telemetry.A.limited=true;
-        assert.equal(row(p).state,'cooldown');assert.equal(row(p).accelerationActive,false);
-    }
+test('surplus catch-up keeps 5h protection and cooldown, which remove its weight and concurrency boost',()=>{
+    // A card-backed carrier is not held back by its window: see scheduler-fast-burn.test.js.
+    const p=fixture();p.usage[0].data.limits[1].percentage=5;
+    p.usage[0].data.limits[0].percentage=95;
+    const protectedRow=row(p);
+    assert.equal(protectedRow.accelerationReason,'surplus');
+    assert.equal(protectedRow.effectiveMode,'burst');assert.equal(protectedRow.accelerationActive,false);
+    assert.equal(protectedRow.state,'protecting');assert.equal(protectedRow.concurrency,1);
+    p.config.accounts[0].mode='burst';assert.ok(row(p).weight>protectedRow.weight);
+    p.config.accounts[0].mode='auto';
+    p.previous={A:protectedRow};p.usage[0].data.limits[0].percentage=85;
+    assert.equal(row(p).accelerationActive,false); // Paused acceleration cannot use the relaxed continuation threshold.
+    p.usage[0].data.limits[0].percentage=43;
+    assert.equal(row(p).accelerationActive,true);
+    p.telemetry.A.limited=true;
+    assert.equal(row(p).state,'cooldown');assert.equal(row(p).accelerationActive,false);
 });
 test('near-deadline surplus drains without a card, while glm13 waits for natural recovery',()=>{
     const p=fixture();p.config.accounts[0].autoReset=false;
@@ -215,8 +215,9 @@ test('V2 percentages stay authoritative without guessed cross-window token ratio
     const p=fixture();assert.equal(row(p).quotaLink,null);assert.equal(row(p).shortUsed,43);assert.equal(row(p).weeklyUsed,66);
 });
 test('official accelerated usage triggers proactive short-window protection after three samples',()=>{
-    const p=fixture();p.previous={A:{cachedAt:NOW-60000,shortUsed:42,shortRatePerHour:100,shortRateSamples:3,shortResetAt:p.usage[0].data.limits[0].nextResetTime+10}};
-    const r=row(p);assert.ok(r.shortForecastHours<0.75);assert.equal(r.accelerationActive,false);assert.ok(r.concurrency<=2);assert.match(r.reasons.join('；'),/提前收紧/);
+    // Without a weekly card the account only balances: its window is still paced.
+    const p=fixture();p.config.accounts[0].autoReset=false;p.previous={A:{cachedAt:NOW-60000,shortUsed:42,shortRatePerHour:100,shortRateSamples:3,shortResetAt:p.usage[0].data.limits[0].nextResetTime+10}};
+    const r=row(p);assert.ok(r.shortForecastHours<0.75);assert.equal(r.effectiveMode,'auto');assert.ok(r.concurrency<=2);assert.match(r.reasons.join('；'),/提前收紧/);
     p.previous.A.shortRateSamples=0;assert.equal(row(p).shortForecastHours,undefined);
 });
 test('reset timestamp jitter preserves rates, a real new window clears them',()=>{

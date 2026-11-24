@@ -80,25 +80,20 @@ test('permission, inventory, replenishment and low mode still gate the new weekl
     }
 });
 
-test('short-window scarcity, forecasts and upstream limits override card acceleration', () => {
-    for (const change of [
-        p => { p.usage[0].data.limits[0].percentage = 96; },
-        p => { p.previous = { Card: { shortRatePerHour: 200, shortRateSamples: 3 } }; },
-        p => { p.telemetry.Card.limited = true; },
-        // Independent concurrency protection can apply even with a healthy pace factor.
-        p => { Object.assign(p.usage[0].data.limits[0], { percentage: 85, nextResetTime: NOW + 0.6 * H }); }
-    ]) {
-        const p = fixture(); change(p);
-        const rows = plan(p).rows, r = rows.find(r => r.name === 'Card');
-        assert.ok(['protecting', 'cooldown'].includes(r.state));
-        assert.ok(r.weeklyWeightFactor < 1);
-        assert.ok(r.weight < rows.find(r => r.name === 'Balanced').weight);
-        assert.ok(r.concurrency <= 2);
-        assert.equal(r.reset, null);
-    }
+test('upstream limits still override card acceleration', () => {
+    // Its own 5h window and fast-burn forecasts do not: see scheduler-fast-burn.test.js.
+    const p = fixture();
+    p.telemetry.Card.limited = true;
+    const rows = plan(p).rows, r = rows.find(r => r.name === 'Card');
+    assert.equal(r.state, 'cooldown');
+    assert.equal(r.accelerationActive, false);
+    assert.ok(r.weeklyWeightFactor < 1);
+    assert.ok(r.weight < rows.find(r => r.name === 'Balanced').weight);
+    assert.ok(r.concurrency <= 2);
+    assert.equal(r.reset, null);
 });
 
-test('actual exhaustion stops traffic and only then allows a weekly reset', () => {
+test('actual exhaustion stops traffic; a weekly card reopens both windows at once', () => {
     const p = fixture(); p.usage[0].data.limits[1].percentage = 100;
     let r = card(p);
     assert.equal(r.weight, 0);
@@ -106,7 +101,7 @@ test('actual exhaustion stops traffic and only then allows a weekly reset', () =
     p.usage[0].data.limits[0].percentage = 100;
     r = card(p);
     assert.equal(r.weight, 0);
-    assert.equal(r.reset, null);
+    assert.equal(r.reset.type, 'week');
 });
 
 test('confirmed weekly recovery exits acceleration instead of keeping the replenishment boost', () => {
@@ -145,15 +140,19 @@ test('two overdrawn peers activate one healthy card carrier before it reaches 50
     assert.equal(plan(p).rows.some(r => r.accelerationReason === 'reset-card'), false);
 });
 
-test('nearest eligible depletion wins once, short-window protection or pending verification hands off', () => {
+test('nearest eligible depletion wins once; a real limit or pending verification hands off', () => {
     const p = pressuredPool();
     p.config.accounts[2].autoReset = true;
     p.accounts[2].resetCards = structuredClone(p.accounts[0].resetCards);
     const active = () => plan(p).rows.filter(r => r.accelerationReason === 'reset-card' && r.accelerationActive).map(r => r.name);
     assert.deepEqual(active(), ['Peer']);
+    // A carrier may spend the last of its window instead of being paused for it.
     p.usage[2].data.limits[0].percentage = 99;
     p.usage[2].data.limits[0].nextResetTime = NOW + 2 * H;
+    assert.deepEqual(active(), ['Peer']);
+    p.telemetry.Peer.limited = true;
     assert.deepEqual(active(), ['Card']);
+    p.telemetry.Peer.limited = false;
     p.usage[2].data.limits[0].percentage = 40;
     p.pendingResets = { Peer: { status: 'submitted' } };
     assert.equal(plan(p).rows.find(r => r.name === 'Peer').weight, 0);

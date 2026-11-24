@@ -8,6 +8,7 @@ const { concurrencyCeiling, resetAllowed } = require('./adaptation');
 const { httpGetJSON } = require('../lib/http');
 const { poolDemand } = require('./demand');
 const { boundChannelCapacity } = require('./channels');
+const { usedToday } = require('./card-usage');
 
 const LEASE_MS = 180000;
 let running = null, timer = null, snapshot = null, snapshotAt = 0, integrationError = null, activity = null;
@@ -240,6 +241,7 @@ function status() {
         resetCards.oldestCheckedAt = Math.min(resetCards.oldestCheckedAt || checkedAt, checkedAt);
         validCards(a, Date.now()).forEach(c => { resetCards[c.type]++; resetCards.total++; });
     });
+    resetCards.usedToday = usedToday(state.journal, Date.now());
     let appliedFallback = null;
     if (snapshot && Date.now() - snapshotAt < 90000) {
         appliedFallback = { paid: false, dilution: false };

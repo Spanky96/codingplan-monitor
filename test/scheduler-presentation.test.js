@@ -28,6 +28,15 @@ test('fallback summary distinguishes permission, standby, active and stale obser
     c.schedulerState.observedAt=Date.now()-91000;assert.match(c.schedulerFallbackStatus('paid').label,/待确认/);
     assert.match(c.schedulerSummaryHTML(),/重置卡总数/);assert.match(c.schedulerSummaryHTML(),/周卡 2 · 5h 卡 1/);
 });
+test('reset card total shows today\'s confirmed usage as remaining(used)',()=>{
+    const c=context();
+    assert.match(c.schedulerSummaryHTML(),/<strong>3<\/strong>/);
+    c.schedulerState.resetCards.usedToday={total:1,week:1,fiveHour:0};
+    assert.match(c.schedulerSummaryHTML(),/<strong>3\(1\)<\/strong>/);
+    assert.match(c.schedulerSummaryHTML(),/今日已用 1（周卡 1 · 5h 卡 0）/);
+    c.schedulerState.resetCards.checkedAccounts=0;
+    assert.match(c.schedulerSummaryHTML(),/<strong>—<\/strong>/);
+});
 test('peak indicator uses Beijing weekdays 14:00 inclusive to 18:00 exclusive, only in dashboard summary',()=>{
     const c=context();
     for(const [time,expected] of [['05:59:59',false],['06:00:00',true],['08:59:59',true],['09:00:00',true],['09:59:59',true],['10:00:00',false]]) {

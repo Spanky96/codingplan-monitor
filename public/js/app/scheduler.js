@@ -87,13 +87,17 @@ function schedulerSummaryHTML(showPeak) {
   var inventoryKnown = cards && cards.checkedAccounts > 0;
   var cardTip = inventoryKnown ? '周卡 ' + cards.week + ' · 5h 卡 ' + cards.fiveHour + '；已记录 ' + cards.checkedAccounts + '/' + cards.accounts + ' 账号（有效期内，含未授权使用）' : '尚未读取卡库存';
   if (inventoryKnown && cards.oldestCheckedAt) cardTip += '；最早采样 ' + new Date(cards.oldestCheckedAt).toLocaleString('zh-CN');
+  // 「4(1)」= 还剩 4 张，今日经本监控用掉 1 张；在官方控制台直接用掉的卡只会让剩余数变小。
+  var usedToday = cards && cards.usedToday || { total: 0, week: 0, fiveHour: 0 };
+  var usedSuffix = inventoryKnown && usedToday.total > 0 ? '(' + usedToday.total + ')' : '';
+  if (usedSuffix) cardTip += '；今日已用 ' + usedToday.total + '（周卡 ' + usedToday.week + ' · 5h 卡 ' + usedToday.fiveHour + '）';
   var synced = schedulerState.lastPush && schedulerState.lastPush.synced && Date.now() - schedulerState.lastPush.at < 90000;
   var label = !c.enabled ? '尚未启动' : !fresh ? '等待计划更新' : !synced ? '等待中转站确认' : '正在托管';
   return '<div class="schedule-heading"><span class="schedule-orbit ' + (c.enabled && fresh && synced ? 'on' : '') + '"></span><div><b>智能调度</b><small>' + label + '</small></div>'
     + (showPeak && isGlmPeakNow(new Date()) ? '<span class="schedule-peak">智谱高峰</span>' : '') + '</div>'
     + '<div class="schedule-metrics"><div><strong>' + (c.enabled && s ? s.active : '—') + '</strong><small>参与调度</small></div>'
     + '<div><strong>' + (c.enabled && s ? s.capacity : '—') + '</strong><small>总并发预算</small></div>'
-    + '<div data-tooltip="' + esc(cardTip) + '"><strong>' + (inventoryKnown ? cards.total : '—') + '</strong><small>重置卡总数' + (inventoryKnown && cards.checkedAccounts < cards.accounts ? ' · 已记录' : '') + '</small></div>'
+    + '<div data-tooltip="' + esc(cardTip) + '"><strong>' + (inventoryKnown ? cards.total + usedSuffix : '—') + '</strong><small>重置卡总数' + (inventoryKnown && cards.checkedAccounts < cards.accounts ? ' · 已记录' : '') + '</small></div>'
     + (showPeak ? schedulerTokenForecastHTML(Date.now()) : '')
     + '<div class="' + (paid.active ? 'schedule-alert' : '') + '" title="' + esc(paid.tip) + '"><strong>' + paid.label + '</strong><small>按量付费</small></div>'
     + '<div class="' + (dilution.active ? 'schedule-alert' : '') + '" title="' + esc(dilution.tip) + '"><strong>' + dilution.label + '</strong><small>备用分流</small></div></div>';
