@@ -7,7 +7,7 @@ var { checkAuth, isAuthed, isHiddenFromGuest } = require('../auth');
 var { clearCacheIndex, patchCachedResult } = require('../cache');
 var {
     makeHeaders, keysUrl, ipWhitelistUrl, riskInfoUrl, resetCardsUrl, resetCardUseUrl,
-    subscriptionListUrl, RESET_CARD_USE_TYPES, RISK_TIPS, RISK_TIPS_FALLBACK, decodeJwtUserType,
+    subscriptionListUrl, RESET_CARD_USE_TYPES, RISK_TIPS, RISK_TIPS_FALLBACK,
     parseGlmResetCards, persistGlmResetCards, isValidIp, uuidV4, withGlmAuthRetry
 } = require('../platforms/glm');
 
@@ -127,9 +127,11 @@ module.exports = function(app, options = {}) {
             var account = getAccount(req);
             if (!account) return res.status(404).json({ error: '未找到账号' });
             if (isHiddenFromGuest(req, account)) return res.status(404).json({ error: '未找到账号' });
-            // 仅智谱账号有风控接口;团队版(ENTERPRISE)不适用
+            // 仅智谱账号有风控接口;团队版不适用
             if ((account.platform || 'glm') !== 'glm') return res.json({ level: null, text: '', teamEdition: false });
-            if (decodeJwtUserType(account.authorization) !== 'PERSONAL') {
+            // 不用 JWT user_type 判断:部分个人订阅账号的 JWT 也标 ENTERPRISE,按 JWT 会把真正该提示的个人号
+            // 当成团队版跳过。与重置卡路由、weights.js 同一口径,以 accounts.teamEdition 为准
+            if (account.teamEdition) {
                 return res.json({ level: null, text: '', teamEdition: true });
             }
             var json = await withGlmAuthRetry(account, i, function(acc) {

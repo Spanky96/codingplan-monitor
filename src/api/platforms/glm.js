@@ -45,7 +45,7 @@ function resetCardUseUrl() {
 // 本地卡类型 → 官方 use 接口 resetType 取值(week 有官方抓包佐证;fiveHour 按列表字段 fiveHourResets 的命名惯例推断)
 var RESET_CARD_USE_TYPES = { fiveHour: 'FIVE_HOUR', week: 'WEEK' };
 
-// 风控等级 → 提示文案映射(data 值 1~8)
+// 风控等级 → 提示文案映射(data 值 1~9)
 var RISK_TIPS = {
     1: '检测到当前支付方式短期内多次购买套餐，存在异常使用风险，部分权益已被限制。详情参阅《订阅服务协议》',
     2: '检测到账号存在多人使用行为，部分订阅权益已被限制。恢复正常使用后，系统将在2天内自动解除。详情参阅《订阅服务协议》',
