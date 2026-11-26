@@ -2,6 +2,7 @@
 var schedulerState = null;
 var schedulerDraft = null;
 var schedulerBusy = false;
+var glmPolicyDraft = null;
 var scheduleGroupedView = localStorage.getItem('usage_schedule_grouped') === 'true';
 var SCHEDULE_MODES = { auto: '自动均衡', slow: '低速保护', burst: '高速消耗' };
 function schedulerModeLabel(policy, row) {
@@ -137,6 +138,7 @@ async function openScheduler(focusName) {
   try {
     schedulerState = await schedulerRequest();
     schedulerDraft = JSON.parse(JSON.stringify(schedulerState.config));
+    glmPolicyDraft = JSON.parse(JSON.stringify(schedulerState.glmModelPolicy));
     renderSchedulerForm();
     renderSchedulerSummary();
     if (focusName) {
@@ -174,7 +176,7 @@ function schedulerChannelRows(a, p, i) {
   return '<details class="schedule-channels"><summary>渠道用途 · ' + a.channels.length + '</summary>' + a.channels.map(function(ch) {
     var mode = p.channelModes[ch.id] || 'paused';
     return '<label><span title="' + esc(_privacyMode ? '渠道 ' + ch.id : ch.name) + '">' + esc(_privacyMode ? '渠道 ' + ch.id : ch.name)
-      + '</span><select aria-label="渠道 ' + ch.id + ' 用途" onchange="schedulerChannel(' + i + ',' + ch.id + ',this.value)">'
+      + (a.glmModelEligible && ch.glmFlash ? ' · Flash' : '') + '</span><select aria-label="渠道 ' + ch.id + ' 用途" onchange="schedulerChannel(' + i + ',' + ch.id + ',this.value)">'
       + [['native','直接调用'],['fallback','备用分流'],['paused','暂停']].map(function(x) {
         return '<option value="' + x[0] + '"' + (mode === x[0] ? ' selected' : '') + '>' + x[1] + '</option>';
       }).join('') + '</select></label>';
@@ -183,6 +185,38 @@ function schedulerChannelRows(a, p, i) {
 function schedulerChannel(i, id, value) {
   var p = schedulerPolicy(schedulerState.candidates[i]); p.channelModes[id] = value;
   schedulerField(i, 'channelModes', p.channelModes);
+}
+function glmPolicyForm() {
+  var draft = glmPolicyDraft, accounts = schedulerState.candidates.filter(function(a) { return a.glmModelEligible; });
+  if (!draft) return '';
+  var options = [['original', '原模型映射'], ['all', '全部使用 Flash'], ['auto', '按额度自动降级']];
+  return '<div class="schedule-guards"><h4>智谱 Coding Plan 模型</h4><label>策略<select onchange="toggleGLMPolicyMode(this.value)">'
+    + options.map(function(o) { return '<option value="' + o[0] + '"' + (draft.mode === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('')
+    + '</select></label><div id="glmPinnedAccounts"' + (draft.mode === 'auto' ? '' : ' hidden') + '><p class="schedule-help">勾选的账号固定使用 Flash。其余账号在全站紧张且周用量高出工作水位至少 10 个百分点时降级。</p>'
+    + accounts.map(function(a) { return '<label><input type="checkbox" value="' + esc(a.name) + '" onchange="togglePinnedGLM(this.value,this.checked)"' + (draft.flashAccounts.includes(a.name) ? ' checked' : '') + '>' + esc(schedulerName(a.name)) + '</label>'; }).join('')
+    + '</div><button class="btn-default" onclick="saveGLMPolicy()">应用模型策略</button><small id="glmPolicyApplied"></small></div>';
+}
+function toggleGLMPolicyMode(mode) {
+  glmPolicyDraft.mode = mode;
+  document.getElementById('glmPinnedAccounts').hidden = mode !== 'auto';
+}
+function togglePinnedGLM(name, checked) {
+  glmPolicyDraft.flashAccounts = glmPolicyDraft.flashAccounts.filter(function(n) { return n !== name; });
+  if (checked) glmPolicyDraft.flashAccounts.push(name);
+}
+async function saveGLMPolicy() {
+  if (schedulerBusy) return;
+  schedulerBusy = true;
+  try {
+    var policy = { mode: glmPolicyDraft.mode, flashAccounts: glmPolicyDraft.flashAccounts.filter(function(name) {
+      return schedulerState.candidates.some(function(a) { return a.glmModelEligible && a.name === name; });
+    }) };
+    schedulerState = await schedulerRequest('/glm-models', 'PUT', policy);
+    renderSchedulerDecisions(); renderSchedulerSummary();
+    var push = schedulerState.lastPush || {};
+    schedulerFeedback(push.synced ? '模型策略已同步，中转站执行 Flash 的渠道数为 ' + push.glm_flash_channels + '。' : '模型策略已保存，' + (push.message || '等待中转站同步。'), push.synced);
+  } catch (e) { schedulerFeedback(e.message); }
+  finally { schedulerBusy = false; }
 }
 function renderSchedulerForm() {
   var c = schedulerDraft;
@@ -206,7 +240,7 @@ function renderSchedulerForm() {
   }).join('');
   document.getElementById('schedulerBody').innerHTML = ''
     + '<div class="schedule-live" id="schedulerLiveSummary">' + schedulerSummaryHTML() + '</div>'
-    + '<div class="schedule-console"><section class="schedule-config"><div class="schedule-section-head"><h4>参与账号</h4><button class="schedule-link" onclick="schedulerSelectAll()">全选</button></div>'
+    + '<div class="schedule-console"><section class="schedule-config">' + glmPolicyForm() + '<div class="schedule-section-head"><h4>参与账号</h4><button class="schedule-link" onclick="schedulerSelectAll()">全选</button></div>'
     + '<div class="schedule-accounts">' + rows + '</div>'
     + '<div class="schedule-guards"><h4>备用策略</h4><label><input id="schedulePaid" type="checkbox" ' + (c.allowPaid ? 'checked' : '') + ' onchange="schedulerDraft.allowPaid=this.checked">允许按量付费兜底</label>'
     + '<label><input id="scheduleDilution" type="checkbox" ' + (c.allowDilution ? 'checked' : '') + ' onchange="schedulerDraft.allowDilution=this.checked">允许备用分流</label>'
@@ -269,6 +303,12 @@ async function saveScheduler(enabled) {
 function renderSchedulerDecisions() {
   var box = document.getElementById('scheduleDecisionRows');
   if (!box || !schedulerState) return;
+  var applied = document.getElementById('glmPolicyApplied');
+  if (applied) {
+    var channels = schedulerState.candidates.filter(function(a) { return a.glmModelEligible; }).flatMap(function(a) { return a.channels; });
+    var confirmed = channels.length && Date.now() - schedulerState.observedAt < 90000 && channels.every(function(ch) { return typeof ch.glmFlash === 'boolean'; });
+    applied.textContent = confirmed ? '中转站已启用 Flash：' + channels.filter(function(ch) { return ch.glmFlash; }).length + ' / ' + channels.length + ' 个套餐渠道' : '等待中转站回报模型策略';
+  }
   var plan = schedulerState.plan;
   document.getElementById('schedulePlanTime').textContent = plan ? timeAgo(plan.generatedAt) : '尚无计划';
   box.innerHTML = plan && plan.rows.length ? plan.rows.map(function(r) {

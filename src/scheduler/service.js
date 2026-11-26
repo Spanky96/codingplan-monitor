@@ -1,6 +1,7 @@
 'use strict';
 const config = require('../config');
 const store = require('./store');
+const glmModels = require('./glm-model-policy');
 const { plan, windowsOf, validCards, EXHAUSTED } = require('./planner');
 const { readAccounts } = require('../api/accounts');
 const cache = require('../api/cache');
@@ -52,7 +53,7 @@ function aggregate(accounts) {
         const key = matchKey(names, a.name);
         if (!key) return;
         const r = result[key] || (result[key] = { count: 0, current: 0, capacity: 0, limited: false, healthy: 0, channels: [] });
-        r.channels.push({ id: a.id, name: a.name, platform: a.platform, suggestedMode: a.suggested_scheduling_mode || 'native', mode: a.scheduling_mode || null,
+        r.channels.push({ glmFlash: a.glm_flash, id: a.id, name: a.name, platform: a.platform, suggestedMode: a.suggested_scheduling_mode || 'native', mode: a.scheduling_mode || null,
             current: a.current_concurrency || 0, capacity: a.concurrency || 0, weight: a.weight || 0, enabled: !!a.effective_schedulable });
         r.count++; r.current += a.current_concurrency || 0; r.capacity += a.concurrency || 0;
         r.limited = r.limited || !!a.rate_limited;
@@ -145,6 +146,7 @@ async function push() {
         const state = store.read();
         if (state.controllerId && (!envelope.data || envelope.data.controller_id !== state.controllerId)) throw new Error('中转站的权重源未指向本监控服务，请检查权重同步地址');
         if (state.config.enabled && (!envelope.data || envelope.data.protocol_version !== 2 || !envelope.data.managed)) throw new Error('中转站尚未接管所选账号，请检查名称匹配和权重同步地址');
+        if (state.glmModelPolicy && envelope.data?.glm_flash_version !== 1) throw new Error('中转站尚未确认智谱模型策略');
         lastPush = { synced: true, at: Date.now(), ...envelope.data };
         try { await telemetry(); } catch (_) { /* sync acknowledgment remains valid */ }
     } catch (e) { lastPush = { synced: false, at: Date.now(), message: e.message }; }
@@ -189,6 +191,9 @@ async function cycle({ preview = false } = {}) {
         try { await telemetry(); } catch (e) { integrationError = e.message; }
         const accounts = readAccounts();
         const names = new Set(state.config.accounts.map(p => p.name).concat(Object.keys(state.pendingResets || {})));
+        if (state.glmModelPolicy?.mode === 'auto') {
+            accounts.filter(a => glmModels.eligible(a, state.config)).forEach(a => names.add(a.name));
+        }
         const jobs = accounts.map((a, i) => ({ a, i })).filter(j => names.has(j.a.name) || supportsCardInventory(j.a, state.config.accounts));
         // Only two official requests in flight; background operation does not depend on an open browser.
         let cursor = 0;
@@ -258,12 +263,12 @@ function status() {
             }
         });
     }
-    return { tokenForecast: forecast.result(Date.now()), config: state.config, plan: state.plan || null, events: state.events, lastPush, integrationError,
+    return { glmModelPolicy: state.glmModelPolicy || glmModels.original, tokenForecast: forecast.result(Date.now()), config: state.config, plan: state.plan || null, events: state.events, lastPush, integrationError,
         appliedFallback, observedAt: snapshotAt, resetCards, channelCapacitySupported: !!(snapshot && snapshot.smart_channel_capacity_version >= 1),
         connected: !!snapshot && snapshot.smart_scheduler_version === 2 && Date.now() - snapshotAt < 90000,
         syncConfigured: !!config.schedulerSyncToken && config.relayEnabled,
         candidates: accounts.map((a, index) => ({ name: a.name, index, platform: a.platform || 'glm', teamEdition: !!a.teamEdition,
-            cards: (a.resetCards || {}).count || 0, capacity: live[a.name] || null, channels: (live[a.name] || {}).channels || [] })) };
+            glmModelEligible: glmModels.eligible(a, state.config), cards: (a.resetCards || {}).count || 0, capacity: live[a.name] || null, channels: (live[a.name] || {}).channels || [] })) };
 }
 function start() {
     if (timer) return;

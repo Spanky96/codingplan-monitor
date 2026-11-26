@@ -4,6 +4,7 @@ const { checkAuth } = require('../auth');
 const { readAccounts } = require('../accounts');
 const store = require('../../scheduler/store');
 const service = require('../../scheduler/service');
+const modelPolicy = require('../../scheduler/glm-model-policy');
 module.exports = function(app) {
     app.get('/api/scheduler', checkAuth, async function(req, res) {
         try {
@@ -17,6 +18,20 @@ module.exports = function(app) {
     app.post('/api/scheduler/preview', checkAuth, async function(req, res) {
         try { await service.telemetry(); await service.cycle({ preview: true }); res.json(service.status()); }
         catch (e) { res.status(502).json({ error: e.message }); }
+    });
+    app.put('/api/scheduler/glm-models', express.json(), checkAuth, async function(req, res) {
+        try {
+            const policy = modelPolicy.validate(req.body, readAccounts(), store.read().config);
+            const relay = await service.telemetry();
+            if (relay.glm_flash_version !== 1 || !relay.weight_sync_enabled) throw new Error('请先升级中转站并开启权重同步');
+            store.update(s => {
+                s.glmModelPolicy = policy;
+                if (!s.controllerId) s.controllerId = require('crypto').randomUUID();
+            });
+            store.event('glm-model', '智谱模型策略已保存：' + ({ all: '全部 Flash', auto: '自动降级', original: '原模型映射' })[policy.mode]);
+            await service.push();
+            res.json(service.status());
+        } catch (e) { res.status(400).json({ error: e.message }); }
     });
     app.put('/api/scheduler', express.json(), checkAuth, async function(req, res) {
         try {

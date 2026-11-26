@@ -131,3 +131,9 @@
 .schedule-channels>label { display:flex; align-items:center; gap:10px; margin-top:7px; }
 .schedule-channels>label>span { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .schedule-channels select { width:105px; flex:none; margin:0; }
+
+#glmPinnedAccounts:not([hidden]) { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:8px; margin:10px 0; }
+#glmPinnedAccounts p { grid-column:1/-1; }
+#glmPinnedAccounts label { overflow-wrap:anywhere; font-size:12px; }
+#glmPolicyApplied { display:block; color:var(--text-mute); margin-top:8px; }
+.schedule-guards button { margin-top:12px; }

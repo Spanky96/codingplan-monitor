@@ -5,10 +5,11 @@ var jsonParser = express.json();
 var config = require('../../config');
 var weights = require('../../weights');
 var { readAccounts, writeAccounts } = require('../accounts');
-var { buildWeightEntries, CACHE_TTL } = require('../cache');
+var { buildWeightEntries, getCachedLastKnown, CACHE_TTL } = require('../cache');
 var { checkAuth, clientIp, authBanState } = require('../auth');
 var privacy = require('../privacy');
 var scheduler = require('../../scheduler/service');
+var glmModelPolicy = require('../../scheduler/glm-model-policy');
 
 var PASSWORD = config.adminPassword;
 
@@ -81,6 +82,7 @@ module.exports = function(app) {
                 // for its old relay prefix until the administrator removes the policy.
                 Object.keys(controls).forEach(function(name) { result[name] = Math.round((controls[name].weight + controls[name].fallback_weight) * 10) / 10; });
                 res.json({ version: 2, controller_id: state.controllerId || '', weights: result, controls: controls,
+                    glm_flash: glmModelPolicy.targets(state, accounts, getCachedLastKnown, generatedAt),
                     recoveries: state.verifiedResets || {}, generated_at: new Date(generatedAt).toISOString() });
             } else if (wantDetail) {
                 res.json({ weights: result, detail: detail, generatedAt: generatedAt, cacheTtlMs: CACHE_TTL });
