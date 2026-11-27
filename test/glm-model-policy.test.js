@@ -18,17 +18,21 @@ function decisions(mode, used, changes = {}, overrides = {}) {
 test('all covers unmanaged coding plans, manual pins apply in auto and original releases both', () => {
     assert.deepEqual(decisions('all', 0, {config:{...state.config,enabled:false},plan:null}), {managed:true,unmanaged:true});
     assert.deepEqual(decisions('original', 100), {managed:false,unmanaged:false});
-    assert.deepEqual(decisions('auto', 15, {plan:{...state.plan,summary:{pressure:false}}}), {managed:false,unmanaged:true});
+    assert.deepEqual(decisions('auto', 15, {plan:{...state.plan,summary:{pressure:false}}}), {managed:true,unmanaged:true});
 });
-test('automatic Flash requires both overall pressure and a ten percentage point weekly lead', () => {
-    assert.equal(decisions('auto', 9.99).managed, false);
-    assert.equal(decisions('auto', 10).managed, true);
-    assert.equal(decisions('auto', 12, {plan:{...state.plan,summary:{pressure:false,fallbackAssessment:{quotaPressure:true}}}}).managed,true);
+test('automatic Flash uses the account’s exact five-point lead, including without pool pressure', () => {
+    for (const changes of [{}, {plan:null}, {config:{...state.config,enabled:false}}]) {
+        assert.equal(decisions('auto', 0, changes).managed, false);
+        assert.equal(decisions('auto', 4.999, changes).managed, false);
+        assert.equal(decisions('auto', 5, changes).managed, true);
+        assert.equal(decisions('auto', 22, changes).managed, true);
+    }
 });
-test('retain last automatic model with stale plan, expired quota or another account’s sample', () => {
-    for (const overrides of [{cachedAt:now-600001}, {name:'unmanaged'}, {success:false}, {data:{limits:[]}}])
-        assert.equal(decisions('auto', 15, {}, overrides).managed,null);
-    assert.equal(decisions('auto', 15, {plan:{...state.plan,generatedAt:now-180000}}).managed,null);
+test('missing, expired and misattributed readings use Flash until a healthy sample confirms recovery', () => {
+    for (const overrides of [{cachedAt:now-600001}, {name:'unmanaged'}, {success:false}, {data:{limits:[]}},
+        {data:{limits:[{unit:6,percentage:1,nextResetTime:now-1}]}}])
+        assert.equal(decisions('auto', 0, {}, overrides).managed,true);
+    assert.equal(decisions('auto', 2, {plan:{...state.plan,generatedAt:now-180000}}).managed,false);
 });
 test('validate model controls independently of concurrency policy', () => {
     assert.deepEqual(validate({mode:'auto',flashAccounts:['unmanaged','unmanaged']},accounts,state.config), {mode:'auto',flashAccounts:['unmanaged']});

@@ -190,14 +190,16 @@ async function cycle({ preview = false } = {}) {
     if (running) return running;
     running = (async () => {
         let state = store.read();
-        if (!state.config.enabled && !preview && !Object.keys(state.pendingResets || {}).length) return null;
+        if (!state.config.enabled && !preview && state.glmModelPolicy?.mode !== 'auto' && !Object.keys(state.pendingResets || {}).length) return null;
         try { await telemetry(); } catch (e) { integrationError = e.message; }
         const accounts = readAccounts();
-        const names = new Set(state.config.accounts.map(p => p.name).concat(Object.keys(state.pendingResets || {})));
+        const names = new Set(Object.keys(state.pendingResets || {}));
+        if (preview || state.config.enabled) state.config.accounts.forEach(p => names.add(p.name));
         if (state.glmModelPolicy?.mode === 'auto') {
             accounts.filter(a => glmModels.eligible(a, state.config)).forEach(a => names.add(a.name));
         }
-        const jobs = accounts.map((a, i) => ({ a, i })).filter(j => names.has(j.a.name) || supportsCardInventory(j.a, state.config));
+        const checkInventory = state.config.enabled || preview;
+        const jobs = accounts.map((a, i) => ({ a, i })).filter(j => names.has(j.a.name) || (checkInventory && supportsCardInventory(j.a, state.config)));
         // Only two official requests in flight; background operation does not depend on an open browser.
         let cursor = 0;
         await Promise.all([0, 1].map(async () => {
@@ -209,15 +211,19 @@ async function cycle({ preview = false } = {}) {
                 }
                 const p = state.config.accounts.find(p => p.name === a.name);
                 const cardInterval = resetAllowed(p, a) ? 600000 : 1800000;
-                if (supportsCardInventory(a, state.config) && Date.now() - Math.max(cardChecks[a.name] || 0, ((a.resetCards || {}).checkedAt || 0)) > cardInterval) {
+                if (checkInventory && supportsCardInventory(a, state.config) && Date.now() - Math.max(cardChecks[a.name] || 0, ((a.resetCards || {}).checkedAt || 0)) > cardInterval) {
                     cardChecks[a.name] = Date.now();
                     try { await require('./reset-cards').list(a, i); } catch (_) { /* no assumed cards */ }
                 }
             }
         }));
         await confirmPending();
+        if (!preview && !store.read().config.enabled) {
+            await push();
+            return null;
+        }
         let next = persistPlan();
-        if (!preview && store.read().config.enabled) {
+        if (!preview) {
             // One reset at a time; the journal and pending confirmation prevent duplicate spending.
             const candidate = next.rows.filter(r => r.reset).sort((a, b) => b.resetDecision.benefit - a.resetDecision.benefit)[0];
             const confirmed = lastPush && lastPush.synced && lastPush.protocol_version === 2 && Date.now() - lastPush.at < LEASE_MS;
@@ -231,7 +237,7 @@ async function cycle({ preview = false } = {}) {
                 next = persistPlan();
             }
             await push();
-        } else if (!preview && Object.keys(state.pendingResets || {}).length) await push();
+        }
         return next;
     })().finally(() => { running = null; });
     return running;

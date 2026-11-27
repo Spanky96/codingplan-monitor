@@ -3,7 +3,7 @@
 // Pure planning: no network, clock or persistence. All percentages are 0..100.
 const { channelCounts } = require('./channels');
 const { scoreAccount } = require('../weights');
-const { concurrencyCeiling, resetAllowed, quotaLink, weeklyPace, chooseMode, chooseConcurrency } = require('./adaptation');
+const { concurrencyCeiling, resetAllowed, quotaLink, weeklyPace, FLASH_LEAD, chooseMode, chooseConcurrency } = require('./adaptation');
 const { fastBurn, targetWeights } = require('./priority');
 const { assessFallback } = require('./fallback');
 const { allocateBackupCapacity, assignBackupWeights } = require('./backup-capacity');
@@ -66,6 +66,8 @@ function plan({ config, accounts, usage, telemetry = {}, previous = {}, previous
         const short = ws.find(w => w.type === 'fiveHour');
         const week = ws.find(w => w.type === 'week');
         const routes = channelCounts(policy, live);
+        const freshUsage = cached && cached.name === policy.name && cached.success && cached.cachedAt &&
+            now - cached.cachedAt <= config.staleAfterSeconds * 1000 && cached.cachedAt <= now + 60000;
         const cards = resetAllowed(policy, account) ? validCards(account, now) : [];
         const reasons = [];
         let reset = null;
@@ -79,6 +81,7 @@ function plan({ config, accounts, usage, telemetry = {}, previous = {}, previous
             observedFallbackConcurrency: live?.channels ? live.channels.filter(c=>routes.modes[String(c.id)]==='fallback').reduce((n,c)=>n+(c.current||0),0) : routes.fallback ? live.current || 0 : 0,
             cachedAt: cached && cached.cachedAt, reset: null, channelModes: routes.modes, nativeChannels: routes.native, fallbackChannels: routes.fallback };
         row.quotaLink = quotaLink(short, week);
+        if (policy.role === 'primary' && routes.native && freshUsage) row.weeklyPace = weeklyPace(week, now);
         ['short', 'weekly'].forEach(label => {
             const w = label === 'short' ? short : week;
             const oldRate = old[label + 'RatePerHour'];
@@ -101,8 +104,7 @@ function plan({ config, accounts, usage, telemetry = {}, previous = {}, previous
         if (policy.paused) return stop('paused', '管理员已在智能调度中暂停此账号');
         if (policy.role === 'paid' && !config.allowPaid) return stop('standby', '按量付费兜底关闭');
         if (!routes.native && !routes.fallback) return stop('paused', '全部渠道已暂停');
-        if (!(policy.role === 'paid' && policy.unmetered) && (!cached || cached.name !== account.name || !cached.success || !cached.cachedAt ||
-            now - cached.cachedAt > config.staleAfterSeconds * 1000 || cached.cachedAt > now + 60000)) {
+        if (!(policy.role === 'paid' && policy.unmetered) && !freshUsage) {
             return stop('stale', '用量数据缺失或过期，等待刷新后恢复');
         }
         const genericScore = !ws.length && (policy.role === 'standard' || policy.role === 'dilution') && cached && cached.success ? scoreAccount(cached) : null;
@@ -113,11 +115,8 @@ function plan({ config, accounts, usage, telemetry = {}, previous = {}, previous
         if (ws.some(w => Number.isFinite(w.resetAt) && w.resetAt <= now && cached.cachedAt <= w.resetAt)) {
             return stop('refreshing', '已到重置时刻，等待官方额度确认');
         }
-        if (policy.role === 'primary' && routes.native) {
-            row.weeklyPace = weeklyPace(week, now);
-            // A manual burn runs ahead by request; it is no sign that the pool is overdrawn.
-            if (row.weeklyPace && row.weeklyPace.workAheadPct >= 20 && policy.mode !== 'burst') atRisk++;
-        }
+        // A manual burn runs ahead by request; it is no sign that the pool is overdrawn.
+        if (row.weeklyPace?.workAheadPct >= 20 && policy.mode !== 'burst') atRisk++;
         let shortFactor = 1, forecastNotice = '';
         if (short) {
             const hours = Number.isFinite(short.resetAt) ? clamp((short.resetAt - now) / HOUR, 1 / 60, 5) : 5;
@@ -182,12 +181,19 @@ function plan({ config, accounts, usage, telemetry = {}, previous = {}, previous
         const reasons = row.reasons;
         const allocation = chooseConcurrency({ policy, routes, short, shortFactor, old, live, now, fast,
             effectiveMode: row.accelerationActive === false ? 'auto' : row.effectiveMode, recentDemand: demandNow });
+        // A deeply overdrawn week or a busy short window should not attract
+        // concurrent spillover each time the higher-weight accounts fill up.
+        const lead = row.weeklyPace?.workAheadPct;
+        if (policy.mode === 'auto' && lead >= FLASH_LEAD && (lead >= 20 || short?.used >= 60 || allocation.shortProtection)) {
+            allocation.concurrency = 1;
+            allocation.concurrencyReason = '周额度超前，保留一个承接槽位';
+        }
         if (forecastNotice && !fast) reasons.push(forecastNotice);
         if (fast && paceFactor < 0.6) reasons.push('高速账号不做 5h 保护：窗口用尽后由周卡或自然重置恢复');
         if (shortFactor < 0.6) { state = 'protecting'; reasons.push('5 小时额度偏紧，降低流量并保留并发分摊'); }
         if (week) {
             let hours = Number.isFinite(week.resetAt) ? clamp((week.resetAt - now) / HOUR, 1, 168) : 168;
-            if (hours < 24 && week.used < 90) {
+            if (hours < 24 && week.used < 90 && !(policy.mode === 'auto' && lead > 0)) {
                 state = 'draining'; reasons.push('周额度临近重置，优先消耗剩余额度');
             }
             // Required remaining burn rate, normalized to a full week's average rate.

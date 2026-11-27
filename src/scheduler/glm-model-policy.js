@@ -1,7 +1,7 @@
 'use strict';
 const { windowsOf } = require('./planner');
 const { accountType } = require('./account-types');
-const { weeklyWaterline } = require('./adaptation');
+const { weeklyLead, FLASH_LEAD } = require('./adaptation');
 
 const original = { mode: 'original', flashAccounts: [] };
 
@@ -18,19 +18,12 @@ function validate(settings, accounts, config) {
 }
 
 function automatic(state, account, index, getUsage, now) {
-    const { config, plan } = state;
-    // Automatic pressure comes from the running scheduler. Without fresh telemetry
-    // or quota, retain the last model on the relay until the next confirmed sample.
-    if (!config.enabled) return false;
-    if (!plan || !plan.summary || !plan.rows.some(r => r.matched) || plan.generatedAt < (state.configChangedAt || 0) ||
-        now - plan.generatedAt >= 180000 || now < plan.generatedAt) return null;
-    if (!plan.summary.pressure && !plan.summary.fallbackAssessment?.quotaPressure) return false;
     const u = getUsage(index);
-    if (!u || !u.success || u.name !== account.name || !(u.cachedAt <= now && now - u.cachedAt <= config.staleAfterSeconds * 1000)) return null;
+    // Permit the original mapping only on a trustworthy sample from this account.
+    if (!u || !u.success || u.name !== account.name || !(u.cachedAt <= now && now - u.cachedAt <= state.config.staleAfterSeconds * 1000)) return true;
     const week = windowsOf(u).find(w => w.type === 'week');
-    if (!week || !Number.isFinite(week.used) || week.used < 0 || week.used > 100 ||
-        !(week.resetAt > now && week.resetAt <= now + 7 * 86400000)) return null;
-    return week.used - weeklyWaterline(week.resetAt, now) >= 10;
+    const lead = weeklyLead(week, now);
+    return lead == null || lead >= FLASH_LEAD || week.used >= 100;
 }
 
 function targets(state, accounts, getUsage, now) {

@@ -17,6 +17,14 @@ function weeklyWaterline(resetAt, now) {
     return total ? clamp(100 * elapsed / total, 0, 100) : clamp(100 * (now - start) / (168 * HOUR), 0, 100);
 }
 
+const FLASH_LEAD = 5;
+
+function weeklyLead(week, now) {
+    if (!week || !Number.isFinite(week.used) || week.used < 0 ||
+        !(week.resetAt > now && week.resetAt <= now + 168 * HOUR)) return null;
+    return week.used - weeklyWaterline(week.resetAt, now);
+}
+
 function concurrencyCeiling(policy) {
     return Math.max(1, Math.min(policy.maxConcurrency || 1, policy.role === 'primary' ? 4 : 64));
 }
@@ -35,16 +43,16 @@ function quotaLink(short, week) {
         canFinishInCurrentShortWindow: needed <= Math.max(0, 100 - short.used) };
 }
 function weeklyPace(week, now) {
-    if (!week || !Number.isFinite(week.resetAt)) return null;
+    const lead = weeklyLead(week, now);
+    if (lead == null) return null;
     const hours = (week.resetAt - now) / HOUR;
-    if (!(hours > 0 && hours <= 168)) return null;
     const elapsed = 168 - hours, expected = elapsed / 168 * 100;
-    const waterline = weeklyWaterline(week.resetAt, now);
+    const waterline = week.used - lead;
     const rate = elapsed >= 1 ? week.used / elapsed : 0;
     const finish = rate > 0 ? Math.max(0, 100 - week.used) / rate : Infinity;
     const tenth = n => Math.round(n * 10) / 10;
     return { expectedPct: tenth(expected), waterlinePct: tenth(waterline), aheadPct: tenth(week.used - expected),
-        workAheadPct: tenth(week.used - waterline), projectedGapHours: Number.isFinite(finish) ? tenth(hours - finish) : null };
+        workAheadPct: lead, projectedGapHours: Number.isFinite(finish) ? tenth(hours - finish) : null };
 }
 function chooseMode({ policy, account, cards, short, week, shortFactor, old, live, now, recentDemand, weekMinHours, pace, atRisk }) {
     const requested = policy.mode || 'auto';
@@ -52,6 +60,7 @@ function chooseMode({ policy, account, cards, short, week, shortFactor, old, liv
     if (requested !== 'auto' || policy.role !== 'primary') return result;
     const hold = reason => ({ ...result, modeReason: reason });
     if (!pace) return hold('缺少可信的周窗口，暂不自动加速');
+    if (pace.workAheadPct > 0) return hold('周用量超出工作水位 ' + Number(pace.workAheadPct.toFixed(1)) + ' 个百分点，降低分流权重');
     const hours = (week.resetAt - now) / HOUR, elapsed = 168 - hours;
     const meanRate = elapsed >= 1 ? week.used / elapsed : 0;
     const remaining = Math.max(0, 100 - week.used);
@@ -164,4 +173,4 @@ function chooseConcurrency({ policy, routes, short, shortFactor, old, live, now,
         plannedAt: now, shortProtection: protection, concurrencyReason: reason,
         concurrencyCeiling: ceiling, limited: !!live.limited };
 }
-module.exports = { concurrencyCeiling, resetAllowed, quotaLink, weeklyWaterline, weeklyPace, chooseMode, chooseConcurrency };
+module.exports = { concurrencyCeiling, resetAllowed, quotaLink, weeklyWaterline, weeklyLead, FLASH_LEAD, weeklyPace, chooseMode, chooseConcurrency };

@@ -2,10 +2,10 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { plan } = require('../src/scheduler/planner');
-const H = 3600000, NOW = Date.parse('2026-11-17T10:53:00+08:00');
+const H = 3600000, NOW = Date.parse('2026-11-20T17:00:00+08:00');
 
-// glm1's reported failure: 98% weekly usage, ample 5h quota, two valid
-// weekly cards, versus a balanced account near its short-window reset.
+// Friday before the weekend, the work waterline reaches 98% while a
+// natural reset is still two days away. A card holder can stay on budget.
 function fixture() {
     const accounts = [{ name: 'Card', platform: 'glm', resetCards: { checkedAt: NOW,
         cards: [1, 2].map(recordId => ({ type: 'week', recordId, expireTime: NOW + 200 * H })) } },
@@ -17,7 +17,7 @@ function fixture() {
         usage: accounts.map((a, i) => ({ name: a.name, platform: 'glm', success: true, cachedAt: NOW,
             data: { limits: [{ type: 'TOKENS_LIMIT', unit: 3, percentage: i === 0 ? 6 : 45,
                 nextResetTime: NOW + (i === 0 ? 3.5 : 0.1) * H },
-            { type: 'TOKENS_LIMIT', unit: 6, percentage: i === 0 ? 98 : 40, nextResetTime: NOW + 75 * H }] } })),
+            { type: 'TOKENS_LIMIT', unit: 6, percentage: i === 0 ? 98 : 76, nextResetTime: NOW + (i === 0 ? 48 : 75) * H }] } })),
         telemetry: { Card: { count: 1, current: 0, capacity: 3 }, Balanced: { count: 1, current: 2, capacity: 2 } } };
 }
 const card = p => plan(p).rows.find(r => r.name === 'Card');
@@ -34,7 +34,7 @@ test('card-backed 98% week outranks a healthy balanced account without spending 
 });
 
 test('approaching weekly exhaustion does not progressively starve an authorized card-backed burst', () => {
-    const p = fixture(), shares = [72, 85, 95, 98, 99.99].map(used => {
+    const p = fixture(), shares = [90, 93, 95, 98].map(used => {
         p.usage[0].data.limits[1].percentage = used;
         const r = card(p);
         assert.equal(r.accelerationActive, true);
@@ -116,9 +116,10 @@ test('confirmed weekly recovery exits acceleration instead of keeping the replen
 function pressuredPool() {
     const p = fixture();
     // Two peers have already spent more than one working day's budget ahead.
-    p.usage[0].data.limits[1].percentage = 44;
-    p.usage[0].data.limits[1].nextResetTime = NOW + 110 * H;
+    p.usage[0].data.limits[1].percentage = 40;
+    p.usage[0].data.limits[1].nextResetTime = NOW + 120 * H;
     p.usage[1].data.limits[1].percentage = 90;
+    p.usage[1].data.limits[1].nextResetTime = NOW + 110 * H;
     p.accounts.push({ name: 'Peer' });
     p.config.accounts.push({ ...p.config.accounts[1], name: 'Peer' });
     p.usage.push({ ...structuredClone(p.usage[1]), name: 'Peer' });
@@ -140,19 +141,19 @@ test('two overdrawn peers activate one healthy card carrier before it reaches 50
     assert.equal(plan(p).rows.some(r => r.accelerationReason === 'reset-card'), false);
 });
 
-test('nearest eligible depletion wins once; a real limit or pending verification hands off', () => {
+test('a healthy carrier retains priority over an overdrawn card holder; limits and verification still apply', () => {
     const p = pressuredPool();
     p.config.accounts[2].autoReset = true;
     p.accounts[2].resetCards = structuredClone(p.accounts[0].resetCards);
     const active = () => plan(p).rows.filter(r => r.accelerationReason === 'reset-card' && r.accelerationActive).map(r => r.name);
-    assert.deepEqual(active(), ['Peer']);
-    // A carrier may spend the last of its window instead of being paused for it.
+    assert.deepEqual(active(), ['Card']);
+    // A nearly spent 5h window cannot promote the overdrawn peer.
     p.usage[2].data.limits[0].percentage = 99;
     p.usage[2].data.limits[0].nextResetTime = NOW + 2 * H;
-    assert.deepEqual(active(), ['Peer']);
-    p.telemetry.Peer.limited = true;
     assert.deepEqual(active(), ['Card']);
-    p.telemetry.Peer.limited = false;
+    p.telemetry.Card.limited = true;
+    assert.deepEqual(active(), []);
+    p.telemetry.Card.limited = false;
     p.usage[2].data.limits[0].percentage = 40;
     p.pendingResets = { Peer: { status: 'submitted' } };
     assert.equal(plan(p).rows.find(r => r.name === 'Peer').weight, 0);

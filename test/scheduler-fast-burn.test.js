@@ -68,28 +68,27 @@ test('upstream limits still halve a burn account, which then recovers one step a
     assert.equal(row(p, 'Burn').concurrency, 3);
 });
 
-test('a week card carrier is no longer held back by its own 5h window or a fast-burn forecast', () => {
+test('an overdrawn card holder respects its 5h window and fast-burn forecast', () => {
     const p = fixture();
     const r = row(p, 'Carrier');
-    assert.equal(r.accelerationActive, true);
-    assert.equal(r.fast, true);
-    assert.equal(r.state, 'burst');
-    assert.equal(r.shortProtection, 0);
-    assert.equal(r.concurrency, 4);
+    assert.equal(r.effectiveMode, 'auto');
+    assert.equal(r.fast, false);
+    assert.equal(r.concurrency, 1);
+    assert.match(r.reasons.join(' '), /周用量超出/);
     p.previous = { Carrier: { cachedAt: NOW - 60000, shortUsed: 70, shortRatePerHour: 120, shortRateSamples: 3,
         shortResetAt: p.usage[1].data.limits[0].nextResetTime + 10000 } };
     const forecast = row(p, 'Carrier');
     assert.ok(forecast.shortForecastHours < 0.75);
-    assert.equal(forecast.accelerationActive, true);
-    assert.equal(forecast.concurrency, 4);
-    assert.doesNotMatch(forecast.reasons.join('；'), /提前收紧|额度偏紧/);
+    assert.equal(forecast.fast, false);
+    assert.equal(forecast.concurrency, 1);
+    assert.match(forecast.reasons.join('；'), /提前收紧/);
 });
 
 test('accounts without a burn request or a card keep 5h protection', () => {
     const p = fixture();
     const paced = row(p, 'Balanced');
     assert.equal(paced.state, 'protecting');
-    assert.equal(paced.concurrency, 2);
+    assert.equal(paced.concurrency, 1);
     p.usage[2].data.limits[0].percentage = 98;
     assert.equal(row(p, 'Balanced').concurrency, 1);
     // Surplus catch-up is automatic: its measured fast-burn guard stays.
@@ -105,7 +104,7 @@ test('accounts without a burn request or a card keep 5h protection', () => {
 
 test('other primaries yield to a burn account while it can still take traffic', () => {
     const p = fixture(['Burn', 'Balanced', 'Late', 'Fresh']);
-    [['Balanced', 70, 72], ['Late', 51, 158], ['Fresh', 40, 100]].forEach(([name, week, hours], i) => {
+    [['Balanced', 38, 72], ['Late', 51, 158], ['Fresh', 24, 100]].forEach(([name, week, hours], i) => {
         Object.assign(p.usage[i + 1].data.limits[0], { percentage: 20 });
         Object.assign(p.usage[i + 1].data.limits[1], { percentage: week, nextResetTime: NOW + hours * H });
     });
@@ -124,14 +123,15 @@ test('other primaries yield to a burn account while it can still take traffic', 
     paused.usage[0].data.limits[0].percentage = 71;
     for (const name of ['Balanced', 'Late', 'Fresh']) {
         assert.equal(exhausted.find(r => r.name === name).weight, row(paused, name).weight);
-        assert.ok(exhausted.find(r => r.name === name).weight > 2.6);
+        assert.ok(exhausted.find(r => r.name === name).weight > 0);
         assert.doesNotMatch(exhausted.find(r => r.name === name).reasons.join('；'), /高速账号优先承接/);
     }
 });
 
 test('a manual burn is not counted as evidence that the pool is overdrawn', () => {
     const p = fixture(['Burn', 'Balanced', 'Holder']);
-    p.usage[2].data.limits[1].percentage = 40;
+    p.usage[2].data.limits[1].percentage = 34;
+    p.usage[2].data.limits[1].nextResetTime = NOW + 100 * H;
     const result = plan(p);
     assert.equal(result.summary.weeklyRiskAccounts, 1); // Balanced only.
     assert.equal(result.rows.some(r => r.accelerationReason === 'reset-card'), false);

@@ -11,22 +11,31 @@ function fixture() {
             {type:'TOKENS_LIMIT',unit:6,percentage:66,nextResetTime:NOW+96*H}]}}],
         telemetry:{A:{count:1,current:1,capacity:2,limited:false}} };
 }
+function withinBudget() {
+    const p = fixture();
+    const now = Date.parse('2026-11-20T17:00:00+08:00');
+    p.now = p.usage[0].cachedAt = p.accounts[0].resetCards.checkedAt = now;
+    p.accounts[0].resetCards.cards[0].expireTime = now + 200*H;
+    p.usage[0].data.limits[0].nextResetTime = now + 3*H;
+    Object.assign(p.usage[0].data.limits[1], {percentage: 77, nextResetTime: now + 75*H});
+    return p;
+}
 const row=p=>plan(p).rows[0];
-test('glm1 case enters automatic high consumption at full concurrency and never resets 66% quota',()=>{
+test('an overdrawn week cannot trigger card-backed acceleration or an early reset',()=>{
     const p=fixture(), r=row(p);
-    assert.equal(r.mode,'auto'); assert.equal(r.effectiveMode,'burst'); assert.equal(r.modeSource,'automatic');
-    assert.equal(r.concurrency,4); assert.equal(r.reset,null); assert.ok(r.weeklyPace.projectedGapHours>48);
-    assert.match(r.reasons[0],/自动高速/);
+    assert.equal(r.effectiveMode,'auto'); assert.equal(r.fast,false); assert.equal(r.concurrency,1);
+    assert.equal(r.reset,null); assert.ok(r.weeklyPace.projectedGapHours>48);
+    assert.match(r.reasons.join(' '),/超出工作水位/);
 });
 test('manual low ceilings remain binding even during automatic acceleration',()=>{
-    const p=fixture();p.config.accounts[0].maxConcurrency=1;assert.equal(row(p).concurrency,1);
+    const p=withinBudget();p.config.accounts[0].maxConcurrency=1;assert.equal(row(p).concurrency,1);
     p.config.accounts[0].maxConcurrency=2;assert.equal(row(p).concurrency,2);
     p.config.accounts[0].maxConcurrency=64;assert.ok(row(p).concurrency<=4);assert.equal(row(p).maxConcurrency,4);
 });
-test('glm1 87% five-hour usage near natural reset resumes acceleration without using a weekly card',()=>{
-    const p=fixture();
-    Object.assign(p.usage[0].data.limits[0],{percentage:87,nextResetTime:NOW+4*60000});
-    p.usage[0].data.limits[1].percentage=95;
+test('an on-budget card holder resumes acceleration near the short reset',()=>{
+    const p=withinBudget();
+    Object.assign(p.usage[0].data.limits[0],{percentage:87,nextResetTime:p.now+4*60000});
+    p.usage[0].data.limits[1].percentage=77;
     p.previous={A:{effectiveMode:'burst',modeSource:'automatic',accelerationActive:false,shortProtection:1,adaptiveConcurrency:3}};
     const r=row(p);
     assert.equal(r.effectiveMode,'burst');assert.equal(r.accelerationActive,true);
@@ -36,16 +45,16 @@ test('glm1 87% five-hour usage near natural reset resumes acceleration without u
     p.telemetry.A.limited=false;p.config.accounts[0].mode='slow';assert.equal(row(p).state,'slow');
 });
 test('a card-backed carrier keeps accelerating in the last minutes of its window, but exhaustion still stops scheduling',()=>{
-    const p=fixture();
-    Object.assign(p.usage[0].data.limits[0],{percentage:99,nextResetTime:NOW+2*60000});
+    const p=withinBudget();
+    Object.assign(p.usage[0].data.limits[0],{percentage:99,nextResetTime:p.now+2*60000});
     let r=row(p);assert.equal(r.accelerationActive,true);assert.equal(r.shortProtection,0);
     p.usage[0].data.limits[0].percentage=100;
     r=row(p);assert.equal(r.state,'exhausted');assert.equal(r.weight,0);assert.equal(r.reset,null);
-    p.usage[0].data.limits[0].percentage=87;p.usage[0].data.limits[0].nextResetTime=NOW+2*H;
+    p.usage[0].data.limits[0].percentage=87;p.usage[0].data.limits[0].nextResetTime=p.now+2*H;
     r=row(p);assert.equal(r.accelerationActive,true);assert.equal(r.state,'burst');assert.equal(r.concurrency,4);
 });
 test('5h factor slightly below one does not halve normal concurrency',()=>{
-    const p=fixture();p.config.accounts[0].autoReset=false;
+    const p=withinBudget();p.config.accounts[0].autoReset=false;
     assert.equal(row(p).concurrency,2);assert.equal(row(p).effectiveMode,'auto');
 });
 test('no permission, missing weekly stock, stale inventory and idle demand prevent card-backed promotion',()=>{
@@ -53,11 +62,11 @@ test('no permission, missing weekly stock, stale inventory and idle demand preve
         p=>p.config.accounts[0].autoReset=false,
         p=>p.accounts[0].resetCards.cards=[],
         p=>p.accounts[0].resetCards.cards[0].type='fiveHour',
-        p=>p.accounts[0].resetCards.checkedAt=NOW-16*60000,
+        p=>p.accounts[0].resetCards.checkedAt=p.now-16*60000,
         p=>p.telemetry.A.current=0,
         p=>p.accounts[0].teamEdition=true,
-        p=>p.accounts[0].resetCards.cards[0].expireTime=NOW+H
-    ]) { const p=fixture();change(p);assert.equal(row(p).effectiveMode,'auto'); }
+        p=>p.accounts[0].resetCards.cards[0].expireTime=p.now+H
+    ]) { const p=withinBudget();change(p);assert.equal(row(p).effectiveMode,'auto'); }
 });
 test('near natural reset, upcoming replenishment and healthy weekly pace hold auto mode',()=>{
     for (const change of [
@@ -129,10 +138,10 @@ test('near-deadline surplus drains without a card, while glm13 waits for natural
     assert.equal(row(p).effectiveMode,'auto');
 });
 test('automatic high consumption exits when the last card is spent or weekly usage resets',()=>{
-    const p=fixture();p.previous={A:row(p)};
+    const p=withinBudget();p.previous={A:row(p)};
     p.accounts[0].resetCards.cards=[];assert.equal(row(p).effectiveMode,'auto');
-    p.accounts[0].resetCards.cards=[{type:'week',recordId:2,expireTime:NOW+200*H}];
-    p.usage[0].data.limits[1].percentage=0;p.usage[0].data.limits[1].nextResetTime=NOW+168*H;
+    p.accounts[0].resetCards.cards=[{type:'week',recordId:2,expireTime:p.now+200*H}];
+    p.usage[0].data.limits[1].percentage=0;p.usage[0].data.limits[1].nextResetTime=p.now+168*H;
     assert.equal(row(p).effectiveMode,'auto');
 });
 test('manual overrides stay explicit and low-speed permission never spends a card',()=>{
@@ -167,7 +176,7 @@ test('glm1 waits for 5h recovery with weekly quota left, then burns the remainde
         short.percentage=0;short.nextResetTime=p.now+5*H;
         p.usage[0].cachedAt=p.now;p.accounts[0].resetCards.checkedAt=p.now;
         const resumed=row(p);
-        assert.equal(resumed.effectiveMode,'burst');assert.notEqual(resumed.accelerationActive,false);
+        assert.equal(resumed.effectiveMode,mode);assert.notEqual(resumed.accelerationActive,false);
         assert.ok(resumed.weight>0);assert.equal(resumed.reset,null);
         p.previous={A:resumed};short.percentage=60;week.percentage=99;
         assert.equal(row(p).reset,null);
@@ -176,25 +185,25 @@ test('glm1 waits for 5h recovery with weekly quota left, then burns the remainde
     }
 });
 test('a single busy reading cannot increase concurrency; consecutive busy samples can',()=>{
-    const p=fixture();p.config.accounts[0].autoReset=false;p.telemetry.A.current=2;
-    p.previous={A:{adaptiveConcurrency:2,concurrency:2,adjustedAt:NOW-300000}};
+    const p=withinBudget();p.config.accounts[0].autoReset=false;p.telemetry.A.current=2;
+    p.previous={A:{adaptiveConcurrency:2,concurrency:2,adjustedAt:p.now-300000}};
     assert.equal(row(p).concurrency,2);
-    p.previous.A={...row(p),busySince:NOW-120000,plannedAt:NOW-30000};assert.equal(row(p).concurrency,3);
-    p.previous.A.plannedAt=NOW-180000;assert.equal(row(p).concurrency,2);
+    p.previous.A={...row(p),busySince:p.now-120000,plannedAt:p.now-30000};assert.equal(row(p).concurrency,3);
+    p.previous.A.plannedAt=p.now-180000;assert.equal(row(p).concurrency,2);
 });
 test('saturation uses the executed capacity, avoiding a stale adaptive denominator',()=>{
-    const p=fixture();p.config.accounts[0].autoReset=false;p.telemetry.A.current=1;
-    p.previous={A:{adaptiveConcurrency:1,concurrency:1,busySince:NOW-120000,plannedAt:NOW-30000,adjustedAt:NOW-180000}};
+    const p=withinBudget();p.config.accounts[0].autoReset=false;p.telemetry.A.current=1;
+    p.previous={A:{adaptiveConcurrency:1,concurrency:1,busySince:p.now-120000,plannedAt:p.now-30000,adjustedAt:p.now-180000}};
     assert.equal(row(p).concurrency,2);
 });
 test('burst cannot bypass a rate-limit recovery period',()=>{
-    const p=fixture();p.previous={A:{adaptiveConcurrency:4,concurrency:4,adjustedAt:NOW-180000}};
+    const p=withinBudget();p.previous={A:{adaptiveConcurrency:4,concurrency:4,adjustedAt:p.now-180000}};
     p.telemetry.A.limited=true;const backed=row(p);assert.equal(backed.concurrency,2);
     p.previous={A:backed};p.telemetry.A.limited=false;p.now+=30000;
     assert.equal(row(p).concurrency,2);assert.match(row(p).concurrencyReason,/恢复观察/);
 });
 test('quota protection has separate enter and release thresholds',()=>{
-    const p=fixture();p.config.accounts[0].autoReset=false;
+    const p=withinBudget();p.config.accounts[0].autoReset=false;
     p.usage[0].data.limits[0].percentage=98;const protectedRow=row(p);assert.equal(protectedRow.concurrency,1);
     p.previous={A:protectedRow};p.usage[0].data.limits[0].percentage=65;
     assert.equal(row(p).shortProtection,1);
@@ -216,7 +225,7 @@ test('V2 percentages stay authoritative without guessed cross-window token ratio
 });
 test('official accelerated usage triggers proactive short-window protection after three samples',()=>{
     // Without a weekly card the account only balances: its window is still paced.
-    const p=fixture();p.config.accounts[0].autoReset=false;p.previous={A:{cachedAt:NOW-60000,shortUsed:42,shortRatePerHour:100,shortRateSamples:3,shortResetAt:p.usage[0].data.limits[0].nextResetTime+10}};
+    const p=withinBudget();p.config.accounts[0].autoReset=false;p.previous={A:{cachedAt:p.now-60000,shortUsed:42,shortRatePerHour:100,shortRateSamples:3,shortResetAt:p.usage[0].data.limits[0].nextResetTime+10}};
     const r=row(p);assert.ok(r.shortForecastHours<0.75);assert.equal(r.effectiveMode,'auto');assert.ok(r.concurrency<=2);assert.match(r.reasons.join('；'),/提前收紧/);
     p.previous.A.shortRateSamples=0;assert.equal(row(p).shortForecastHours,undefined);
 });

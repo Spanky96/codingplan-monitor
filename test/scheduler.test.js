@@ -22,6 +22,7 @@ test('healthy accounts share load; paid and dilution remain hard-disabled', () =
 });
 test('weekly deadline increases priority and 5h scarcity reduces it', () => {
     const p = fixture(); p.usage[0].data.limits[1].nextResetTime = NOW + 8 * H;
+    p.usage[1].data.limits[1].nextResetTime = NOW + 72 * H;
     assert.ok(row(p, 'A').weight > row(p, 'B').weight);
     p.usage[0].data.limits[0].percentage = 98;
     assert.ok(row(p, 'A').weight < row(p, 'B').weight);
@@ -80,6 +81,7 @@ test('AIMD backs off on rate limits and grows only after a stable busy interval'
 });
 test('all alias channels receive capacity while respecting the configured pool ceiling', () => {
     const p = fixture(); p.telemetry.A.count = 3;
+    p.usage[0].data.limits[1].percentage = 0;
     assert.ok(row(p, 'A').concurrency >= 3);
     assert.ok(row(p, 'A').concurrency <= 8);
 });

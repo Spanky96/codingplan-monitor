@@ -20,15 +20,16 @@
       return (limits || []).some(function(l) { return l && l.type === 'CREDIT_LIMIT'; }) ? 'credit' : 'token';
     }
 
-    // [startMs,endMs] 内落在「周一~周五 08:00–18:00」(本地时间)的毫秒数
+    // [startMs,endMs] 内落在「周一~周五 08:00–18:00」(北京时间)的毫秒数
     function glmWorkMsBetween(startMs, endMs) {
       if (!(endMs > startMs)) return 0;
-      var d0 = new Date(startMs);
+      var offset = 8 * 3600000, day = 86400000;
+      var first = Math.floor((startMs + offset) / day) * day - offset;
       var total = 0;
       for (var i = 0; i < GLM_WORK_SCAN_DAYS; i++) {
-        var midnight = new Date(d0.getFullYear(), d0.getMonth(), d0.getDate() + i).getTime(); // DST 安全的次日零点
+        var midnight = first + i * day;
         if (midnight > endMs) break;
-        var dow = new Date(midnight).getDay();
+        var dow = new Date(midnight + offset).getUTCDay();
         if (dow < 1 || dow > 5) continue; // 周末不推进
         var wStart = midnight + GLM_WORK_START_HOUR * 3600000;
         var wEnd = midnight + GLM_WORK_END_HOUR * 3600000;
@@ -44,7 +45,7 @@
       if (isNaN(resetMs)) return -1;
       var startMs = resetMs - periodMs;
       var now = Date.now();
-      if (now <= startMs) return -1; // 与现有行为一致:未到窗口不画水位线
+      if (now < startMs) return -1; // 与现有行为一致:未到窗口不画水位线
       var totalWork = glmWorkMsBetween(startMs, resetMs);
       if (totalWork <= 0) return Math.min(100, ((Math.min(now, resetMs) - startMs) / periodMs) * 100); // 窗口整段不在工作时段 → 退回线性
       var doneWork = glmWorkMsBetween(startMs, Math.min(now, resetMs));

@@ -205,7 +205,7 @@ function glmPolicyForm() {
   var options = [['original', '原模型映射'], ['all', '全部使用 Flash'], ['auto', '按额度自动降级']];
   return '<div class="schedule-guards"><h4>智谱 Coding Plan 模型</h4><label>策略<select onchange="toggleGLMPolicyMode(this.value)">'
     + options.map(function(o) { return '<option value="' + o[0] + '"' + (draft.mode === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('')
-    + '</select></label><div id="glmPinnedAccounts"' + (draft.mode === 'auto' ? '' : ' hidden') + '><p class="schedule-help">勾选的账号固定使用 Flash。其余账号在全站紧张且周用量高出工作水位至少 10 个百分点时降级。</p>'
+    + '</select></label><div id="glmPinnedAccounts"' + (draft.mode === 'auto' ? '' : ' hidden') + '><p class="schedule-help">勾选的账号固定使用 Flash。其余账号的周用量高出工作水位至少 5 个百分点时使用 Flash，低于门槛时按原模型映射调用。额度耗尽或周用量待确认时使用 Flash。</p>'
     + accounts.map(function(a) { return '<label><input type="checkbox" value="' + esc(a.name) + '" onchange="togglePinnedGLM(this.value,this.checked)"' + (draft.flashAccounts.includes(a.name) ? ' checked' : '') + '>' + esc(schedulerName(a.name)) + '</label>'; }).join('')
     + '</div><button class="btn-default" onclick="saveGLMPolicy()">应用模型策略</button><small id="glmPolicyApplied"></small></div>';
 }
@@ -355,6 +355,7 @@ function renderSchedulerDecisions() {
       + esc(schedulerName(r.name)) + '</b><span class="schedule-state">' + esc(r.state === 'burst' && r.modeSource === 'automatic' ? '自动高速' : SCHEDULE_STATES[r.state] || r.state) + '</span></div><p>' + esc(r.reasons.join('；')) + '</p>'
       + '<div class="schedule-allocation"><i style="width:' + Math.max(0, Math.min(100, r.share)) + '%"></i></div><small>目标份额 ' + r.share + '% · 并发 ' + r.concurrency + '/' + r.maxConcurrency
       + (r.shortUsed == null ? '' : ' · 5h 已用 ' + Math.round(r.shortUsed) + '%') + (r.weeklyUsed == null ? '' : ' · 周已用 ' + Math.round(r.weeklyUsed) + '%')
+      + (r.weeklyPace ? ' · 周水位 ' + r.weeklyPace.waterlinePct + '%' : '')
       + (r.quotaLink ? ' · 一轮 5h ≈ ' + Math.round(r.quotaLink.shortToWeekRatio * 100) + '% 周额度' : '')
       + '</small></div><div class="schedule-weight"><strong>' + r.weight.toFixed(1) + '</strong><small>权重</small></div></div>';
   }).join('') : '<div class="schedule-empty">尚无调度计划</div>';
