@@ -18,6 +18,13 @@ function timestamp(value) {
     }
     return Date.parse(value);
 }
+function paidBalance(usage) {
+    const data = usage?.success && usage.data;
+    if (!data) return null;
+    const balance = data.balance ?? data.me?.balance;
+    if (balance == null && data.platformGiftBalance == null) return null;
+    return Number(balance ?? 0) + Number(data.platformGiftBalance ?? 0);
+}
 function windowsOf(usage) {
     if (!usage || !usage.success || !usage.data) return [];
     if ((usage.platform || 'glm') === 'glm') {
@@ -55,7 +62,7 @@ function plan({ config, accounts, usage, telemetry = {}, previous = {}, previous
         const cached = usage[index];
         const old = previous[policy.name] || {};
         const live = telemetry[policy.name];
-        const ws = windowsOf(cached);
+        const ws = windowsOf(cached?.name === policy.name ? cached : null);
         const short = ws.find(w => w.type === 'fiveHour');
         const week = ws.find(w => w.type === 'week');
         const routes = channelCounts(policy, live);
@@ -69,7 +76,7 @@ function plan({ config, accounts, usage, telemetry = {}, previous = {}, previous
             shortResetAt: short && Number.isFinite(short.resetAt) ? short.resetAt : null,
             weeklyResetAt: week && Number.isFinite(week.resetAt) ? week.resetAt : null,
             observedConcurrency: live ? live.current : null, matched: live ? live.count : 0,
-            observedFallbackConcurrency: live ? (live.channels || []).filter(c=>routes.modes[String(c.id)]==='fallback').reduce((n,c)=>n+(c.current||0),0) : 0,
+            observedFallbackConcurrency: live?.channels ? live.channels.filter(c=>routes.modes[String(c.id)]==='fallback').reduce((n,c)=>n+(c.current||0),0) : routes.fallback ? live.current || 0 : 0,
             cachedAt: cached && cached.cachedAt, reset: null, channelModes: routes.modes, nativeChannels: routes.native, fallbackChannels: routes.fallback };
         row.quotaLink = quotaLink(short, week);
         ['short', 'weekly'].forEach(label => {
@@ -98,7 +105,7 @@ function plan({ config, accounts, usage, telemetry = {}, previous = {}, previous
             now - cached.cachedAt > config.staleAfterSeconds * 1000 || cached.cachedAt > now + 60000)) {
             return stop('stale', '用量数据缺失或过期，等待刷新后恢复');
         }
-        const genericScore = !ws.length && policy.role === 'standard' && cached && cached.success ? scoreAccount(cached) : null;
+        const genericScore = !ws.length && (policy.role === 'standard' || policy.role === 'dilution') && cached && cached.success ? scoreAccount(cached) : null;
         if (policy.role !== 'paid' && ((!ws.length && !genericScore) || ws.some(w => !Number.isFinite(w.used) || w.used < 0))) {
             return stop('stale', '缺少可信的额度窗口');
         }
@@ -134,10 +141,10 @@ function plan({ config, accounts, usage, telemetry = {}, previous = {}, previous
             }
             return Object.assign(stop('exhausted', '额度已用尽，等待自然重置'), { reset });
         }
-        if (policy.role === 'paid' && !policy.unmetered) {
-            const d = cached.data || {};
-            if (d.balance == null && d.platformGiftBalance == null) return stop('stale', '未提供余额数据，需允许无余额数据的按量占位才可兜底');
-            if (!(Number(d.balance || 0) + Number(d.platformGiftBalance || 0) > 0)) return stop('exhausted', '按量账号无可用余额');
+        if (policy.role === 'paid') {
+            const balance = paidBalance(cached?.name === account.name ? cached : null);
+            if (balance == null && !policy.unmetered) return stop('stale', '未提供余额数据，需允许无余额数据的按量占位才可兜底');
+            if (balance != null && !(balance > 0)) return stop('exhausted', '按量账号无可用余额');
         }
         if (genericScore && (genericScore.exhausted || !(genericScore.weight > 0))) return stop('exhausted', '额度已用尽');
         ready.push({ row, policy, account, cards, short, week, shortFactor, forecastNotice, old, live, routes, genericScore });
@@ -291,4 +298,4 @@ function plan({ config, accounts, usage, telemetry = {}, previous = {}, previous
     } };
 }
 
-module.exports = { plan, windowsOf, validCards, timestamp, EXHAUSTED };
+module.exports = { paidBalance, plan, windowsOf, validCards, timestamp, EXHAUSTED };

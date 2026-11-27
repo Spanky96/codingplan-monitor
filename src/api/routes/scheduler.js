@@ -35,7 +35,7 @@ module.exports = function(app) {
     });
     app.put('/api/scheduler', express.json(), checkAuth, async function(req, res) {
         try {
-            const config = store.validate(req.body, readAccounts());
+            let config = store.validate(req.body, readAccounts(), store.read().config);
             if (config.enabled) {
                 const snapshot = await service.telemetry();
                 if (snapshot.smart_scheduler_version !== 2) throw new Error('请先部署支持智能调度协议的中转站版本');
@@ -43,6 +43,8 @@ module.exports = function(app) {
                 if (!service.status().syncConfigured) throw new Error('请在两个服务配置相同的 SCHEDULER_SYNC_TOKEN');
             }
             store.update(s => {
+                // Telemetry yields to account edits; validate the inventory at commit time.
+                config = store.validate(req.body, readAccounts(), s.config);
                 s.config = config; s.configChangedAt = Date.now();
                 if (!s.controllerId) s.controllerId = require('crypto').randomUUID();
             });
@@ -52,7 +54,7 @@ module.exports = function(app) {
                 await service.push();
                 service.cycle().catch(() => {});
             } else await service.push();
-            res.json(service.status());
+            res.json({ ...service.status(), removedAccountCount: req.body.accounts.length - config.accounts.length });
         } catch (e) { res.status(400).json({ error: e.message }); }
     });
 };

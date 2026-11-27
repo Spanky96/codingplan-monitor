@@ -1,5 +1,6 @@
 'use strict';
 
+const { eligible } = require('./glm-model-policy');
 const { windowsOf } = require('./planner');
 const { beijingMidnight } = require('../lib/util');
 const HOUR = 3600000, MINUTE = 60000;
@@ -72,7 +73,7 @@ function recordSample(histories, name, point) {
 function createForecast() {
     const histories = new Map();
     let latest = null;
-    function observe(accounts, usage, policies, snapshot, now) {
+    function observe(accounts, usage, config, snapshot, now) {
         const at = Date.parse(snapshot.generated_at), end = cutoff(now);
         if (now >= end || !Number.isFinite(at) || at > now + MINUTE || now - at > 5 * MINUTE ||
             !(Date.parse(snapshot.day_start) <= now && now < Date.parse(snapshot.day_end))) return;
@@ -82,7 +83,7 @@ function createForecast() {
             const name = names.find(n => typeof r.account_name === 'string' && r.account_name.startsWith(n));
             if (name && Number.isFinite(r.total_tokens) && r.total_tokens >= 0) totals.set(name, (totals.get(name) || 0) + r.total_tokens);
         }
-        const coding = accounts.filter(a => (a.platform || 'glm') === 'glm' && !policies.some(p => p.name === a.name && p.role === 'paid'));
+        const coding = accounts.filter(a => eligible(a, config));
         for (const name of histories.keys()) if (!coding.some(a => a.name === name)) histories.delete(name);
         const entries = [], groups = new Map();
         for (const account of coding) {

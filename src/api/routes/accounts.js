@@ -5,6 +5,14 @@ var { readAccounts, writeAccounts } = require('../accounts');
 var { checkAuth } = require('../auth');
 var { clearCache } = require('../cache');
 
+function saveInventory(accounts) {
+    writeAccounts(accounts);
+    clearCache();
+    if (require('../../scheduler/store').pruneRemoved(accounts)) {
+        require('../../scheduler/service').push().catch(() => {});
+    }
+}
+
 module.exports = function(app) {
     app.get('/api/accounts', checkAuth, function(req, res) {
         try { res.json(readAccounts()); } catch (err) { res.status(500).json({ error: err.message }); }
@@ -14,8 +22,7 @@ module.exports = function(app) {
         try {
             var accounts = readAccounts();
             accounts.push(req.body);
-            writeAccounts(accounts);
-            clearCache();
+            saveInventory(accounts);
             res.json({ success: true, index: accounts.length - 1 });
         } catch (err) { res.status(500).json({ error: err.message }); }
     });
@@ -33,8 +40,7 @@ module.exports = function(app) {
                 req.body.zcode = accounts[idx].zcode;
             }
             accounts[idx] = req.body;
-            writeAccounts(accounts);
-            clearCache();
+            saveInventory(accounts);
             res.json({ success: true });
         } catch (err) { res.status(500).json({ error: err.message }); }
     });
@@ -42,8 +48,7 @@ module.exports = function(app) {
     app.put('/api/accounts', jsonParser, checkAuth, function(req, res) {
         try {
             if (!Array.isArray(req.body)) return res.status(400).json({ error: '参数必须是数组' });
-            writeAccounts(req.body);
-            clearCache();
+            saveInventory(req.body);
             res.json({ success: true });
         } catch (err) { res.status(500).json({ error: err.message }); }
     });
@@ -54,8 +59,7 @@ module.exports = function(app) {
             var idx = parseInt(req.params.index);
             if (!accounts[idx]) return res.status(404).json({ error: '未找到账号' });
             accounts.splice(idx, 1);
-            writeAccounts(accounts);
-            clearCache();
+            saveInventory(accounts);
             res.json({ success: true });
         } catch (err) { res.status(500).json({ error: err.message }); }
     });

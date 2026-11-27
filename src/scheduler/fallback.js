@@ -7,7 +7,7 @@ function assessFallback({ rows, previous = {}, config, now, recentDemand, load }
     const ready = primary.filter(r => r.raw > 0 && !r.limited);
     const capacity = ready.reduce((sum, r) => sum + r.concurrency, 0);
     const assigned = rows.filter(r => r.role === 'primary' || r.role === 'paid' || r.fallbackChannels).reduce((sum, r) =>
-        sum + (r.role === 'standard' ? r.observedFallbackConcurrency || 0 : r.observedConcurrency || 0), 0);
+        sum + (r.role === 'primary' || r.role === 'paid' ? r.observedConcurrency || 0 : r.observedFallbackConcurrency || 0), 0);
     const current = load && now-load.at>=0 && now-load.at<90000 ? Math.max(assigned,load.inFlight) : assigned;
     const consecutive = previous.at && now >= previous.at && now - previous.at <= 90000;
     const old = consecutive ? previous : {};

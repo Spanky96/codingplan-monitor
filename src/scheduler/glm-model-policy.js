@@ -1,11 +1,12 @@
 'use strict';
 const { windowsOf } = require('./planner');
+const { accountType } = require('./account-types');
 const { weeklyWaterline } = require('./adaptation');
 
 const original = { mode: 'original', flashAccounts: [] };
 
 function eligible(account, config) {
-    return (account.platform || 'glm') === 'glm' && !config.accounts.some(p => p.name === account.name && p.role === 'paid');
+    return (account.platform || 'glm') === 'glm' && accountType(config, account) !== 'paid';
 }
 
 function validate(settings, accounts, config) {

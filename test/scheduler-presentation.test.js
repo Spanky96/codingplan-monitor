@@ -88,3 +88,23 @@ test('weekly bar textures only the pre-today accumulation; today’s share stays
     assert.doesNotMatch(dead, /seg-charge/); assert.match(dead, /fill-exhausted/); assert.match(dead, /seg-past/);
     assert.doesNotMatch(c.renderLimitRow({ ...l, unit: 3, percentage: 100 }, d), /seg-charge/);
 });
+
+test('changing an account type keeps deselected accounts out and respects mixed and paused channels', () => {
+    const c = context();
+    c.schedulerRenderAtScroll = () => {};
+    c.schedulerCandidates = [
+        { name: 'Existing', platform: 'other', channels: [
+            { id: 1, suggestedMode: 'native' }, { id: 2, suggestedMode: 'fallback' }, { id: 3, suggestedMode: 'native' }
+        ] },
+        { name: 'Independent', platform: 'other', channels: [{ id: 4, suggestedMode: 'native' }] }
+    ];
+    c.schedulerDraft = { accountTypes: { Existing: 'subscription', Independent: 'subscription' },
+        accounts: [{ name: 'Existing', role: 'standard', channelModes: { 1: 'native', 2: 'native', 3: 'paused' } }] };
+    c.schedulerType(0, 'dilution');
+    assert.deepEqual(c.schedulerDraft.accounts[0].channelModes, { 1: 'native', 2: 'fallback', 3: 'paused' });
+    c.schedulerType(1, 'dilution');
+    assert.equal(c.schedulerDraft.accounts.length, 1);
+    assert.equal(c.schedulerPolicy(c.schedulerCandidates[1]).channelModes[4], 'fallback');
+    c.schedulerState.config = c.schedulerDraft;
+    assert.equal(c.scheduleCategory(c.schedulerCandidates[1]), 'reserve');
+});

@@ -9,7 +9,7 @@ function sample(f, now, values) {
         { type: a.type || 'TOKENS_LIMIT', unit: 3, percentage: a.short, ...(a.shortQuota ? { usage: a.shortQuota, currentValue: a.shortQuota * a.short / 100 } : {}), nextResetTime: a.shortReset || T + 4 * H },
         { type: a.type || 'TOKENS_LIMIT', unit: 6, percentage: a.week, ...(a.weekQuota ? { usage: a.weekQuota, currentValue: a.weekQuota * a.week / 100 } : {}), nextResetTime: a.weekReset || T + 48 * H }
     ] } }));
-    f.observe(accounts, usage, values.filter(a => a.paid).map(a => ({ name: a.name, role: 'paid' })), {
+    f.observe(accounts, usage, { accounts: values.filter(a => a.paid).map(a => ({ name: a.name, role: 'paid' })) }, {
         generated_at: new Date(now), day_start: new Date(midnight).toISOString(), day_end: new Date(midnight + DAY).toISOString(),
         rows: values.map(a => ({ account_name: a.name + '-relay', total_tokens: a.tokens || 0 }))
     }, now);

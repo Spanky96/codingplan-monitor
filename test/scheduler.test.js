@@ -205,3 +205,30 @@ test('unselected personal accounts never receive controller decisions', () => {
     const p = fixture(); p.config.accounts = p.config.accounts.filter(x=>x.name !== 'A');
     assert.equal(row(p, 'A'), undefined);
 });
+
+test('B keeps a mixed provider’s native traffic independent from the GLM downgrade gate', () => {
+    const p = withNativeMini();
+    p.config.accounts[3].role = 'dilution';
+    p.telemetry.Mini.channels[0].current = 8;
+    p.telemetry.Mini.current = 8;
+    const planned = plan(p);
+    assert.ok(planned.rows.find(r => r.name === 'Mini').nativeWeight > 0);
+    assert.equal(planned.rows.find(r => r.name === 'Mini').fallbackWeight, 0);
+    assert.ok(planned.summary.fallbackAssessment.demand < 8);
+    p.telemetry.Mini.channels[0].current = p.telemetry.Mini.current = 0;
+    p.config.allowDilution = true;
+    for (const u of p.usage.slice(0, 2)) u.data.limits[0].percentage = 100;
+    assert.ok(row(p, 'Mini').fallbackWeight > 0);
+});
+
+test('permission for missing balance never reopens an empty prepaid account', () => {
+    const p = fixture();
+    for (const u of p.usage.slice(0, 2)) u.data.limits[0].percentage = 100;
+    p.config.allowPaid = true;
+    p.config.accounts[2].unmetered = true;
+    p.usage[2].data = { balance: 0 };
+    assert.equal(row(p, 'Paid').state, 'exhausted');
+    p.config.accounts[2].unmetered = false;
+    p.usage[2].data = { me: { balance: 2 } };
+    assert.ok(row(p, 'Paid').weight > 0);
+});

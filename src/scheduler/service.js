@@ -2,13 +2,14 @@
 const config = require('../config');
 const store = require('./store');
 const glmModels = require('./glm-model-policy');
-const { plan, windowsOf, validCards, EXHAUSTED } = require('./planner');
+const { plan, paidBalance, windowsOf, validCards, EXHAUSTED } = require('./planner');
 const { readAccounts } = require('../api/accounts');
 const cache = require('../api/cache');
 const { concurrencyCeiling, resetAllowed } = require('./adaptation');
 const { httpGetJSON } = require('../lib/http');
 const { poolDemand } = require('./demand');
-const { boundChannelCapacity } = require('./channels');
+const { accountType, roleFor, editableConfig } = require('./account-types');
+const { boundChannelCapacity, defaultChannelMode } = require('./channels');
 const { usedToday } = require('./card-usage');
 
 const LEASE_MS = 180000;
@@ -21,11 +22,10 @@ async function sampleForecast() {
     if (!config.relayEnabled || Date.now() >= cutoff(Date.now())) return;
     const snapshot = await require('../api/account-tokens').snapshot();
     const accounts = readAccounts();
-    forecast.observe(accounts, accounts.map((_, i) => cache.getCachedLastKnown(i)), store.read().config.accounts, snapshot, Date.now());
+    forecast.observe(accounts, accounts.map((_, i) => cache.getCachedLastKnown(i)), store.read().config, snapshot, Date.now());
 }
-function supportsCardInventory(account, policies) {
-    return (account.platform || 'glm') === 'glm' && !account.teamEdition &&
-        !policies.some(p => p.name === account.name && p.role === 'paid');
+function supportsCardInventory(account, config) {
+    return !account.teamEdition && glmModels.eligible(account, config);
 }
 function matchKey(names, name) {
     return names.filter(n => n && name.startsWith(n)).sort((a, b) => b.length - a.length)[0];
@@ -114,9 +114,12 @@ function controls(state = store.read(), now = Date.now()) {
         const index = accounts.findIndex(a => a.name === p.name), u = cache.getCachedLastKnown(index);
         const unmetered = p.role === 'paid' && p.unmetered;
         const validUsage = unmetered || (u && u.name === p.name && u.success && now - u.cachedAt <= state.config.staleAfterSeconds * 1000);
-        const exhausted = !unmetered && windowsOf(u).some(w => w.used >= EXHAUSTED);
+        const currentUsage = u?.name === p.name ? u : null;
+        const balance = p.role === 'paid' ? paidBalance(currentUsage) : null;
+        const paidBlocked = p.role === 'paid' && (balance == null ? !unmetered : !(balance > 0));
+        const exhausted = paidBlocked || windowsOf(currentUsage).some(w => w.used >= EXHAUSTED);
         const pending = (state.pendingResets || {})[p.name];
-        const usable = fresh && r && validUsage && !exhausted && !pending;
+        const usable = index >= 0 && fresh && r && validUsage && !exhausted && !pending;
         const concurrency = fresh && r ? Math.min(r.concurrency, concurrencyCeiling(p)) : 1;
         return [p.name, { weight: usable ? (r.nativeWeight == null ? r.weight : r.nativeWeight) : 0, fallback_weight: usable ? (r.fallbackWeight || 0) : 0,
             ...(r && r.channelConcurrency ? { channel_concurrency: boundChannelCapacity(r.channelModes || {}, r.channelConcurrency, usable ? concurrency : 0) } : {}),
@@ -194,7 +197,7 @@ async function cycle({ preview = false } = {}) {
         if (state.glmModelPolicy?.mode === 'auto') {
             accounts.filter(a => glmModels.eligible(a, state.config)).forEach(a => names.add(a.name));
         }
-        const jobs = accounts.map((a, i) => ({ a, i })).filter(j => names.has(j.a.name) || supportsCardInventory(j.a, state.config.accounts));
+        const jobs = accounts.map((a, i) => ({ a, i })).filter(j => names.has(j.a.name) || supportsCardInventory(j.a, state.config));
         // Only two official requests in flight; background operation does not depend on an open browser.
         let cursor = 0;
         await Promise.all([0, 1].map(async () => {
@@ -206,7 +209,7 @@ async function cycle({ preview = false } = {}) {
                 }
                 const p = state.config.accounts.find(p => p.name === a.name);
                 const cardInterval = resetAllowed(p, a) ? 600000 : 1800000;
-                if (supportsCardInventory(a, state.config.accounts) && Date.now() - Math.max(cardChecks[a.name] || 0, ((a.resetCards || {}).checkedAt || 0)) > cardInterval) {
+                if (supportsCardInventory(a, state.config) && Date.now() - Math.max(cardChecks[a.name] || 0, ((a.resetCards || {}).checkedAt || 0)) > cardInterval) {
                     cardChecks[a.name] = Date.now();
                     try { await require('./reset-cards').list(a, i); } catch (_) { /* no assumed cards */ }
                 }
@@ -238,7 +241,7 @@ function status() {
     // Inventory includes unselected accounts and accounts without spending permission.
     // Exclude expired cards; expose coverage so a missing snapshot is never called zero.
     const resetCards = { total: 0, week: 0, fiveHour: 0, checkedAccounts: 0, accounts: 0, oldestCheckedAt: null };
-    accounts.filter(a => supportsCardInventory(a, state.config.accounts)).forEach(a => {
+    accounts.filter(a => supportsCardInventory(a, state.config)).forEach(a => {
         resetCards.accounts++;
         const checkedAt = (a.resetCards || {}).checkedAt;
         if (!checkedAt) return;
@@ -254,8 +257,9 @@ function status() {
             const key = matchKey(accounts.map(a => a.name), a.name);
             const account = accounts.find(a => a.name === key);
             const p = state.config.accounts.find(p => p.name === key);
-            const role = p ? p.role : account && (account.platform === 'telecomjs' || /智云/.test(account.name) ? 'paid' : (account.platform || 'glm') === 'glm' ? 'primary' : 'standard');
-            const mode = a.scheduling_mode || (p && p.channelModes ? p.channelModes[String(a.id)] : role === 'standard' ? a.suggested_scheduling_mode : 'native');
+            if (!account) return;
+            const role = p ? p.role : roleFor(accountType(state.config, account), account);
+            const mode = a.scheduling_mode || (p && p.channelModes ? p.channelModes[String(a.id)] : defaultChannelMode(role, a.suggested_scheduling_mode, (live[key]?.channels || []).some(c => c.suggestedMode === 'fallback')));
             const active = a.effective_schedulable == null ? a.schedulable : a.effective_schedulable;
             if (active && (a.weight == null || a.weight > 0)) {
                 if (role === 'paid') appliedFallback.paid = true;
@@ -263,7 +267,7 @@ function status() {
             }
         });
     }
-    return { glmModelPolicy: state.glmModelPolicy || glmModels.original, tokenForecast: forecast.result(Date.now()), config: state.config, plan: state.plan || null, events: state.events, lastPush, integrationError,
+    return { glmModelPolicy: state.glmModelPolicy || glmModels.original, tokenForecast: forecast.result(Date.now()), config: editableConfig(state.config, accounts), plan: state.plan || null, events: state.events, lastPush, integrationError,
         appliedFallback, observedAt: snapshotAt, resetCards, channelCapacitySupported: !!(snapshot && snapshot.smart_channel_capacity_version >= 1),
         connected: !!snapshot && snapshot.smart_scheduler_version === 2 && Date.now() - snapshotAt < 90000,
         syncConfigured: !!config.schedulerSyncToken && config.relayEnabled,

@@ -21,7 +21,7 @@ function allocateBackupCapacity({ rows, assessment, previous, telemetry, config,
         // the reserve precisely when it is needed. Actual near-exhaustion and
         // upstream rate limits still constrain it.
         r.backupQuotaOverride = !!(enabled && config.allowDilution && assessment.capacityGap > 0 &&
-            r.role === 'standard' && r.fallbackChannels && r.raw > 0 && r.effectiveMode !== 'slow' &&
+            (r.role === 'standard' || r.role === 'dilution') && r.fallbackChannels && r.raw > 0 && r.effectiveMode !== 'slow' &&
             r.shortUsed != null && r.shortUsed < 85 && (r.weeklyUsed == null || r.weeklyUsed < 95));
         const quotaLimit = r.backupQuotaOverride ? r.maxConcurrency : r.shortProtection === 2 ? 1 : r.shortProtection === 1 ? 2 : r.maxConcurrency;
         const limit = Math.min(r.maxConcurrency, recovering ? r.concurrency : r.maxConcurrency,

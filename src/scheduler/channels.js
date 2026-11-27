@@ -1,13 +1,21 @@
 'use strict';
 
+// On a mixed account keep the relay's native and replacement endpoints separate.
+function defaultChannelMode(role, suggestedMode, hasReplacement) {
+    if (role === 'dilution' && !hasReplacement) return 'fallback';
+    if (role === 'dilution' || role === 'standard') return suggestedMode || 'native';
+    return 'native';
+}
+
 // Explicit relay IDs keep native endpoints separate from optional replacement routes.
 function channelModes(policy, live) {
     const channels = (live && live.channels) || [];
+    const hasReplacement = channels.some(c => c.suggestedMode === 'fallback');
     const out = {};
     channels.forEach(channel => {
         const id = String(channel.id);
         out[id] = policy.channelModes ? (policy.channelModes[id] || 'paused')
-            : policy.role === 'standard' || policy.role === 'dilution' ? (channel.suggestedMode || 'native') : 'native';
+            : defaultChannelMode(policy.role, channel.suggestedMode, hasReplacement);
     });
     return out;
 }
@@ -32,4 +40,4 @@ function boundChannelCapacity(modes, capacities, ceiling) {
     }
     return result;
 }
-module.exports = { channelModes, channelCounts, boundChannelCapacity };
+module.exports = { defaultChannelMode, channelModes, channelCounts, boundChannelCapacity };

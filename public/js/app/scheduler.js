@@ -1,6 +1,7 @@
 // Smart scheduling console. Editable policy stays separate from polling status.
 var schedulerState = null;
 var schedulerDraft = null;
+var schedulerCandidates = [];
 var schedulerBusy = false;
 var glmPolicyDraft = null;
 var scheduleGroupedView = localStorage.getItem('usage_schedule_grouped') === 'true';
@@ -27,7 +28,8 @@ var SCHEDULE_STATES = { balanced: '均衡分流', protecting: '5h 保护', drain
   stale: '数据过期', unmapped: '未匹配渠道', missing: '账号变更', refreshing: '确认自然重置',
   'reset-verifying': '验证重置', starting: '准备中' };
 SCHEDULE_STATES['upstream-blocked'] = '上游异常';
-var SCHEDULE_ROLES = { primary: 'Coding Plan', paid: '按量付费', standard: '其他模型' };
+var SCHEDULE_TYPES = { subscription: 'A · 订阅套餐', dilution: 'B · 降级', paid: 'C · 按量付费' };
+var SCHEDULE_ROLES = { primary: '订阅套餐', standard: '订阅套餐', dilution: '模型降级', paid: '按量付费' };
 
 async function schedulerRequest(path, method, body) {
   var r = await fetch(API_PREFIX + '/api/scheduler' + (path || ''), {
@@ -138,11 +140,12 @@ async function openScheduler(focusName) {
   try {
     schedulerState = await schedulerRequest();
     schedulerDraft = JSON.parse(JSON.stringify(schedulerState.config));
+    schedulerCandidates = schedulerState.candidates;
     glmPolicyDraft = JSON.parse(JSON.stringify(schedulerState.glmModelPolicy));
     renderSchedulerForm();
     renderSchedulerSummary();
     if (focusName) {
-      var at = schedulerState.candidates.findIndex(function(a) { return a.name === focusName; });
+      var at = schedulerCandidates.findIndex(function(a) { return a.name === focusName; });
       var el = document.getElementById('schedule-account-' + at);
       if (el) { el.scrollIntoView({ block: 'center' }); el.classList.add('highlight'); }
     }
@@ -152,23 +155,33 @@ async function openScheduler(focusName) {
     }).catch(function(e) { schedulerFeedback(e.message); });
   } catch (e) { document.getElementById('schedulerBody').innerHTML = '<div class="schedule-empty">' + esc(e.message) + '</div>'; }
 }
-function schedulerDefaultRole(a) {
-  return a.platform === 'telecomjs' || /智云/.test(a.name) ? 'paid' : (a.platform || 'glm') === 'glm' ? 'primary' : 'standard';
+function schedulerRole(a, type) {
+  if (type === 'paid' || type === 'dilution') return type;
+  return (a.platform || 'glm') === 'glm' ? 'primary' : 'standard';
+}
+function schedulerDefaultChannels(a, role) {
+  var channels = a.channels || [];
+  var hasReplacement = channels.some(function(ch) { return ch.suggestedMode === 'fallback'; });
+  return Object.fromEntries(channels.map(function(ch) {
+    var mode = 'native';
+    if (role === 'dilution' && !hasReplacement) mode = 'fallback';
+    else if (role === 'dilution' || role === 'standard') mode = ch.suggestedMode || 'native';
+    return [ch.id, mode];
+  }));
 }
 function schedulerLocalTime(iso) {
   var date = new Date(iso);
   return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0,16);
 }
 function schedulerPolicy(a) {
-  var p = schedulerDraft.accounts.find(function(p) { return p.name === a.name; }) || {
-    name: a.name, role: schedulerDefaultRole(a), maxConcurrency: schedulerDefaultRole(a) === 'primary' ? 4 : Math.min(64, Math.max(2, a.capacity ? a.capacity.capacity : 4)),
-    quotaScale: 1, mode: 'auto', autoReset: true, paused: false, unmetered: false
+  var role = schedulerRole(a, schedulerDraft.accountTypes[a.name]);
+  var selected = schedulerDraft.accounts.find(function(p) { return p.name === a.name; });
+  var p = selected ? Object.assign({}, selected) : {
+    name: a.name, maxConcurrency: role === 'primary' ? 4 : Math.min(64, Math.max(2, a.capacity ? a.capacity.capacity : 4)),
+    quotaScale: 1, mode: 'auto', autoReset: role === 'primary', paused: false, unmetered: false
   };
-  if (p.role === 'dilution') p.role = 'standard';
-  if (!p.channelModes) {
-    p.channelModes = {};
-    (a.channels || []).forEach(function(ch) { p.channelModes[ch.id] = p.role === 'standard' ? (ch.suggestedMode || 'native') : 'native'; });
-  }
+  p.role = role;
+  if (!p.channelModes && (a.channels || []).length) p.channelModes = schedulerDefaultChannels(a, role);
   return p;
 }
 function schedulerChannelRows(a, p, i) {
@@ -177,13 +190,13 @@ function schedulerChannelRows(a, p, i) {
     var mode = p.channelModes[ch.id] || 'paused';
     return '<label><span title="' + esc(_privacyMode ? '渠道 ' + ch.id : ch.name) + '">' + esc(_privacyMode ? '渠道 ' + ch.id : ch.name)
       + (a.glmModelEligible && ch.glmFlash ? ' · Flash' : '') + '</span><select aria-label="渠道 ' + ch.id + ' 用途" onchange="schedulerChannel(' + i + ',' + ch.id + ',this.value)">'
-      + [['native','直接调用'],['fallback','备用分流'],['paused','暂停']].map(function(x) {
+      + [['native','直接调用'],['fallback','模型降级分流'],['paused','暂停']].map(function(x) {
         return '<option value="' + x[0] + '"' + (mode === x[0] ? ' selected' : '') + '>' + x[1] + '</option>';
       }).join('') + '</select></label>';
   }).join('') + '</details>';
 }
 function schedulerChannel(i, id, value) {
-  var p = schedulerPolicy(schedulerState.candidates[i]); p.channelModes[id] = value;
+  var p = schedulerPolicy(schedulerCandidates[i]); p.channelModes[id] = value;
   schedulerField(i, 'channelModes', p.channelModes);
 }
 function glmPolicyForm() {
@@ -220,13 +233,13 @@ async function saveGLMPolicy() {
 }
 function renderSchedulerForm() {
   var c = schedulerDraft;
-  var rows = schedulerState.candidates.map(function(a, i) {
+  var rows = schedulerCandidates.map(function(a, i) {
     var p = schedulerPolicy(a), selected = c.accounts.some(function(p) { return p.name === a.name; });
     return '<div class="schedule-account ' + (selected ? 'selected' : '') + '" id="schedule-account-' + i + '">'
       + '<div class="schedule-account-title"><label><input type="checkbox" id="sa-pick-' + i + '" ' + (selected ? 'checked' : '') + ' onchange="schedulerPick(' + i + ',this.checked)"><b>' + esc(schedulerName(a.name)) + '</b></label><span>' + (selected ? '已选择' : '未托管 · 原权重') + '</span></div>'
-      + '<div class="schedule-account-fields"><label>用途<select id="sa-role-' + i + '" onchange="schedulerField(' + i + ',\'role\',this.value)">'
-      + Object.keys(SCHEDULE_ROLES).filter(function(role) { return role === 'paid' || (role === 'primary' && a.platform === 'glm') || role === 'standard'; }).map(function(role) {
-        return '<option value="' + role + '"' + (p.role === role ? ' selected' : '') + '>' + SCHEDULE_ROLES[role] + '</option>';
+      + '<div class="schedule-account-fields"><label>账号类型<select id="sa-type-' + i + '" onchange="schedulerType(' + i + ',this.value)">'
+      + Object.keys(SCHEDULE_TYPES).map(function(type) {
+        return '<option value="' + type + '"' + (c.accountTypes[a.name] === type ? ' selected' : '') + '>' + SCHEDULE_TYPES[type] + '</option>';
       }).join('') + '</select></label>'
       + '<label>调度模式<select onchange="schedulerField(' + i + ',\'mode\',this.value)">' + [['auto','自动决策'],['slow','低速保护'],['burst','手动高速']].map(function(m) { return '<option value="' + m[0] + '"' + ((p.mode || 'auto') === m[0] ? ' selected' : '') + '>' + m[1] + '</option>'; }).join('') + '</select></label>'
       + '<label title="' + (p.role === 'primary' ? '智谱总并发最多 4；算法可在此上限内升降' : '同一账号所有渠道共享上限') + '">并发上限<input id="sa-cap-' + i + '" type="number" min="1" max="' + (p.role === 'primary' ? 4 : 64) + '" value="' + Math.min(p.maxConcurrency, p.role === 'primary' ? 4 : 64) + '" onchange="schedulerField(' + i + ',\'maxConcurrency\',Number(this.value))"></label>'
@@ -235,6 +248,7 @@ function renderSchedulerForm() {
       + (a.platform === 'glm' && !a.teamEdition && p.role === 'primary' ? '<label title="勾选后禁止调度自动用卡；低速模式同样暂停用卡"><input type="checkbox" ' + (!p.autoReset ? 'checked' : '') + ' onchange="schedulerField(' + i + ',\'autoReset\',!this.checked)">不使用重置卡 <span>' + (p.mode === 'slow' ? '低速暂缓 · ' : '') + a.cards + ' 张</span></label>' : '')
       + '<label><input type="checkbox" ' + (p.paused ? 'checked' : '') + ' onchange="schedulerField(' + i + ',\'paused\',this.checked)">暂停此账号</label>'
       + (p.role === 'paid' ? '<label title="无法获取余额的占位账号需显式允许才可兜底"><input type="checkbox" ' + (p.unmetered ? 'checked' : '') + ' onchange="schedulerField(' + i + ',\'unmetered\',this.checked)">允许无余额数据的按量占位</label>' : '') + '</div>'
+      + (p.role === 'dilution' ? '<p class="schedule-help">将承接模型替换的渠道设为「模型降级分流」，原生模型渠道可保留「直接调用」。分流按下方备用策略启用。</p>' : '')
       + schedulerChannelRows(a, p, i)
       + '<details class="schedule-more"><summary>更多设置</summary><label class="schedule-replenish">预计额度补充<input type="datetime-local" value="' + (p.replenishAt ? schedulerLocalTime(p.replenishAt) : '') + '" onchange="schedulerField(' + i + ',\'replenishAt\',this.value ? new Date(this.value).toISOString() : null)"></label></details></div>';
   }).join('');
@@ -255,29 +269,50 @@ function renderSchedulerForm() {
   renderSchedulerDecisions();
 }
 function schedulerPick(i, checked) {
-  var a = schedulerState.candidates[i], p = schedulerPolicy(a);
+  var a = schedulerCandidates[i], p = schedulerPolicy(a);
   schedulerDraft.accounts = schedulerDraft.accounts.filter(function(p) { return p.name !== a.name; });
   if (checked) schedulerDraft.accounts.push(p);
   document.getElementById('schedule-account-' + i).classList.toggle('selected', checked);
   document.querySelector('#schedule-account-' + i + ' .schedule-account-title>span').textContent = checked ? '已选择' : '未托管 · 原权重';
 }
+function schedulerType(i, type) {
+  var a = schedulerCandidates[i], selected = schedulerDraft.accounts.find(function(p) { return p.name === a.name; });
+  schedulerDraft.accountTypes[a.name] = type;
+  if (selected) {
+    var role = schedulerRole(a, type);
+    var defaults = schedulerDefaultChannels(a, role);
+    // Keep paused and as-yet unapproved channels closed when changing type.
+    if (selected.channelModes) {
+      Object.keys(selected.channelModes).forEach(function(id) {
+        if (selected.channelModes[id] !== 'paused') selected.channelModes[id] = defaults[id] || 'paused';
+      });
+    }
+    selected.role = role;
+    if (role === 'primary') selected.maxConcurrency = Math.min(4, selected.maxConcurrency);
+    else selected.autoReset = false;
+    if (role !== 'paid') selected.unmetered = false;
+  }
+  schedulerRenderAtScroll();
+}
+function schedulerRenderAtScroll() {
+  var top = document.querySelector('.schedule-accounts').scrollTop;
+  renderSchedulerForm();
+  document.querySelector('.schedule-accounts').scrollTop = top;
+}
 function schedulerField(i, field, value) {
-  var a = schedulerState.candidates[i], p = schedulerPolicy(a);
+  var a = schedulerCandidates[i], selected = schedulerDraft.accounts.find(function(p) { return p.name === a.name; });
+  var p = selected || schedulerPolicy(a);
   p[field] = value;
-  if (!schedulerDraft.accounts.some(function(x) { return x.name === a.name; })) {
+  if (!selected) {
     schedulerDraft.accounts.push(p);
     document.getElementById('sa-pick-' + i).checked = true;
     document.getElementById('schedule-account-' + i).classList.add('selected');
     document.querySelector('#schedule-account-' + i + ' .schedule-account-title>span').textContent = '已选择';
   }
-  if (field === 'role' || field === 'mode') {
-    var top = document.querySelector('.schedule-accounts').scrollTop;
-    renderSchedulerForm();
-    document.querySelector('.schedule-accounts').scrollTop = top;
-  }
+  if (field === 'mode') schedulerRenderAtScroll();
 }
 function schedulerSelectAll() {
-  schedulerState.candidates.forEach(function(a, i) {
+  schedulerCandidates.forEach(function(a, i) {
     var el = document.getElementById('sa-pick-' + i);
     if (el) { el.checked = true; schedulerPick(i, true); }
   });
@@ -295,8 +330,12 @@ async function saveScheduler(enabled) {
     schedulerDraft.enabled = enabled;
     schedulerState = await schedulerRequest('', 'PUT', schedulerDraft);
     schedulerDraft = JSON.parse(JSON.stringify(schedulerState.config));
+    schedulerCandidates = schedulerState.candidates;
     renderSchedulerForm(); renderSchedulerSummary(); loadWeights(); loadCapacity();
-    schedulerFeedback(schedulerState.lastPush && schedulerState.lastPush.synced ? '配置已保存，中转站已确认同步。' : '配置已保存。' + ((schedulerState.lastPush || {}).message || '等待中转站同步。'), true);
+    var feedback = schedulerState.lastPush && schedulerState.lastPush.synced ? '配置已保存，中转站已确认同步。' : '配置已保存。' + ((schedulerState.lastPush || {}).message || '等待中转站同步。');
+    if (schedulerState.removedAccountCount) feedback += '已跳过 ' + schedulerState.removedAccountCount + ' 个已移除账号。';
+    if (enabled && !schedulerDraft.enabled) feedback += '当前没有参与账号，托管已停止。';
+    schedulerFeedback(feedback, true);
   } catch (e) { schedulerFeedback(e.message); }
   finally { schedulerBusy = false; document.querySelectorAll('#schedulerBody button').forEach(function(b) { b.disabled = false; }); }
 }
@@ -329,12 +368,12 @@ function renderSchedulerDecisions() {
 setInterval(function() { if (!document.hidden) loadScheduler(); }, 30000);
 
 var scheduleCategoryFilter = 'all';
-var SCHEDULE_CATEGORIES = { burst: '高速消耗', balanced: '均衡调度', slow: '低速保护', exhausted: '已耗尽', paid: '按量付费', minimax: 'MiniMax', reserve: '备用分流', other: '其他账号' };
+var SCHEDULE_CATEGORIES = { burst: '高速消耗', balanced: '均衡调度', slow: '低速保护', exhausted: '已耗尽', paid: '按量付费', reserve: '模型降级', other: '其他账号' };
 function scheduleCategory(acc) {
   var p = schedulerState && schedulerState.config.accounts.find(function(p) { return p.name === acc.name; });
-  var role = p ? p.role : schedulerDefaultRole(acc);
-  if (role === 'paid') return 'paid';
-  if (acc.platform === 'minimax') return 'minimax';
+  var type = schedulerState && (schedulerState.config.accountTypes || {})[acc.name];
+  if (type === 'paid' || (!type && p && p.role === 'paid')) return 'paid';
+  if (type === 'dilution') return 'reserve';
   if (p && p.channelModes && Object.values(p.channelModes).length && Object.values(p.channelModes).every(function(m) { return m !== 'native'; })) return 'reserve';
   if (getAccMaxPct(acc) >= 100) return 'exhausted';
   var r = schedulerRow(acc.name);
